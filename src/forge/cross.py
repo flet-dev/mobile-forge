@@ -58,7 +58,7 @@ class CrossVEnv:
         self.arch = arch
 
         self.platform_identifier = self._platform_identifier(sdk, sdk_version, arch)
-        self.tag = self.platform_identifier.replace("-", "_").replace(".", "_")
+        self.tag = self._platform_identifier(sdk, sdk_version, arch).replace("-", "_").replace(".", "_")
         self.venv_name = f"venv3.{sys.version_info.minor}-{self.tag}"
         self.platform_triplet = f"{self.arch}-{self.PLATFORM_TRIPLET[sdk]}"
 
@@ -151,14 +151,9 @@ class CrossVEnv:
     @classmethod
     def _platform_identifier(cls, sdk, version, arch):
         if sdk == "android":
-            if arch == "arm64-v8a":
-                identifier = "linux-aarch64"
-            elif arch == "armeabi-v7a":
-                identifier = "linux-arm"
-            elif arch == "x86_64":
-                identifier = "linux-x86_64"
-            elif arch == "x86":
-                identifier = "linux-i686"
+            if version is None:
+                version = 21
+            identifier = f"{sdk}-{version}-{arch}"
         elif sdk in {"iphoneos", "iphonesimulator"}:
             if version is None:
                 version = "12.0"
@@ -174,6 +169,15 @@ class CrossVEnv:
         else:
             raise ValueError(f"Don't know how to build wheels for {sdk}")
         return identifier
+
+    @classmethod
+    def _android_arch(cls, arch):
+        return {
+            "arm64-v8a": "aarch64",
+            "armeabi-v7a": "arm",
+            "x86_64": "x86_64",
+            "x86": "i686"
+        }[arch]
 
     def create(
         self,
