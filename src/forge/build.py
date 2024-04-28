@@ -7,7 +7,7 @@ import shutil
 import sys
 import tarfile
 import zipfile
-from abc import ABC, abstractmethod, abstractproperty
+from abc import ABC, abstractmethod
 from email import generator, message
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -35,13 +35,15 @@ class Builder(ABC):
         self.cross_venv = cross_venv
         self.package = package
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def build_path(self) -> Path:
         """The path in which all environment and sources for the build will be
         created."""
         ...
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def log_file_path(self) -> Path:
         """The path where build logs should be written."""
         ...
@@ -51,7 +53,8 @@ class Builder(ABC):
         """The path for the log file if a build error occurs."""
         return self.log_file_path.parent.parent / "errors" / self.log_file_path.name
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def source_archive_path(self) -> Path:
         """The source archive file for the package."""
         ...
@@ -191,42 +194,47 @@ class Builder(ABC):
         log(self.log_file, f"\n[{self.cross_venv}] Install forge build requirements")
         self.install_requirements("build")
 
-    def compile_env(self, **kwargs) -> dict[str:str]:
+    def compile_env(self, **kwargs) -> dict[str, str]:
         sysconfig_data = self.cross_venv.sysconfig_data
         install_root = self.cross_venv.install_root
-        sdk_root = self.cross_venv.sdk_root
 
         ar = sysconfig_data["AR"]
 
         cc = sysconfig_data["CC"]
 
         cflags = self.cross_venv.sysconfig_data["CFLAGS"]
-        # Pre Python 3.11 versions included BZip2 and XZ includes in CFLAGS. Remove them.
-        cflags = re.sub(r"-I.*/merge/iOS/.*/bzip2-.*/include", "", cflags)
-        cflags = re.sub(r"-I.*/merge/iOS/.*/xs-.*/include", "", cflags)
 
-        # Replace any hard-coded reference to --sysroot=<sysroot> with the actual reference
-        cflags = re.sub(r"--sysroot=\w+", f"--sysroot={sdk_root}", cflags)
-
-        # Add the install root and SDK root includes
+        # Add install root include
         if (install_root / "include").is_dir():
             cflags += f" -I{install_root}/include"
-        if (sdk_root / "usr" / "include").is_dir():
-            cflags += f" -I{sdk_root}/usr/include"
+
+        if self.cross_venv.sdk != "android":
+
+            # Pre Python 3.11 versions included BZip2 and XZ includes in CFLAGS. Remove them.
+            cflags = re.sub(r"-I.*/merge/iOS/.*/bzip2-.*/include", "", cflags)
+            cflags = re.sub(r"-I.*/merge/iOS/.*/xs-.*/include", "", cflags)
+
+            # Replace any hard-coded reference to --sysroot=<sysroot> with the actual reference
+            cflags = re.sub(r"--sysroot=\w+", f"--sysroot={self.cross_venv.sdk_root}", cflags)
+
+            # Add SDK root include
+            if (self.cross_venv.sdk_root / "usr" / "include").is_dir():
+                cflags += f" -I{self.cross_venv.sdk_root}/usr/include"
 
         ldflags = self.cross_venv.sysconfig_data["LDFLAGS"]
-        # Pre Python 3.11 versions included BZip2 and XZ includes in CFLAGS. Remove them.
-        cflags = re.sub(r"-I.*/merge/iOS/.*/bzip2-.*/include", "", cflags)
-        cflags = re.sub(r"-I.*/merge/iOS/.*/xs-.*/include", "", cflags)
 
-        # Replace any hard-coded reference to -isysroot <sysroot> with the actual reference
-        cflags = re.sub(r"-isysroot \w+", f"-isysroot={sdk_root}", cflags)
-
-        # Add the install root and SDK root includes
+        # Add install root lib
         if (install_root / "lib").is_dir():
             ldflags += f" -L{install_root}/lib"
-        if (sdk_root / "usr" / "lib").is_dir():
-            ldflags += f" -L{sdk_root}/usr/lib"
+
+        if self.cross_venv.sdk != "android":
+
+            # Replace any hard-coded reference to -isysroot <sysroot> with the actual reference
+            ldflags = re.sub(r"-isysroot \w+", f"-isysroot={self.cross_venv.sdk_root}", ldflags)
+
+            # Add SDK root lib
+            if (self.cross_venv.sdk_root / "usr" / "lib").is_dir():
+                ldflags += f" -L{self.cross_venv.sdk_root}/usr/lib"
 
         env = {
             "AR": ar,
