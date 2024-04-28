@@ -21,10 +21,10 @@ class CrossVEnv:
 
     HOST_SDKS = {
         "android": [
-            ("android", "armeabi-v7a"),
             ("android", "arm64-v8a"),
-            ("android", "x86"),
+            ("android", "armeabi-v7a"),
             ("android", "x86_64"),
+            ("android", "x86"),
         ],
         "iOS": [
             ("iphoneos", "arm64"),
@@ -149,11 +149,16 @@ class CrossVEnv:
         return self._sdk_root
 
     @classmethod
-    def _platform_identifier(self, sdk, version, arch):
+    def _platform_identifier(cls, sdk, version, arch):
         if sdk == "android":
-            if version is None:
-                version = 21
-            identifier = f"{sdk}-{version}-{arch}"
+            if arch == "arm64-v8a":
+                identifier = "linux-aarch64"
+            elif arch == "armeabi-v7a":
+                identifier = "linux-arm"
+            elif arch == "x86_64":
+                identifier = "linux-x86_64"
+            elif arch == "x86":
+                identifier = "linux-i686"
         elif sdk in {"iphoneos", "iphonesimulator"}:
             if version is None:
                 version = "12.0"
@@ -184,7 +189,7 @@ class CrossVEnv:
         :raises: ``RuntimeError`` if an environment matching the requested host already
             exists, and ``clean=False``.
         """
-        env_key = f"MOBILE_FORGE_{self.sdk.upper()}_{self.arch.upper()}"
+        env_key = f"MOBILE_FORGE_{self.sdk.upper()}_{self.arch.upper().replace('-', '_')}"
         host_python = os.getenv(env_key)
         if host_python is None:
             raise RuntimeError(
