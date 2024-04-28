@@ -35,13 +35,14 @@ if [ -z "$PYTHON_APPLE_SUPPORT" ]; then
 fi
 
 if [ ! -d $PYTHON_APPLE_SUPPORT/install ]; then
-    echo "PYTHON_APPLE_SUPPORT does not point at a valid loation."
+    echo "PYTHON_APPLE_SUPPORT does not point at a valid location."
     return
 fi
 
 PYTHON_FOLDER=$(echo `ls -1d $PYTHON_APPLE_SUPPORT/install/macOS/macosx/python-$PYTHON_VER.*` | sort -n -r | head -n1)
 PYTHON_VERSION=$(basename $PYTHON_FOLDER | cut -d "-" -f 2)
 
+# check Apple paths
 if [ ! -x $PYTHON_APPLE_SUPPORT/install/macOS/macosx/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
     echo "PYTHON_APPLE_SUPPORT does not appear to contain a Python $PYTHON_VERSION macOS binary."
     echo $PYTHON_APPLE_SUPPORT/install/macOS/macosx/python-$PYTHON_VERSION/bin/python$PYTHON_VER
@@ -61,6 +62,32 @@ fi
 if [ ! -e $PYTHON_APPLE_SUPPORT/install/iOS/iphonesimulator.x86_64/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
     echo "PYTHON_APPLE_SUPPORT does not appear to contain a Python $PYTHON_VERSION iOS x86-64 simulator binary."
     return
+fi
+
+# check Android paths
+if [ ! -z "$PYTHON_ANDROID_SUPPORT" ] && [ ! -d $PYTHON_ANDROID_SUPPORT/install ]; then
+    echo "PYTHON_ANDROID_SUPPORT is set, but does not point at a valid location."
+    return
+else
+    if [ ! -e $PYTHON_ANDROID_SUPPORT/install/android/arm64-v8a/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
+        echo "PYTHON_ANDROID_SUPPORT does not appear to contain a Python $PYTHON_VERSION Android arm64-v8a device binary."
+        return
+    fi
+
+    if [ ! -e $PYTHON_ANDROID_SUPPORT/install/android/armeabi-v7a/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
+        echo "PYTHON_ANDROID_SUPPORT does not appear to contain a Python $PYTHON_VERSION Android armeabi-v7a device binary."
+        return
+    fi
+
+    if [ ! -e $PYTHON_ANDROID_SUPPORT/install/android/x86_64/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
+        echo "PYTHON_ANDROID_SUPPORT does not appear to contain a Python $PYTHON_VERSION Android x86_64 device binary."
+        return
+    fi
+
+    if [ ! -e $PYTHON_ANDROID_SUPPORT/install/android/x86/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
+        echo "PYTHON_ANDROID_SUPPORT does not appear to contain a Python $PYTHON_VERSION Android x86 device binary."
+        return
+    fi
 fi
 
 # Ensure CMake is installed
