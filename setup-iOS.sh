@@ -39,9 +39,6 @@ if [ ! -d $PYTHON_APPLE_SUPPORT/install ]; then
     return
 fi
 
-PYTHON_FOLDER=$(echo `ls -1d $PYTHON_APPLE_SUPPORT/install/macOS/macosx/python-$PYTHON_VER.*` | sort -n -r | head -n1)
-PYTHON_VERSION=$(basename $PYTHON_FOLDER | cut -d "-" -f 2)
-
 # check Apple paths
 if [ ! -x $PYTHON_APPLE_SUPPORT/install/macOS/macosx/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
     echo "PYTHON_APPLE_SUPPORT does not appear to contain a Python $PYTHON_VERSION macOS binary."
@@ -49,6 +46,12 @@ if [ ! -x $PYTHON_APPLE_SUPPORT/install/macOS/macosx/python-$PYTHON_VERSION/bin/
     return
 fi
 
+PYTHON_FOLDER=$(echo `ls -1d $PYTHON_APPLE_SUPPORT/install/macOS/macosx/python-$PYTHON_VER.*` | sort -n -r | head -n1)
+PYTHON_VERSION=$(basename $PYTHON_FOLDER | cut -d "-" -f 2)
+
+echo "Python version: $PYTHON_VERSION"
+
+# iOS paths
 if [ ! -e $PYTHON_APPLE_SUPPORT/install/iOS/iphoneos.arm64/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
     echo "PYTHON_APPLE_SUPPORT does not appear to contain a Python $PYTHON_VERSION iOS ARM64 device binary."
     return
@@ -64,11 +67,12 @@ if [ ! -e $PYTHON_APPLE_SUPPORT/install/iOS/iphonesimulator.x86_64/python-$PYTHO
     return
 fi
 
+export MOBILE_FORGE_IPHONEOS_ARM64=$PYTHON_APPLE_SUPPORT/install/iOS/iphoneos.arm64/python-$PYTHON_VERSION/bin/python$PYTHON_VER
+export MOBILE_FORGE_IPHONESIMULATOR_ARM64=$PYTHON_APPLE_SUPPORT/install/iOS/iphonesimulator.arm64/python-$PYTHON_VERSION/bin/python$PYTHON_VER
+export MOBILE_FORGE_IPHONESIMULATOR_X86_64=$PYTHON_APPLE_SUPPORT/install/iOS/iphonesimulator.x86_64/python-$PYTHON_VERSION/bin/python$PYTHON_VER
+
 # check Android paths
-if [ ! -z "$PYTHON_ANDROID_SUPPORT" ] && [ ! -d $PYTHON_ANDROID_SUPPORT/install ]; then
-    echo "PYTHON_ANDROID_SUPPORT is set, but does not point at a valid location."
-    return
-else
+if [ ! -z "$PYTHON_ANDROID_SUPPORT" ]; then
     if [ ! -e $PYTHON_ANDROID_SUPPORT/install/android/arm64-v8a/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
         echo "PYTHON_ANDROID_SUPPORT does not appear to contain a Python $PYTHON_VERSION Android arm64-v8a device binary."
         return
@@ -88,6 +92,11 @@ else
         echo "PYTHON_ANDROID_SUPPORT does not appear to contain a Python $PYTHON_VERSION Android x86 device binary."
         return
     fi
+
+    export MOBILE_FORGE_ANDROID_ARM64_V8A=$PYTHON_ANDROID_SUPPORT/install/android/arm64-v8a/python-$PYTHON_VERSION/bin/python$PYTHON_VER
+    export MOBILE_FORGE_ANDROID_ARMEABI_V7A=$PYTHON_ANDROID_SUPPORT/install/android/armeabi-v7a/python-$PYTHON_VERSION/bin/python$PYTHON_VER
+    export MOBILE_FORGE_ANDROID_X86_64=$PYTHON_ANDROID_SUPPORT/install/android/x86_64/python-$PYTHON_VERSION/bin/python$PYTHON_VER
+    export MOBILE_FORGE_ANDROID_X86=$PYTHON_ANDROID_SUPPORT/install/android/x86/python-$PYTHON_VERSION/bin/python$PYTHON_VER
 fi
 
 # Ensure CMake is installed
@@ -141,10 +150,6 @@ if ! [ -f "dist/ninja-1.11.1-py3-none-ios_12_0_iphoneos_arm64.whl" ]; then
 fi
 
 export PATH="$PATH:$PYTHON_APPLE_SUPPORT/support/$PYTHON_VER/iOS/bin:$(pwd)/tools/CMake.app/Contents/bin"
-
-export MOBILE_FORGE_IPHONEOS_ARM64=$PYTHON_APPLE_SUPPORT/install/iOS/iphoneos.arm64/python-$PYTHON_VERSION/bin/python$PYTHON_VER
-export MOBILE_FORGE_IPHONESIMULATOR_ARM64=$PYTHON_APPLE_SUPPORT/install/iOS/iphonesimulator.arm64/python-$PYTHON_VERSION/bin/python$PYTHON_VER
-export MOBILE_FORGE_IPHONESIMULATOR_X86_64=$PYTHON_APPLE_SUPPORT/install/iOS/iphonesimulator.x86_64/python-$PYTHON_VERSION/bin/python$PYTHON_VER
 
 echo
 echo "You can now build packages with forge; e.g.:"
