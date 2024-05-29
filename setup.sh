@@ -71,6 +71,8 @@ if [ ! -z "$PYTHON_APPLE_SUPPORT" ]; then
     export MOBILE_FORGE_IPHONESIMULATOR_X86_64=$PYTHON_APPLE_SUPPORT/install/iOS/iphonesimulator.x86_64/python-$PYTHON_VERSION/bin/python$PYTHON_VER
 
     export PATH="$PATH:$PYTHON_APPLE_SUPPORT/support/$PYTHON_VER/iOS/bin"
+
+    echo "PATH in setup.sh: $PATH"
 fi
 
 # configure Android paths
