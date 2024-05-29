@@ -45,7 +45,7 @@ for:
 
     build_script:
       - export PYTHON_ANDROID_SUPPORT=$(realpath ./python-mobile)
-      - source ./setup.sh $PYTHON_SHORT_VERSION
+      - source ./setup.sh $PYTHON_VERSION
 
       # build packages
       - forge android lru-dict:1.3.0
@@ -70,7 +70,7 @@ for:
 
     build_script:
       - export PYTHON_APPLE_SUPPORT=$(realpath ./Python-Apple-support)
-      - source ./setup.sh $PYTHON_SHORT_VERSION
+      - source ./setup.sh $PYTHON_VERSION
 
       # build packages
       - forge iOS lru-dict:1.3.0
