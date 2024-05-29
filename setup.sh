@@ -36,6 +36,11 @@ CMAKE_VERSION="3.27.4"
 echo "Python version: $PYTHON_VERSION"
 echo "Python short version: $PYTHON_VER"
 
+if [[ -z "$PYTHON_APPLE_SUPPORT" && -z "$PYTHON_ANDROID_SUPPORT" ]]; then
+    echo "Neither PYTHON_APPLE_SUPPORT nor PYTHON_ANDROID_SUPPORT are defined."
+    return
+fi
+
 # configure iOS paths
 if [ ! -z "$PYTHON_APPLE_SUPPORT" ]; then
 
@@ -90,7 +95,7 @@ if [ ! -z "$PYTHON_ANDROID_SUPPORT" ]; then
         return
     fi
 
-    echo "PYTHON_APPLE_SUPPORT: $PYTHON_ANDROID_SUPPORT"
+    echo "PYTHON_ANDROID_SUPPORT: $PYTHON_ANDROID_SUPPORT"
 
     export MOBILE_FORGE_ANDROID_ARM64_V8A=$PYTHON_ANDROID_SUPPORT/install/android/arm64-v8a/python-$PYTHON_VERSION/bin/python$PYTHON_VER
     export MOBILE_FORGE_ANDROID_ARMEABI_V7A=$PYTHON_ANDROID_SUPPORT/install/android/armeabi-v7a/python-$PYTHON_VERSION/bin/python$PYTHON_VER
