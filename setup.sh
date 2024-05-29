@@ -39,17 +39,17 @@ if [ ! -d $PYTHON_APPLE_SUPPORT/install ]; then
     return
 fi
 
+PYTHON_FOLDER=$(echo `ls -1d $PYTHON_APPLE_SUPPORT/install/macOS/macosx/python-$PYTHON_VER.*` | sort -n -r | head -n1)
+PYTHON_VERSION=$(basename $PYTHON_FOLDER | cut -d "-" -f 2)
+
+echo "Python version: $PYTHON_VERSION"
+
 # check Apple paths
 if [ ! -x $PYTHON_APPLE_SUPPORT/install/macOS/macosx/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
     echo "PYTHON_APPLE_SUPPORT does not appear to contain a Python $PYTHON_VERSION macOS binary."
     echo $PYTHON_APPLE_SUPPORT/install/macOS/macosx/python-$PYTHON_VERSION/bin/python$PYTHON_VER
     return
 fi
-
-PYTHON_FOLDER=$(echo `ls -1d $PYTHON_APPLE_SUPPORT/install/macOS/macosx/python-$PYTHON_VER.*` | sort -n -r | head -n1)
-PYTHON_VERSION=$(basename $PYTHON_FOLDER | cut -d "-" -f 2)
-
-echo "Python version: $PYTHON_VERSION"
 
 # iOS paths
 if [ ! -e $PYTHON_APPLE_SUPPORT/install/iOS/iphoneos.arm64/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
