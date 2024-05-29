@@ -27,10 +27,6 @@ if [ -z "$1" ]; then
 fi
 
 PYTHON_URL_PREFIX=https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.12.3+20240415
-PYTHON_BUILD_MACOS_X86_64=$PYTHON_URL_PREFIX-x86_64-apple-darwin-install_only.tar.gz
-PYTHON_BUILD_MACOS_ARM64=$PYTHON_URL_PREFIX-aarch64-apple-darwin-install_only.tar.gz
-PYTHON_BUILD_LINUX_X86_64=$PYTHON_URL_PREFIX-x86_64_v3-unknown-linux-gnu-install_only.tar.gz
-PYTHON_BUILD_LINUX_X86_64=$PYTHON_URL_PREFIX-aarch64-unknown-linux-gnu-install_only.tar.gz
 
 PYTHON_VERSION=$1
 read python_version_major python_version_minor < <(echo $PYTHON_VERSION | sed -E 's/^([0-9]+)\.([0-9]+).*/\1 \2/')
@@ -144,33 +140,34 @@ venv_dir="$(pwd)/venv$PYTHON_VER"
 if [ ! -d $venv_dir ]; then
     echo "Creating Python $PYTHON_VER virtual environment for build in $venv_dir..."
 
-    tmp_dir=$(mktemp -d)
-    pushd $tmp_dir
+    if ! [ -d "tools/python" ]; then
+        if [ $(uname) = "Darwin" ]; then
+            # macOS
+            if [ $(uname -m) = "arm64" ]; then
+                PYTHON_SUFFIX="aarch64-apple-darwin-install_only.tar.gz"
+            else
+                PYTHON_SUFFIX="x86_64-apple-darwin-install_only.tar.gz"
+            fi
+        else
+            # Linux
+            if [ $(uname -m) = "arm64" ]; then
+                PYTHON_SUFFIX="aarch64-unknown-linux-gnu-install_only.tar.gz"
+            else
+                PYTHON_SUFFIX="x86_64_v3-unknown-linux-gnu-install_only.tar.gz"
+            fi
+        fi
 
-    if [ $(uname) = "Darwin" ]; then
-        # macOS
-        if [ $(uname -m) = "arm64" ]; then
-            PYTHON_URL=$PYTHON_BUILD_MACOS_ARM64
-        else
-            PYTHON_URL=$PYTHON_BUILD_MACOS_X86_64
+        if ! [ -f "downloads/python-${PYTHON_VERSION}-${PYTHON_SUFFIX}" ]; then
+            echo "Downloading Python ${PYTHON_VERSION}"
+            mkdir -p downloads
+            curl --location --progress-bar "${PYTHON_URL_PREFIX}-${PYTHON_SUFFIX}" --output "downloads/python-${PYTHON_VERSION}-${PYTHON_SUFFIX}"
         fi
-    else
-        # Linux
-        if [ $(uname -m) = "arm64" ]; then
-            PYTHON_URL=$PYTHON_BUILD_LINUX_ARM64
-        else
-            PYTHON_URL=$PYTHON_BUILD_LINUX_X86_64
-        fi
+
+        mkdir -p tools
+        tar -xzf "downloads/python-${PYTHON_VERSION}-${PYTHON_SUFFIX}" -C tools
     fi
 
-    curl --location --progress-bar $PYTHON_URL -o python.tar.gz
-    tar -xzf python.tar.gz
-
-    ./python/bin/python -m venv $venv_dir
-
-    popd
-    rm -rf $tmp_dir
-
+    tools/python/bin/python -m venv $venv_dir
     source $venv_dir/bin/activate
 
     pip install -U pip
@@ -203,6 +200,11 @@ if ! [ -f "dist/ninja-1.11.1-py3-none-ios_12_0_iphoneos_arm64.whl" ]; then
     mv dist/ninja-1.11.1-*.whl dist/ninja-1.11.1-py3-none-ios_12_0_iphoneos_arm64.whl
     cp dist/ninja-1.11.1-py3-none-ios_12_0_iphoneos_arm64.whl dist/ninja-1.11.1-py3-none-ios_12_0_iphonesimulator_x86_64.whl
     cp dist/ninja-1.11.1-py3-none-ios_12_0_iphoneos_arm64.whl dist/ninja-1.11.1-py3-none-ios_12_0_iphonesimulator_arm64.whl
+
+    cp dist/ninja-1.11.1-py3-none-ios_12_0_iphoneos_arm64.whl dist/ninja-1.11.1-py3-none-android_21_arm64_v8a.whl
+    cp dist/ninja-1.11.1-py3-none-ios_12_0_iphoneos_arm64.whl dist/ninja-1.11.1-py3-none-android_21_armeabi_v7a.whl
+    cp dist/ninja-1.11.1-py3-none-ios_12_0_iphoneos_arm64.whl dist/ninja-1.11.1-py3-none-android_21_x86_64.whl
+    cp dist/ninja-1.11.1-py3-none-ios_12_0_iphoneos_arm64.whl dist/ninja-1.11.1-py3-none-android_21_x86.whl
 fi
 
 echo
