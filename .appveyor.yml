@@ -46,22 +46,19 @@ for:
       # use python-mobile repo to build Python for Android
       - git clone -q --branch=main https://github.com/flet-dev/python-mobile.git
       - pushd python-mobile
-      #- ./build-all.sh $PYTHON_VERSION
+      - ./build-all.sh $PYTHON_VERSION
       - popd
       #- ./ci/package-python-for-android.sh python-mobile/install $PYTHON_VERSION $ANDROID_ABI
       #- find dist -type f -iname *.tar.gz -exec appveyor PushArtifact -DeploymentName python-dist-android {} \;
 
     build_script:
       - export PYTHON_ANDROID_SUPPORT=$(realpath ./python-mobile)
-      #- source ./setup.sh $PYTHON_VERSION
+      - source ./setup.sh $PYTHON_VERSION
 
       # build packages
-      #- forge android lru-dict:1.3.0
-
-      - sh: |
-          mkdir -p dist
-          echo "Test" > dist/wheel1.whl
-          echo "Test 2" > dist/wheel2.whl
+      - forge android aiohttp:3.9.5
+      - forge android bitarray:2.7.3
+      - forge android lru-dict:1.3.0
 
     deploy_script:
       - python .ci/publish-wheels.py dist
