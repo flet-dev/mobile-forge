@@ -1,6 +1,12 @@
 import os
+import re
 
 import boto3
+
+html_header = "<!DOCTYPE html><html><body>\n"
+html_root_anchor = '<a href="{0}/">{0}</a></br>\n'
+html_package_anchor = '<a href="https://pypi.flet.dev/{key}#sha256={sha256}" data-dist-info-metadata="sha256={sha256}" data-core-metadata="sha256={sha256}">{key}</a></br>\n'
+html_footer = "</body></html>\n"
 
 
 def upload_file(s3_client, bucket_name, local_file_path, remote_file_path):
@@ -29,14 +35,6 @@ def main():
         )
         exit(1)
 
-    # Resolve the provided path to absolute relative to the current directory
-    dist_dir = os.path.abspath(args.dist_dir)
-
-    # Check if the directory exists
-    if not os.path.isdir(dist_dir):
-        print(f"Error: Directory not found: {dist_dir}")
-        exit(1)
-
     # Create S3 client with Cloudflare R2 endpoint
     s3_client = boto3.client(
         "s3",
@@ -45,15 +43,56 @@ def main():
         aws_secret_access_key=cf_secret_access_key,
     )
 
-    # Loop through files in the directory
-    for file in os.listdir(dist_dir):
-        local_file_path = os.path.join(dist_dir, file)
-        remote_file_path = (
-            file  # Upload with the same filename in the bucket (can be modified)
-        )
-        upload_file(s3_client, cf_bucket_name, local_file_path, remote_file_path)
+    def normalize(name):
+        return re.sub(r"[-_.]+", "-", name).lower()
 
-    print("All files uploaded!")
+    index = {}
+
+    for obj in s3_client.list_objects(Bucket=cf_bucket_name)["Contents"]:
+        key = obj["Key"]
+        if key.endswith("/index.html"):
+            parts = key.split("/")
+            if len(parts) > 2:
+                package_name = parts[1]
+            if not package_name in index:
+                index[package_name] = []
+        elif not key.endswith("index.html"):
+            print(key)
+            package_name = normalize(key.split("-")[0])
+            wheels = index.get(package_name, None)
+            if wheels is None:
+                wheels = []
+                index[package_name] = wheels
+            metadata = s3_client.head_object(Bucket=cf_bucket_name, Key=obj["Key"])
+            wheels.append({"key": key, "sha256": metadata["Metadata"]["sha256"]})
+
+    print("Writing root index")
+    packages = [html_root_anchor.format(p) for p in sorted(index.keys())]
+    lines = [html_header] + packages + [html_footer]
+    s3_client.put_object(
+        Key="simple/index.html",
+        Body="\n".join(lines).encode("utf8"),
+        Bucket=cf_bucket_name,
+    )
+
+    print("Updating package indexes")
+    for package_name, files in index.items():
+        files.sort(key=lambda f: f["key"])
+        versions = [
+            html_package_anchor.format(key=f["key"], sha256=f["sha256"]) for f in files
+        ]
+        key = f"simple/{package_name}/index.html"
+        if len(versions) == 0:
+            print("Deleting index", key)
+            s3_client.delete_object(Key=key, Bucket=cf_bucket_name)
+        else:
+            print("Updating index", key)
+            lines = [html_header] + versions + [html_footer]
+            s3_client.put_object(
+                Key=key,
+                Body="\n".join(lines).encode("utf8"),
+                Bucket=cf_bucket_name,
+            )
 
 
 if __name__ == "__main__":
