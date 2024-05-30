@@ -102,9 +102,9 @@ for:
       APPVEYOR_BUILD_WORKER_IMAGE: ubuntu
 
     build_script:
-      - pip install boto3
-      - which pip
-      - pip list -v
+      - pip3 install boto3
+      - which pip3
+      - pip3 list -v
       - which python
       - python .ci/rebuild-simple-index.py
 
