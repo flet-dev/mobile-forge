@@ -14,8 +14,8 @@ environment:
   CF_BUCKET_NAME: flet-simple
 
   matrix:
-    - job_name: Build Android packages
-      job_group: build_android
+    # - job_name: Build Android packages
+    #   job_group: build_android
 
     # - job_name: Build iOS packages
     #   job_group: build_ios
@@ -103,6 +103,6 @@ for:
 
     build_script:
       - pip install boto3
-      - python .ci/rebuild-simple-index.py
+      - python3 .ci/rebuild-simple-index.py
 
     test: off
