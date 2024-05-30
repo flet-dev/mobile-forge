@@ -10,13 +10,13 @@ environment:
     - job_name: Build Android packages
       job_group: build_android
 
-    - job_name: Build iOS packages
-      job_group: build_ios
-      APPVEYOR_BUILD_WORKER_IMAGE: macos-sonoma
+    # - job_name: Build iOS packages
+    #   job_group: build_ios
+    #   APPVEYOR_BUILD_WORKER_IMAGE: macos-sonoma
 
-    - job_name: Re-build Simple index
-      job_group: rebuild_index
-      job_depends_on: build_android, build_ios
+    # - job_name: Re-build Simple index
+    #   job_group: rebuild_index
+    #   job_depends_on: build_android, build_ios
 
 stack:
 - python $PYTHON_SHORT_VERSION
@@ -35,20 +35,29 @@ for:
       NDK_VERSION: r26d
 
     install:
+      - pip install boto3
       # use python-mobile repo to build Python for Android
       - git clone -q --branch=main https://github.com/flet-dev/python-mobile.git
       - pushd python-mobile
-      - ./build-all.sh $PYTHON_VERSION
+      #- ./build-all.sh $PYTHON_VERSION
       - popd
       #- ./ci/package-python-for-android.sh python-mobile/install $PYTHON_VERSION $ANDROID_ABI
       #- find dist -type f -iname *.tar.gz -exec appveyor PushArtifact -DeploymentName python-dist-android {} \;
 
     build_script:
       - export PYTHON_ANDROID_SUPPORT=$(realpath ./python-mobile)
-      - source ./setup.sh $PYTHON_VERSION
+      #- source ./setup.sh $PYTHON_VERSION
 
       # build packages
-      - forge android lru-dict:1.3.0
+      #- forge android lru-dict:1.3.0
+
+      - sh: |
+          mkdir -p dist
+          echo "Test" > dist/wheel1.whl
+          echo "Test 2" > dist/wheel1.whl
+
+    deploy_script:
+      - python .ci/publish-wheels.py dist
 
     test: off
 
