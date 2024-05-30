@@ -41,6 +41,68 @@ if [[ -z "$PYTHON_APPLE_SUPPORT" && -z "$PYTHON_ANDROID_SUPPORT" ]]; then
     return
 fi
 
+if [ ! -z "$VIRTUAL_ENV" ]; then
+    deactivate
+fi
+
+venv_dir="$(pwd)/venv$PYTHON_VER"
+
+if [ ! -d $venv_dir ]; then
+    echo "Creating Python $PYTHON_VER virtual environment for build in $venv_dir..."
+
+    if ! [ -d "tools/python" ]; then
+        if [ $(uname) = "Darwin" ]; then
+            # macOS
+            if [ $(uname -m) = "arm64" ]; then
+                PYTHON_SUFFIX="aarch64-apple-darwin-install_only.tar.gz"
+            else
+                PYTHON_SUFFIX="x86_64-apple-darwin-install_only.tar.gz"
+            fi
+        else
+            # Linux
+            if [ $(uname -m) = "arm64" ]; then
+                PYTHON_SUFFIX="aarch64-unknown-linux-gnu-install_only.tar.gz"
+            else
+                PYTHON_SUFFIX="x86_64_v3-unknown-linux-gnu-install_only.tar.gz"
+            fi
+        fi
+
+        if ! [ -f "downloads/python-${PYTHON_VERSION}-${PYTHON_SUFFIX}" ]; then
+            echo "Downloading Python ${PYTHON_VERSION}"
+            mkdir -p downloads
+            curl --location --progress-bar "${PYTHON_URL_PREFIX}-${PYTHON_SUFFIX}" --output "downloads/python-${PYTHON_VERSION}-${PYTHON_SUFFIX}"
+        fi
+
+        mkdir -p tools
+        tar -xzf "downloads/python-${PYTHON_VERSION}-${PYTHON_SUFFIX}" -C tools
+    fi
+
+    tools/python/bin/python -m venv $venv_dir
+    source $venv_dir/bin/activate
+
+    pip install -U pip
+    pip install -e . wheel
+
+    echo "Building platform dependency wheels..."
+    if [ ! -z "$PYTHON_APPLE_SUPPORT" ]; then
+        python -m make_dep_wheels iOS
+        if [ $? -ne 0 ]; then
+            return
+        fi
+    elif [ ! -z "$PYTHON_ANDROID_SUPPORT" ]; then
+        python -m make_dep_wheels android
+        if [ $? -ne 0 ]; then
+            return
+        fi
+    fi
+
+    echo "Python $PYTHON_VERSION environment has been created."
+    echo
+else
+    echo "Using existing Python $PYTHON_VERSION environment."
+    source $venv_dir/bin/activate
+fi
+
 # configure iOS paths
 if [ ! -z "$PYTHON_APPLE_SUPPORT" ]; then
 
@@ -71,8 +133,6 @@ if [ ! -z "$PYTHON_APPLE_SUPPORT" ]; then
     export MOBILE_FORGE_IPHONESIMULATOR_X86_64=$PYTHON_APPLE_SUPPORT/install/iOS/iphonesimulator.x86_64/python-$PYTHON_VERSION/bin/python$PYTHON_VER
 
     export PATH="$PATH:$PYTHON_APPLE_SUPPORT/support/$PYTHON_VER/iOS/bin"
-
-    echo "PATH in setup.sh: $PATH"
 fi
 
 # configure Android paths
@@ -138,68 +198,6 @@ else
     export PATH="$PATH:$(pwd)/tools/cmake"
 fi
 
-if [ ! -z "$VIRTUAL_ENV" ]; then
-    deactivate
-fi
-
-venv_dir="$(pwd)/venv$PYTHON_VER"
-
-if [ ! -d $venv_dir ]; then
-    echo "Creating Python $PYTHON_VER virtual environment for build in $venv_dir..."
-
-    if ! [ -d "tools/python" ]; then
-        if [ $(uname) = "Darwin" ]; then
-            # macOS
-            if [ $(uname -m) = "arm64" ]; then
-                PYTHON_SUFFIX="aarch64-apple-darwin-install_only.tar.gz"
-            else
-                PYTHON_SUFFIX="x86_64-apple-darwin-install_only.tar.gz"
-            fi
-        else
-            # Linux
-            if [ $(uname -m) = "arm64" ]; then
-                PYTHON_SUFFIX="aarch64-unknown-linux-gnu-install_only.tar.gz"
-            else
-                PYTHON_SUFFIX="x86_64_v3-unknown-linux-gnu-install_only.tar.gz"
-            fi
-        fi
-
-        if ! [ -f "downloads/python-${PYTHON_VERSION}-${PYTHON_SUFFIX}" ]; then
-            echo "Downloading Python ${PYTHON_VERSION}"
-            mkdir -p downloads
-            curl --location --progress-bar "${PYTHON_URL_PREFIX}-${PYTHON_SUFFIX}" --output "downloads/python-${PYTHON_VERSION}-${PYTHON_SUFFIX}"
-        fi
-
-        mkdir -p tools
-        tar -xzf "downloads/python-${PYTHON_VERSION}-${PYTHON_SUFFIX}" -C tools
-    fi
-
-    tools/python/bin/python -m venv $venv_dir
-    source $venv_dir/bin/activate
-
-    pip install -U pip
-    pip install -e . wheel
-
-    echo "Building platform dependency wheels..."
-    if [ ! -z "$PYTHON_APPLE_SUPPORT" ]; then
-        python -m make_dep_wheels iOS
-        if [ $? -ne 0 ]; then
-            return
-        fi
-    elif [ ! -z "$PYTHON_ANDROID_SUPPORT" ]; then
-        python -m make_dep_wheels android
-        if [ $? -ne 0 ]; then
-            return
-        fi
-    fi
-
-    echo "Python $PYTHON_VERSION environment has been created."
-    echo
-else
-    echo "Using existing Python $PYTHON_VERSION environment."
-    source $venv_dir/bin/activate
-fi
-
 # Create wheels for ninja that can be installed in the host environment
 if ! [ -f "dist/ninja-1.11.1-py3-none-ios_12_0_iphoneos_arm64.whl" ]; then
     echo "Downloading Ninja"
@@ -235,5 +233,3 @@ echo
 echo "Build all applicable versions of lru-dict for all iOS targets:"
 echo "   forge iOS --all-versions lru-dict"
 echo
-
-echo "PATH before script finish: $PATH"
