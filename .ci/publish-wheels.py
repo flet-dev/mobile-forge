@@ -17,11 +17,10 @@ def upload_file(s3_client, bucket_name, local_file_path, remote_file_path):
     """Uploads a file to Cloudflare S2 storage with SHA256 hash in metadata."""
     try:
         with open(local_file_path, "rb") as f:
-            file_content = f.read()
             sha256_hash = get_sha256(local_file_path)
             metadata = {"sha256": sha256_hash}
             s3_client.upload_fileobj(
-                file_content,
+                f,
                 bucket_name,
                 remote_file_path,
                 ExtraArgs=dict(Metadata=metadata),
