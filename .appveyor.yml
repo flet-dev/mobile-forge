@@ -61,6 +61,10 @@ for:
 
       # cleanup
       - rm dist/ninja-*
+      - rm dist/bzip2-*
+      - rm dist/xz-*
+      - rm dist/libffi-*
+      - rm dist/openssl-*
 
     deploy_script:
       - pip install boto3
@@ -95,6 +99,10 @@ for:
 
       # cleanup
       - rm dist/ninja-*
+      - rm dist/bzip2-*
+      - rm dist/xz-*
+      - rm dist/libffi-*
+      - rm dist/openssl-*
 
     deploy_script:
       - pip install boto3
