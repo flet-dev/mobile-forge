@@ -5,6 +5,13 @@ skip_branch_with_pr: true
 environment:
   PYTHON_VERSION: 3.12.3
   PYTHON_SHORT_VERSION: 3.12
+  CF_ACCESS_KEY_ID:
+    secure: +m1fzbrEPRecXKCCMn4uA781PAASzJSWAxuJj1c7ctLfWbi5oW4PMnowPK96XtQ5
+  CF_SECRET_ACCESS_KEY:
+    secure: siQTjK+IAmy+zcTSO0d/dnyU/SHC52+gaW8xOT3GFqW8dyRAWr7YXtCU0QvlIC5MFVnbEmgDcDKqINaWN1iD5Cuuw/QAFsF1L/zDnQSvAtE=
+  CF_ENDPOINT_URL:
+    secure: lSQBfrqIXIOAYhA0NGej7Pfll1wOSKTTFwQCl8N8lvI22uI5CA/UjRKaqw6KlIZMcXvqTP1w11CVqC2CWnyM3hK857X2tAe8nkO8KT0DCzw=
+  CF_BUCKET_NAME: flet-simple
 
   matrix:
     - job_name: Build Android packages
