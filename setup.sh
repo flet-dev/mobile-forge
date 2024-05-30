@@ -235,3 +235,5 @@ echo
 echo "Build all applicable versions of lru-dict for all iOS targets:"
 echo "   forge iOS --all-versions lru-dict"
 echo
+
+echo "PATH before script finish: $PATH"
