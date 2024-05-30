@@ -61,7 +61,7 @@ for:
       - sh: |
           mkdir -p dist
           echo "Test" > dist/wheel1.whl
-          echo "Test 2" > dist/wheel1.whl
+          echo "Test 2" > dist/wheel2.whl
 
     deploy_script:
       - python .ci/publish-wheels.py dist
