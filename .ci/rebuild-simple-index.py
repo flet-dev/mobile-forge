@@ -67,7 +67,10 @@ def main():
             wheels.append({"key": key, "sha256": metadata["Metadata"]["sha256"]})
 
     print("Writing root index")
-    packages = [html_root_anchor.format(p) for p in sorted(index.keys())]
+    packages = [
+        html_root_anchor.format(p)
+        for p in sorted([p[0] for p in index.items() if len(p[1]) > 0])
+    ]
     lines = [html_header] + packages + [html_footer]
     s3_client.put_object(
         Key="simple/index.html",
