@@ -1,5 +1,3 @@
-set -e
-
 usage() {
     echo "Usage:"
     echo
@@ -89,7 +87,9 @@ if [ ! -d $venv_dir ]; then
         if [ $? -ne 0 ]; then
             return
         fi
-    elif [ ! -z "$PYTHON_ANDROID_SUPPORT" ]; then
+    fi
+
+    if [ ! -z "$PYTHON_ANDROID_SUPPORT" ]; then
         python -m make_dep_wheels android
         if [ $? -ne 0 ]; then
             return
