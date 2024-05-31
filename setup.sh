@@ -3,11 +3,6 @@
 usage() {
     echo "Usage:"
     echo
-}
-
-# set -e
-    echo "Usage:"
-    echo
     echo "    source $1 <python version>"
     echo
     echo "for example:"
