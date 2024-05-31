@@ -121,7 +121,7 @@ for:
     environment:
       APPVEYOR_BUILD_WORKER_IMAGE: ubuntu
 
-    build_script:
+    deploy_script:
       - pip3 install boto3
       - python .ci/rebuild-simple-index.py
 
