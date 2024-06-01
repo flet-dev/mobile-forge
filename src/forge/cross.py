@@ -58,7 +58,11 @@ class CrossVEnv:
         self.arch = arch
 
         self.platform_identifier = self._platform_identifier(sdk, sdk_version, arch)
-        self.tag = self._platform_identifier(sdk, sdk_version, arch).replace("-", "_").replace(".", "_")
+        self.tag = (
+            self._platform_identifier(sdk, sdk_version, arch)
+            .replace("-", "_")
+            .replace(".", "_")
+        )
         self.venv_name = f"venv3.{sys.version_info.minor}-{self.tag}"
         self.platform_triplet = f"{self.arch}-{self.PLATFORM_TRIPLET[sdk]}"
 
@@ -176,7 +180,7 @@ class CrossVEnv:
             "arm64-v8a": "aarch64",
             "armeabi-v7a": "arm",
             "x86_64": "x86_64",
-            "x86": "i686"
+            "x86": "i686",
         }[arch]
 
     def create(
@@ -193,7 +197,9 @@ class CrossVEnv:
         :raises: ``RuntimeError`` if an environment matching the requested host already
             exists, and ``clean=False``.
         """
-        env_key = f"MOBILE_FORGE_{self.sdk.upper()}_{self.arch.upper().replace('-', '_')}"
+        env_key = (
+            f"MOBILE_FORGE_{self.sdk.upper()}_{self.arch.upper().replace('-', '_')}"
+        )
         host_python = os.getenv(env_key)
         if host_python is None:
             raise RuntimeError(
@@ -306,6 +312,7 @@ class CrossVEnv:
             if not (
                 # Exclude rbenv, npm, and other language environments
                 p.startswith(f"{Path.home()}/.")
+                and not p.startswith(f"{Path.home()}/.cargo")
                 # Exclude homebrew
                 or p.startswith("/opt")
                 # Exclude local python installs
