@@ -80,8 +80,7 @@ class Builder(ABC):
             log(self.log_file, f"No {target} requirements.")
 
     @abstractmethod
-    def download_source_url(self):
-        ...
+    def download_source_url(self): ...
 
     def download_source(self):
         """Download the source tarball."""
@@ -215,7 +214,9 @@ class Builder(ABC):
             cflags = re.sub(r"-I.*/merge/iOS/.*/xs-.*/include", "", cflags)
 
             # Replace any hard-coded reference to --sysroot=<sysroot> with the actual reference
-            cflags = re.sub(r"--sysroot=\w+", f"--sysroot={self.cross_venv.sdk_root}", cflags)
+            cflags = re.sub(
+                r"--sysroot=\w+", f"--sysroot={self.cross_venv.sdk_root}", cflags
+            )
 
             # Add SDK root include
             if (self.cross_venv.sdk_root / "usr" / "include").is_dir():
@@ -230,7 +231,9 @@ class Builder(ABC):
         if self.cross_venv.sdk != "android":
 
             # Replace any hard-coded reference to -isysroot <sysroot> with the actual reference
-            ldflags = re.sub(r"-isysroot \w+", f"-isysroot={self.cross_venv.sdk_root}", ldflags)
+            ldflags = re.sub(
+                r"-isysroot \w+", f"-isysroot={self.cross_venv.sdk_root}", ldflags
+            )
 
             # Add SDK root lib
             if (self.cross_venv.sdk_root / "usr" / "lib").is_dir():

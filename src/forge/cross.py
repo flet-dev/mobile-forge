@@ -42,6 +42,7 @@ class CrossVEnv:
             ("watchsimulator", "x86_64"),
         ],
     }
+
     PLATFORM_TRIPLET = {
         "android": "linux-android",
         "iphoneos": "apple-ios",
@@ -50,6 +51,13 @@ class CrossVEnv:
         "appletvsimulator": "apple-tvos-simulator",
         "watchos": "apple-watchos",
         "watchsimulator": "apple-watchos-simulator",
+    }
+
+    ANDROID_PLATFORM_TRIPLET = {
+        "arm64-v8a": "arm-linux-androideabi",
+        "armeabi-v7a": "aarch64-linux-android",
+        "x86_64": "x86_64-linux-android",
+        "x86": "i686-linux-android",
     }
 
     def __init__(self, sdk, sdk_version, arch):
@@ -64,7 +72,10 @@ class CrossVEnv:
             .replace(".", "_")
         )
         self.venv_name = f"venv3.{sys.version_info.minor}-{self.tag}"
-        self.platform_triplet = f"{self.arch}-{self.PLATFORM_TRIPLET[sdk]}"
+        if sdk == "android":
+            self.platform_triplet = self.ANDROID_PLATFORM_TRIPLET[arch]
+        else:
+            self.platform_triplet = f"{self.arch}-{self.PLATFORM_TRIPLET[sdk]}"
 
         # Prime the on-demand variable cache
         self._sysconfig_data = None
