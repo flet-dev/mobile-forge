@@ -59,17 +59,20 @@ for:
       - pushd python-mobile
       - ./build-all.sh $PYTHON_VERSION
       - popd
+
+      # configure forge
+      - export PYTHON_ANDROID_SUPPORT=$(realpath ./python-mobile)
+      - source ./setup.sh $PYTHON_VERSION
+
       #- ./ci/package-python-for-android.sh python-mobile/install $PYTHON_VERSION $ANDROID_ABI
       #- find dist -type f -iname *.tar.gz -exec appveyor PushArtifact -DeploymentName python-dist-android {} \;
+
+      # install Rust
       - curl https://sh.rustup.rs -sSf | sh -s -- -y
       - . "$HOME/.cargo/env"
       - rustup target add aarch64-linux-android
 
     build_script:
-      - export PYTHON_ANDROID_SUPPORT=$(realpath ./python-mobile)
-      - source ./setup.sh $PYTHON_VERSION
-
-      # build packages
       - forge android libjpeg:3.0.1
       - forge android libpng:1.6.43
       - forge android aiohttp:3.9.5
@@ -107,17 +110,20 @@ for:
       - pushd Python-Apple-support
       - make iOS
       - popd
+
+      # configure forge
+      - export PYTHON_APPLE_SUPPORT=$(realpath ./Python-Apple-support)
+      - source ./setup.sh $PYTHON_VERSION
+
       #- ./ci/package-python-for-ios.sh Python-Apple-support $PYTHON_VERSION
       #- find dist -type f -iname *.tar.gz -exec appveyor PushArtifact -DeploymentName python-dist-ios {} \;
+
+      # install Rust
       - curl https://sh.rustup.rs -sSf | sh -s -- -y
       - . "$HOME/.cargo/env"
       - rustup target add aarch64-apple-darwin
 
     build_script:
-      - export PYTHON_APPLE_SUPPORT=$(realpath ./Python-Apple-support)
-      - source ./setup.sh $PYTHON_VERSION
-
-      # build packages
       - forge iOS libjpeg:3.0.1
       - forge iOS libpng:1.6.43
       - forge iOS aiohttp:3.9.5
