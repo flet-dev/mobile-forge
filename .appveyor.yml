@@ -28,6 +28,16 @@ environment:
 stack:
 - python $PYTHON_SHORT_VERSION
 
+on_finish:
+- sh: |
+    if test -d logs; then
+      find dist -type f -iname logs/*.log -exec appveyor PushArtifact {} \;
+    fi
+
+    if test -d errors; then
+      find dist -type f -iname errors/*.log -exec appveyor PushArtifact {} \;
+    fi
+
 for:
   # ======================================
   #      Build Android packages
