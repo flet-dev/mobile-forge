@@ -2,14 +2,14 @@ package:
   name: freetype
   version: 2.9.1
 
-patches:
-  - config.patch
-
 build:
   number: 1
 
 source:
   url: https://download.savannah.gnu.org/releases/freetype/freetype-2.9.1.tar.gz
+
+patches:
+  - config.patch
 
 about:
   license_file: docs/FTL.TXT
