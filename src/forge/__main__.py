@@ -248,14 +248,15 @@ def main():
         print("Successful builds for:")
         for name, version, tag in successes:
             print(f" * {name} {version if version else '(default version)'} ({tag})")
+        print()
 
     if failures:
         print()
         print("Failed builds for:")
         for name, version, tag in failures:
             print(f" * {name} {version if version else '(default version)'} ({tag})")
-
-    print()
+        print()
+        sys.exit(1)
 
 
 if __name__ == "__main__":
