@@ -49,6 +49,9 @@ for:
       - popd
       #- ./ci/package-python-for-android.sh python-mobile/install $PYTHON_VERSION $ANDROID_ABI
       #- find dist -type f -iname *.tar.gz -exec appveyor PushArtifact -DeploymentName python-dist-android {} \;
+      - curl https://sh.rustup.rs -sSf | sh -s -- -y
+      - . "$HOME/.cargo/env"
+      - rustup target add aarch64-linux-android
 
     build_script:
       - export PYTHON_ANDROID_SUPPORT=$(realpath ./python-mobile)
@@ -57,6 +60,7 @@ for:
       # build packages
       - forge android aiohttp:3.9.5
       - forge android bitarray:2.9.2
+      - forge android bcrypt:4.1.3
       - forge android brotli:1.1.0
       - forge android lru-dict:1.3.0
       - forge android cffi:1.16.0
@@ -91,6 +95,9 @@ for:
       - popd
       #- ./ci/package-python-for-ios.sh Python-Apple-support $PYTHON_VERSION
       #- find dist -type f -iname *.tar.gz -exec appveyor PushArtifact -DeploymentName python-dist-ios {} \;
+      - curl https://sh.rustup.rs -sSf | sh -s -- -y
+      - . "$HOME/.cargo/env"
+      - rustup target add aarch64-apple-darwin
 
     build_script:
       - export PYTHON_APPLE_SUPPORT=$(realpath ./Python-Apple-support)
@@ -99,6 +106,7 @@ for:
       # build packages
       - forge iOS aiohttp:3.9.5
       - forge iOS bitarray:2.9.2
+      - forge iOS bcrypt:4.1.3
       - forge iOS brotli:1.1.0
       - forge iOS lru-dict:1.3.0
       - forge iOS cffi:1.16.0
