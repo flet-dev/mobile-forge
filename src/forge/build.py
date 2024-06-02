@@ -244,8 +244,13 @@ class Builder(ABC):
             "CC": cc,
             "CFLAGS": cflags,
             "LDFLAGS": ldflags,
+            "CROSS_VENV_SDK": self.cross_venv.sdk,
         }
         env.update(kwargs)
+
+        if self.cross_venv.sdk == "android":
+            cc_parts = cc.split("/")
+            env["NDK_ROOT"] = "/".join(cc_parts[: cc_parts.index("toolchains")])
 
         # Add in some user environment keys that are useful
         for key in [

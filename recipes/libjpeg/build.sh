@@ -2,10 +2,19 @@
 set -eu
 
 # SIMD is only available for x86, so disable for consistency between ABIs.
-./configure --host=$HOST_TRIPLET --build=$BUILD_TRIPLET --without-turbojpeg --without-simd
-make -j $CPU_COUNT
-make install prefix=$PREFIX
+if [ $CROSS_VENV_SDK == "android" ]; then
+    cmake -G"Unix Makefiles" \
+        -DCMAKE_SYSTEM_NAME=Android \
+        -DCMAKE_TOOLCHAIN_FILE=$NDK_ROOT/build/cmake/android.toolchain.cmake \
+        -DWITH_SIMD=OFF \
+        -DCMAKE_INSTALL_PREFIX=$PREFIX .
+else
+    cmake -G"Unix Makefiles" \
+        -DCMAKE_INSTALL_PREFIX=$PREFIX .
+fi
 
-rm -r $PREFIX/{bin,doc,man}
-mv $PREFIX/lib?? $PREFIX/lib  # lib32 or lib64
-rm -r $PREFIX/lib/{*.la,pkgconfig}
+make -j $CPU_COUNT
+make install
+
+rm -r $PREFIX/{bin,share}
+rm -r $PREFIX/lib/{pkgconfig,cmake}
