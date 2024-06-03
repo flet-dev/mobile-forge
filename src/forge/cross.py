@@ -54,8 +54,8 @@ class CrossVEnv:
     }
 
     ANDROID_PLATFORM_TRIPLET = {
-        "arm64-v8a": "arm-linux-androideabi",
-        "armeabi-v7a": "aarch64-linux-android",
+        "arm64-v8a": "aarch64-linux-android",
+        "armeabi-v7a": "arm-linux-androideabi",
         "x86_64": "x86_64-linux-android",
         "x86": "i686-linux-android",
     }
@@ -79,6 +79,7 @@ class CrossVEnv:
 
         # Prime the on-demand variable cache
         self._sysconfig_data = None
+        self._scheme_paths = None
         self._install_root = None
         self._sdk_root = None
 
@@ -117,6 +118,28 @@ class CrossVEnv:
             self._sysconfig_data = config["data"]
 
         return self._sysconfig_data
+
+    @property
+    def scheme_paths(self) -> dict[str, str]:
+        """The install scheme paths for the cross environment."""
+        if self._scheme_paths is None:
+            # Run a script in the cross-venv that outputs the config variables
+            config_var_repr = self.check_output(
+                [
+                    "python",
+                    "-c",
+                    "import sysconfig; print(sysconfig.get_paths())",
+                ],
+                encoding="UTF-8",
+            )
+
+            # Parse the output of the previous command as Python,
+            # turning it back into a dict.
+            config = {}
+            exec(f"data = {config_var_repr}", config, config)
+            self._scheme_paths = config["data"]
+
+        return self._scheme_paths
 
     @property
     def install_root(self) -> Path:

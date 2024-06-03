@@ -64,7 +64,12 @@ class Builder(ABC):
         for requirement in self.package.meta["requirements"][target]:
             try:
                 package, version = requirement.split()
-                specifier = f"{package}=={version}"
+                if version.startswith("^"):
+                    specifier = f"{package}>={version[1:]}"
+                elif version.startswith("~"):
+                    specifier = f"{package}~={version[1:]}"
+                else:
+                    specifier = f"{package}=={version}"
             except ValueError:
                 specifier = requirement
             requirements.append(specifier)
@@ -239,12 +244,25 @@ class Builder(ABC):
             if (self.cross_venv.sdk_root / "usr" / "lib").is_dir():
                 ldflags += f" -L{self.cross_venv.sdk_root}/usr/lib"
 
+        cargo_build_target = {
+            "arm64-apple-ios": "aarch64-apple-ios",
+            "arm64-apple-ios-simulator": "aarch64-apple-ios-sim",
+            # This one is odd; Rust doesn't provide an `x86_64-apple-ios-simulator`,
+            # but there's no such thing as an x86_64 ios *device*.
+            "x86_64-apple-ios-simulator": "x86_64-apple-ios",
+        }[self.cross_venv.platform_triplet] if self.cross_venv.sdk != "android" else self.cross_venv.platform_triplet
+
         env = {
             "AR": ar,
             "CC": cc,
             "CFLAGS": cflags,
             "LDFLAGS": ldflags,
             "CROSS_VENV_SDK": self.cross_venv.sdk,
+            "CARGO_BUILD_TARGET": cargo_build_target,
+            "CARGO_TARGET_{}_LINKER".format(cargo_build_target.replace("-", "_").upper()): cc,
+            #"CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS": ldflags,
+            "PYO3_CROSS_PYTHON_VERSION": self.cross_venv.sysconfig_data["py_version_short"],
+            "PYO3_CROSS_LIB_DIR": "{}/lib".format(self.cross_venv.sysconfig_data["prefix"])
         }
         env.update(kwargs)
 
@@ -520,7 +538,7 @@ class PythonPackageBuilder(Builder):
         script_env = {}
         for line in self.package.meta["build"]["script_env"]:
             key, value = line.split("=", 1)
-            script_env[key] = value
+            script_env[key] = value.format(**self.cross_venv.scheme_paths)
 
         # Set the cross host platform in the environment
         script_env["_PYTHON_HOST_PLATFORM"] = self.cross_venv.platform_identifier
