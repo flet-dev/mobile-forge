@@ -1,0 +1,25 @@
+diff --git a/pyproject.toml b/pyproject.toml
+index 93f3530..a5fbbd9 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -1,6 +1,6 @@
+ [project]
+ name = "setuptools-rust"
+-version = "1.9.0"
++version = "1.9.0+ios"
+ description = "Setuptools Rust extension plugin"
+ readme = "README.md"
+ requires-python = ">=3.8"
+diff --git a/setuptools_rust/build.py b/setuptools_rust/build.py
+index e693ccb..dfc4a5b 100644
+--- a/setuptools_rust/build.py
++++ b/setuptools_rust/build.py
+@@ -191,7 +191,7 @@ class build_rust(RustCommand):
+                 ]
+ 
+             # OSX requires special linker arguments
+-            if rustc_cfgs.get("target_os") == "macos":
++            if rustc_cfgs.get("target_os") in {"macos", "ios", "tvos", "watchos"}:
+                 ext_basename = os.path.basename(self.get_dylib_ext_path(ext, ext.name))
+                 rustc_args.extend(
+                     [

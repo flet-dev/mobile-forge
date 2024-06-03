@@ -9,7 +9,8 @@ build:
 
 requirements:
   build:
-    - "setuptools_rust @ git+https://github.com/freakboy3742/setuptools-rust@iOS-support"
+    - setuptools-rust 1.9.0+ios
 
   host:
+    - cffi 1.16.0
     - openssl ^3.0.12
