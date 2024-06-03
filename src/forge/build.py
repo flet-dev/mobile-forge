@@ -251,6 +251,7 @@ class Builder(ABC):
         if self.cross_venv.sdk == "android":
             cc_parts = cc.split("/")
             env["NDK_ROOT"] = "/".join(cc_parts[: cc_parts.index("toolchains")])
+            env["ANDROID_ABI"] = self.cross_venv.arch
 
         # Add in some user environment keys that are useful
         for key in [

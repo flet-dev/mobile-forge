@@ -5,6 +5,7 @@ set -eu
 if [ $CROSS_VENV_SDK == "android" ]; then
     cmake -G"Unix Makefiles" \
         -DCMAKE_SYSTEM_NAME=Android \
+        -DANDROID_ABI=$ANDROID_ABI \
         -DCMAKE_TOOLCHAIN_FILE=$NDK_ROOT/build/cmake/android.toolchain.cmake \
         -DWITH_SIMD=OFF \
         -DCMAKE_INSTALL_PREFIX=$PREFIX .
