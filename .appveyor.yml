@@ -20,9 +20,9 @@ environment:
     - job_name: Build iOS packages
       job_group: build_ios
 
-    - job_name: Re-build Simple index
-      job_group: rebuild_index
-      job_depends_on: build_android, build_ios
+    # - job_name: Re-build Simple index
+    #   job_group: rebuild_index
+    #   job_depends_on: build_android, build_ios
 
 stack:
 - python $PYTHON_SHORT_VERSION
@@ -80,15 +80,15 @@ for:
       - forge android freetype:2.13.2
 
       # # packages
-      - forge android aiohttp:3.9.5
-      - forge android bitarray:2.9.2
-      - forge android bcrypt:4.1.3
-      - forge android brotli:1.1.0
-      - forge android lru-dict:1.3.0
-      - forge android cffi:1.16.0
-      - forge android argon2-cffi-bindings:21.2.0
       - forge android pillow:10.3.0
-      - forge android yarl:1.9.4
+      - forge android bcrypt:4.1.3
+      # - forge android aiohttp:3.9.5
+      # - forge android bitarray:2.9.2
+      # - forge android brotli:1.1.0
+      # - forge android lru-dict:1.3.0
+      # - forge android cffi:1.16.0
+      # - forge android argon2-cffi-bindings:21.2.0
+      # - forge android yarl:1.9.4
 
       # cleanup
       - rm dist/ninja-*
@@ -141,15 +141,15 @@ for:
       - forge iOS freetype:2.13.2
 
       # packages
-      - forge iOS aiohttp:3.9.5
-      - forge iOS bitarray:2.9.2
-      - forge iOS bcrypt:4.1.3
-      - forge iOS brotli:1.1.0
-      - forge iOS lru-dict:1.3.0
-      - forge iOS cffi:1.16.0
-      - forge iOS argon2-cffi-bindings:21.2.0
       - forge iOS pillow:10.3.0
-      - forge iOS yarl:1.9.4
+      - forge iOS bcrypt:4.1.3
+      # - forge iOS aiohttp:3.9.5
+      # - forge iOS bitarray:2.9.2
+      # - forge iOS brotli:1.1.0
+      # - forge iOS lru-dict:1.3.0
+      # - forge iOS cffi:1.16.0
+      # - forge iOS argon2-cffi-bindings:21.2.0
+      # - forge iOS yarl:1.9.4
 
       # cleanup
       - rm dist/ninja-*

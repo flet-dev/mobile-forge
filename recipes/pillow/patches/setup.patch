@@ -1,7 +1,19 @@
-index ac401dd..cb0495d 100644
+diff --git a/setup.py b/setup.py
+index ac401dd..a5a9938 100644
 --- a/setup.py
 +++ b/setup.py
-@@ -421,10 +421,19 @@ class pil_build_ext(build_ext):
+@@ -341,9 +341,7 @@ class pil_build_ext(build_ext):
+         return True if value in configuration.get(option, []) else None
+ 
+     def initialize_options(self):
+-        self.disable_platform_guessing = self.check_configuration(
+-            "platform-guessing", "disable"
+-        )
++        self.disable_platform_guessing = True
+         self.add_imaging_libs = ""
+         build_ext.initialize_options(self)
+         for x in self.feature:
+@@ -421,10 +419,19 @@ class pil_build_ext(build_ext):
                  self.extensions.remove(extension)
                  break
  
@@ -23,7 +35,7 @@ index ac401dd..cb0495d 100644
                  .strip()
                  .decode("latin1")
              )
-@@ -577,11 +586,15 @@ class pil_build_ext(build_ext):
+@@ -577,11 +584,15 @@ class pil_build_ext(build_ext):
                  _add_directory(library_dirs, "/usr/X11/lib")
                  _add_directory(include_dirs, "/usr/X11/include")
  
