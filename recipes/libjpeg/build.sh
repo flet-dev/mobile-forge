@@ -14,7 +14,7 @@ else
         -DCMAKE_INSTALL_PREFIX=$PREFIX .
 fi
 
-make -j $CPU_COUNT > /dev/null 2>&1
+make -j $CPU_COUNT > /dev/null 2>&1 || { echo "Error building libjpeg"; exit 1; }
 make install
 
 rm -r $PREFIX/{bin,share}
