@@ -77,13 +77,16 @@ for:
 
     build_script:
 
+      # tools
+      - forge android setuptools-rust
+
       # libs
       - forge android cffi:1.16.0
       - forge android libjpeg:3.0.1
       - forge android libpng:1.6.43
       - forge android freetype:2.13.2
 
-      # # packages
+      # packages
       - forge android pillow:10.3.0
       - forge android bcrypt:4.1.3
       - forge android cryptography:42.0.7
@@ -141,6 +144,9 @@ for:
       - export PATH="$PATH:$HOME/.cargo/bin"
 
     build_script:
+
+      # tools
+      - forge iOS setuptools-rust
 
       # libs
       - forge iOS cffi:1.16.0
