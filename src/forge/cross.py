@@ -208,15 +208,6 @@ class CrossVEnv:
             raise ValueError(f"Don't know how to build wheels for {sdk}")
         return identifier
 
-    @classmethod
-    def _android_arch(cls, arch):
-        return {
-            "arm64-v8a": "aarch64",
-            "armeabi-v7a": "arm",
-            "x86_64": "x86_64",
-            "x86": "i686",
-        }[arch]
-
     def create(
         self,
         location=None,
@@ -426,10 +417,7 @@ class CrossVEnv:
         self.run(
             logfile,
             (["build-pip"] if build else ["python", "-m", "pip"])
-            + [
-                "install",
-                "--disable-pip-version-check",
-            ]
+            + ["install", "--disable-pip-version-check"]
             # If we're doing a host build, require binary packages.
             # build environment can use non-binary packages.
             + (

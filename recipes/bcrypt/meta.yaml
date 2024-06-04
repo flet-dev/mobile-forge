@@ -4,5 +4,5 @@ package:
 
 requirements:
   build:
-    - setuptools-rust 1.9.0+ios
+    - setuptools_rust @ git+https://github.com/flet-dev/setuptools-rust@ios-support
     - cffi 1.16.0

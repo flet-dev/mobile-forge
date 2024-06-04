@@ -229,9 +229,16 @@ class Builder(ABC):
 
         ldflags = self.cross_venv.sysconfig_data["LDFLAGS"]
 
+        # -lpython3.x
+        ldflags += " -L{}/lib".format(self.cross_venv.sysconfig_data["prefix"])
+
         # Add install root lib
         if (install_root / "lib").is_dir():
             ldflags += f" -L{install_root}/lib"
+
+        # cargo_ldflags = re.sub(r"-march=[\w-]+", "", ldflags)
+        # cargo_ldflags += " -L{}/lib".format(self.cross_venv.sysconfig_data["prefix"])
+        cargo_ldflags = " -C link-arg=-undefined -C link-arg=dynamic_lookup"
 
         if self.cross_venv.sdk != "android":
 
@@ -244,13 +251,17 @@ class Builder(ABC):
             if (self.cross_venv.sdk_root / "usr" / "lib").is_dir():
                 ldflags += f" -L{self.cross_venv.sdk_root}/usr/lib"
 
-        cargo_build_target = {
-            "arm64-apple-ios": "aarch64-apple-ios",
-            "arm64-apple-ios-simulator": "aarch64-apple-ios-sim",
-            # This one is odd; Rust doesn't provide an `x86_64-apple-ios-simulator`,
-            # but there's no such thing as an x86_64 ios *device*.
-            "x86_64-apple-ios-simulator": "x86_64-apple-ios",
-        }[self.cross_venv.platform_triplet] if self.cross_venv.sdk != "android" else self.cross_venv.platform_triplet
+        cargo_build_target = (
+            {
+                "arm64-apple-ios": "aarch64-apple-ios",
+                "arm64-apple-ios-simulator": "aarch64-apple-ios-sim",
+                # This one is odd; Rust doesn't provide an `x86_64-apple-ios-simulator`,
+                # but there's no such thing as an x86_64 ios *device*.
+                "x86_64-apple-ios-simulator": "x86_64-apple-ios",
+            }[self.cross_venv.platform_triplet]
+            if self.cross_venv.sdk != "android"
+            else self.cross_venv.platform_triplet
+        )
 
         env = {
             "AR": ar,
@@ -259,10 +270,18 @@ class Builder(ABC):
             "LDFLAGS": ldflags,
             "CROSS_VENV_SDK": self.cross_venv.sdk,
             "CARGO_BUILD_TARGET": cargo_build_target,
-            "CARGO_TARGET_{}_LINKER".format(cargo_build_target.replace("-", "_").upper()): cc,
-            #"CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS": ldflags,
-            "PYO3_CROSS_PYTHON_VERSION": self.cross_venv.sysconfig_data["py_version_short"],
-            "PYO3_CROSS_LIB_DIR": "{}/lib".format(self.cross_venv.sysconfig_data["prefix"])
+            "CARGO_TARGET_{}_LINKER".format(
+                cargo_build_target.replace("-", "_").upper()
+            ): cc,
+            "CARGO_TARGET_{}_RUSTFLAGS".format(
+                cargo_build_target.replace("-", "_").upper()
+            ): cargo_ldflags,
+            "PYO3_CROSS_PYTHON_VERSION": self.cross_venv.sysconfig_data[
+                "py_version_short"
+            ],
+            "PYO3_CROSS_LIB_DIR": "{}/lib".format(
+                self.cross_venv.sysconfig_data["prefix"]
+            ),
         }
         env.update(kwargs)
 
