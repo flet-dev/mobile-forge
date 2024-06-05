@@ -203,10 +203,11 @@ class Builder(ABC):
         install_root = self.cross_venv.install_root
 
         ar = sysconfig_data["AR"]
-
         cc = sysconfig_data["CC"]
+        cxx = sysconfig_data["CXX"]
 
         cflags = self.cross_venv.sysconfig_data["CFLAGS"]
+        cppflags = self.cross_venv.sysconfig_data["CPPFLAGS"]
 
         # Add install root include
         if (install_root / "include").is_dir():
@@ -266,7 +267,9 @@ class Builder(ABC):
         env = {
             "AR": ar,
             "CC": cc,
+            "CXX": cxx,
             "CFLAGS": cflags,
+            "CPPFLAGS": cppflags,
             "LDFLAGS": ldflags,
             "CROSS_VENV_SDK": self.cross_venv.sdk,
             "CARGO_BUILD_TARGET": cargo_build_target,
@@ -552,6 +555,47 @@ class PythonPackageBuilder(Builder):
             )
             self.cross_venv.pip_install(self.log_file, ["build", "wheel"], build=True)
 
+    def _create_meson_cross(self, env: dict[str, str]):
+        cpu_family = {
+                    "arm64-v8a": "aarch64",
+                    "arm64": "aarch64",
+                    "armeabi-v7a": "arm",
+                    "x86_64": "x86_64",
+                    "x86": "x86"
+                }[self.cross_venv.arch]
+        cpu = {
+                    "arm64-v8a": "aarch64",
+                    "arm64": "aarch64",
+                    "armeabi-v7a": "armv7",
+                    "x86_64": "x86_64",
+                    "x86": "i686"
+                }[self.cross_venv.arch]
+        meson_cross = str(self.build_path / "meson.cross")
+        with open(meson_cross, "w") as m:
+            m.write("\n".join([
+                "[binaries]",
+                "c = '{}'".format(env["CC"]),
+                "cpp = '{}'".format(env["CXX"]),
+                "ar = '{}'".format(env["AR"]),
+                "",
+                "[built-in options]",
+                "c_args = '{}'".format(env["CFLAGS"]),
+                "cpp_args = '{}'".format(env["CPPFLAGS"]),
+                "c_links_args = '{}'".format(env["LDFLAGS"]),
+                "cpp_links_args = '{}'".format(env["LDFLAGS"]),
+                "",
+                "[properties]",
+                "needs_exe_wrapper = true",
+                "",
+                "[host_machine]",
+                "cpu_family = '{}'".format(cpu_family),
+                "cpu = '{}'".format(cpu),
+                "endian = 'little'",
+                "system = '{}'".format(self.cross_venv.sdk),
+                "",
+            ]))
+        return meson_cross
+
     def _build(self):
         # Set up any additional environment variables needed in the script environment.
         script_env = {}
@@ -561,6 +605,9 @@ class PythonPackageBuilder(Builder):
 
         # Set the cross host platform in the environment
         script_env["_PYTHON_HOST_PLATFORM"] = self.cross_venv.platform_identifier
+
+        env = self.compile_env(**script_env)
+        meson_cross = self._create_meson_cross(env)
 
         self.cross_venv.run(
             self.log_file,
@@ -572,7 +619,9 @@ class PythonPackageBuilder(Builder):
                 "--wheel",
                 "--outdir",
                 str(Path.cwd() / "dist"),
+                "-Csetup-args=--cross-file",
+                f"-Csetup-args={meson_cross}"
             ],
             cwd=self.build_path,
-            env=self.compile_env(**script_env),
+            env=env,
         )
