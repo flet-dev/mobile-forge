@@ -62,7 +62,7 @@ properties:
         default: []
         items:
           type: string
-    additionalProperties: false
+    additionalProperties: true
 
   requirements:
     type: object

@@ -557,46 +557,51 @@ class PythonPackageBuilder(Builder):
 
     def _create_meson_cross(self, env: dict[str, str]):
         cpu_family = {
-                    "arm64-v8a": "aarch64",
-                    "arm64": "aarch64",
-                    "armeabi-v7a": "arm",
-                    "x86_64": "x86_64",
-                    "x86": "x86"
-                }[self.cross_venv.arch]
+            "arm64-v8a": "aarch64",
+            "arm64": "aarch64",
+            "armeabi-v7a": "arm",
+            "x86_64": "x86_64",
+            "x86": "x86",
+        }[self.cross_venv.arch]
         cpu = {
-                    "arm64-v8a": "aarch64",
-                    "arm64": "aarch64",
-                    "armeabi-v7a": "armv7",
-                    "x86_64": "x86_64",
-                    "x86": "i686"
-                }[self.cross_venv.arch]
+            "arm64-v8a": "aarch64",
+            "arm64": "aarch64",
+            "armeabi-v7a": "armv7",
+            "x86_64": "x86_64",
+            "x86": "i686",
+        }[self.cross_venv.arch]
         meson_cross = str(self.build_path / "meson.cross")
         with open(meson_cross, "w") as m:
-            m.write("\n".join([
-                "[binaries]",
-                "c = '{}'".format(env["CC"]),
-                "cpp = '{}'".format(env["CXX"]),
-                "ar = '{}'".format(env["AR"]),
-                "",
-                "[built-in options]",
-                "c_args = '{}'".format(env["CFLAGS"]),
-                "cpp_args = '{}'".format(env["CPPFLAGS"]),
-                "c_links_args = '{}'".format(env["LDFLAGS"]),
-                "cpp_links_args = '{}'".format(env["LDFLAGS"]),
-                "",
-                "[properties]",
-                "needs_exe_wrapper = true",
-                "",
-                "[host_machine]",
-                "cpu_family = '{}'".format(cpu_family),
-                "cpu = '{}'".format(cpu),
-                "endian = 'little'",
-                "system = '{}'".format(self.cross_venv.sdk),
-                "",
-            ]))
+            m.write(
+                "\n".join(
+                    [
+                        "[binaries]",
+                        "c = '{}'".format(env["CC"]),
+                        "cpp = '{}'".format(env["CXX"]),
+                        "ar = '{}'".format(env["AR"]),
+                        "",
+                        "[built-in options]",
+                        "c_args = '{}'".format(env["CFLAGS"]),
+                        "cpp_args = '{}'".format(env["CPPFLAGS"]),
+                        "c_links_args = '{}'".format(env["LDFLAGS"]),
+                        "cpp_links_args = '{}'".format(env["LDFLAGS"]),
+                        "",
+                        "[properties]",
+                        "needs_exe_wrapper = true",
+                        "",
+                        "[host_machine]",
+                        "cpu_family = '{}'".format(cpu_family),
+                        "cpu = '{}'".format(cpu),
+                        "endian = 'little'",
+                        "system = '{}'".format(self.cross_venv.sdk),
+                        "",
+                    ]
+                )
+            )
         return meson_cross
 
     def _build(self):
+
         # Set up any additional environment variables needed in the script environment.
         script_env = {}
         for line in self.package.meta["build"]["script_env"]:
@@ -607,7 +612,26 @@ class PythonPackageBuilder(Builder):
         script_env["_PYTHON_HOST_PLATFORM"] = self.cross_venv.platform_identifier
 
         env = self.compile_env(**script_env)
-        meson_cross = self._create_meson_cross(env)
+
+        meson_cross_file = self._create_meson_cross(env)
+
+        # final environment
+        env.update(
+            {
+                "PACKAGE_BUILD_PATH": str(self.build_path),
+                "MESON_CROSS_FILE": meson_cross_file,
+            }
+        )
+
+        backend_args = (
+            [
+                arg.format(**self.cross_venv.scheme_paths, **env)
+                for arg in self.package.meta["build"]["backend-args"]
+            ]
+            if "build" in self.package.meta
+            and "backend-args" in self.package.meta["build"]
+            else []
+        )
 
         self.cross_venv.run(
             self.log_file,
@@ -619,9 +643,8 @@ class PythonPackageBuilder(Builder):
                 "--wheel",
                 "--outdir",
                 str(Path.cwd() / "dist"),
-                "-Csetup-args=--cross-file",
-                f"-Csetup-args={meson_cross}"
-            ],
+            ]
+            + backend_args,
             cwd=self.build_path,
             env=env,
         )
