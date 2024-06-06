@@ -1,16 +1,23 @@
+# Building for Android requires API Level 24 or above.
+# See https://apilevels.com
+
 package:
   name: numpy
-  version: 1.26.0
-
-{% if version and version < (1, 26) %}
-{% else %}
-
-patches:
-  - mobile-1.26.0.patch
+  version: 1.26.4
 
 requirements:
  host:
 #     - chaquopy-openblas 0.2.20
 #     - chaquopy-libgfortran 4.9  # Required by ld.bfd on arm64 (see build-wheel.py)
-    - ninja
-{% endif %}
+  - ninja
+  - meson
+
+build:
+  script_env:
+    - NPY_DISABLE_SVML=1
+
+  backend-args:
+    - -Csetup-args=-Dblas=none
+    - -Csetup-args=-Dlapack=none
+    - -Csetup-args=--cross-file
+    - -Csetup-args={MESON_CROSS_FILE}

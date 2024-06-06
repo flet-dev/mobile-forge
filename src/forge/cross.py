@@ -13,7 +13,7 @@ from forge import subprocess
 
 class CrossVEnv:
     BASE_VERSION = {
-        "android": "21",
+        "android": "24",
         "iOS": "12.0",
         "tvOS": "7.0",
         "watchOS": "4.0",
