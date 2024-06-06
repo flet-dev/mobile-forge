@@ -202,9 +202,9 @@ fi
 if ! [ -f "dist/ninja-1.11.1-py3-none-ios_12_0_iphoneos_arm64.whl" ]; then
     echo "Downloading Ninja"
     python -m pip wheel --no-deps -w dist ninja==1.11.1
-    mv dist/ninja-1.11.1-*.whl dist/ninja-1.11.1-py3-none-ios_12_0_iphoneos_arm64.whl
-    cp dist/ninja-1.11.1-py3-none-ios_12_0_iphoneos_arm64.whl dist/ninja-1.11.1-py3-none-ios_12_0_iphonesimulator_x86_64.whl
-    cp dist/ninja-1.11.1-py3-none-ios_12_0_iphoneos_arm64.whl dist/ninja-1.11.1-py3-none-ios_12_0_iphonesimulator_arm64.whl
+    mv dist/ninja-1.11.1-*.whl dist/ninja-1.11.1-py3-none-ios_12_0_arm64_iphoneos.whl
+    cp dist/ninja-1.11.1-py3-none-ios_12_0_iphoneos_arm64.whl dist/ninja-1.11.1-py3-none-ios_12_0_x86_64_iphonesimulator.whl
+    cp dist/ninja-1.11.1-py3-none-ios_12_0_iphoneos_arm64.whl dist/ninja-1.11.1-py3-none-ios_12_0_arm64_iphonesimulator.whl
 
     cp dist/ninja-1.11.1-py3-none-ios_12_0_iphoneos_arm64.whl dist/ninja-1.11.1-py3-none-android_21_arm64_v8a.whl
     cp dist/ninja-1.11.1-py3-none-ios_12_0_iphoneos_arm64.whl dist/ninja-1.11.1-py3-none-android_21_armeabi_v7a.whl

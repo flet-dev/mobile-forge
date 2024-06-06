@@ -195,15 +195,15 @@ class CrossVEnv:
         elif sdk in {"iphoneos", "iphonesimulator"}:
             if version is None:
                 version = "12.0"
-            identifier = f"ios-{version}-{sdk}-{arch}"
+            identifier = f"ios-{version}-{arch}-{sdk}"
         elif sdk in {"appletvos", "appletvsimulator"}:
             if version is None:
                 version = "7.0"
-            identifier = f"tvos-{version}-{sdk}-{arch}"
+            identifier = f"tvos-{version}-{arch}-{sdk}"
         elif sdk in {"watchos", "watchsimulator"}:
             if version is None:
                 version = "4.0"
-            identifier = f"watchos-{version}-{sdk}-{arch}"
+            identifier = f"watchos-{version}-{arch}-{sdk}"
         else:
             raise ValueError(f"Don't know how to build wheels for {sdk}")
         return identifier

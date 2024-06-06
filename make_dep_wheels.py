@@ -43,7 +43,10 @@ def make_wheel(package, os_name, target):
 
     package_version, package_build = package_version_build.split("-")
 
-    wheel_tag = f"py3-none-{os_name}_{min_version}_{target.replace('-', '_')}".lower().replace(".", "_")
+    target_parts = target.split(".")
+    target_parts.reverse()
+    wheel_target = "_".join(target_parts)
+    wheel_tag = f"py3-none-{os_name}_{min_version}_{wheel_target.replace('-', '_')}".lower().replace(".", "_")
 
     wheel_file = (
         Path("dist") / f"{package.lower()}-{package_version_build}-{wheel_tag}.whl"

@@ -238,8 +238,8 @@ class Builder(ABC):
             ldflags += f" -L{install_root}/lib"
 
         # cargo_ldflags = re.sub(r"-march=[\w-]+", "", ldflags)
-        # cargo_ldflags += " -L{}/lib".format(self.cross_venv.sysconfig_data["prefix"])
-        cargo_ldflags = " -C link-arg=-undefined -C link-arg=dynamic_lookup"
+        cargo_ldflags = " -L{}/lib".format(self.cross_venv.sysconfig_data["prefix"])
+        cargo_ldflags += " -C link-arg=-undefined -C link-arg=dynamic_lookup"
 
         if self.cross_venv.sdk != "android":
 
