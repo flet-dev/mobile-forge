@@ -18,6 +18,7 @@ from packaging.utils import canonicalize_name, canonicalize_version
 from forge import subprocess
 from forge.logger import log, log_exception
 from forge.pypi import get_pypi_source_urls
+from forge.utils import merge_dicts
 
 try:
     import tomllib
@@ -205,6 +206,11 @@ class Builder(ABC):
         ar = sysconfig_data["AR"]
         cc = sysconfig_data["CC"]
         cxx = sysconfig_data["CXX"]
+        strip = (
+            str(Path(ar).parent.joinpath("llvm-strip"))
+            if ar and self.cross_venv.sdk == "android"
+            else "strip"
+        )
 
         cflags = self.cross_venv.sysconfig_data["CFLAGS"]
         cppflags = self.cross_venv.sysconfig_data["CPPFLAGS"]
@@ -268,6 +274,7 @@ class Builder(ABC):
             "AR": ar,
             "CC": cc,
             "CXX": cxx,
+            "STRIP": strip,
             "CFLAGS": cflags,
             "CPPFLAGS": cppflags,
             "LDFLAGS": ldflags,
@@ -570,35 +577,47 @@ class PythonPackageBuilder(Builder):
             "x86_64": "x86_64",
             "x86": "i686",
         }[self.cross_venv.arch]
+
+        master_meson_config = {
+            "binaries": {
+                "c": env["CC"],
+                "cpp": env["CXX"],
+                "ar": env["AR"],
+                "strip": env["STRIP"],
+            },
+            "built-in options": {
+                "c_args": env["CFLAGS"],
+                "cpp_args": env["CPPFLAGS"],
+                "c_links_args": env["LDFLAGS"],
+                "cpp_links_args": env["LDFLAGS"],
+            },
+            "properties": {"needs_exe_wrapper": True},
+            "host_machine": {
+                "cpu_family": cpu_family,
+                "cpu": cpu,
+                "endian": "little",
+                "system": self.cross_venv.sdk,
+            },
+        }
+
+        package_meson_config = (
+            self.package.meta["build"]["meson"]
+            if "build" in self.package.meta and "meson" in self.package.meta["build"]
+            else {}
+        )
+
+        meson_config = merge_dicts(master_meson_config, package_meson_config)
+
         meson_cross = str(self.build_path / "meson.cross")
         with open(meson_cross, "w") as m:
-            m.write(
-                "\n".join(
-                    [
-                        "[binaries]",
-                        "c = '{}'".format(env["CC"]),
-                        "cpp = '{}'".format(env["CXX"]),
-                        "ar = '{}'".format(env["AR"]),
-                        "",
-                        "[built-in options]",
-                        "c_args = '{}'".format(env["CFLAGS"]),
-                        "cpp_args = '{}'".format(env["CPPFLAGS"]),
-                        "c_links_args = '{}'".format(env["LDFLAGS"]),
-                        "cpp_links_args = '{}'".format(env["LDFLAGS"]),
-                        # "",
-                        "[properties]",
-                        #"needs_exe_wrapper = true",
-                        "longdouble_format = 'IEEE_DOUBLE_LE'",
-                        "",
-                        "[host_machine]",
-                        "cpu_family = '{}'".format(cpu_family),
-                        "cpu = '{}'".format(cpu),
-                        "endian = 'little'",
-                        "system = '{}'".format(self.cross_venv.sdk),
-                        "",
-                    ]
-                )
-            )
+            for section in meson_config.keys():
+                m.write(f"[{section}]\n")
+                for k, v in meson_config[section].items():
+                    m.write(
+                        "{} = {}\n".format(
+                            k, f"'{v}'" if isinstance(v, str) else str(v).lower()
+                        )
+                    )
         return meson_cross
 
     def _build(self):
