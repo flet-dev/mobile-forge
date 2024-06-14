@@ -229,7 +229,7 @@ def main():
                 package = Package(
                     package_name_or_recipe,
                     version=version,
-                    build_number=str(build_number),
+                    build_number=build_number,
                     sdk=sdk,
                     sdk_version=sdk_version,
                     arch=arch,
