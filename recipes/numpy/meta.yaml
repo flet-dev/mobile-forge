@@ -8,7 +8,6 @@ package:
 requirements:
  host:
 #     - chaquopy-openblas 0.2.20
-#     - chaquopy-libgfortran 4.9  # Required by ld.bfd on arm64 (see build-wheel.py)
   - ninja
   - meson
 
@@ -21,3 +20,11 @@ build:
     - -Csetup-args=-Dlapack=none
     - -Csetup-args=--cross-file
     - -Csetup-args={MESON_CROSS_FILE}
+
+  meson:
+    properties:
+# {% if sdk == 'android' and arch in ['arm64-v8a', 'x86_64'] %}
+      longdouble_format: IEEE_QUAD_LE
+# {% else %}
+      longdouble_format: IEEE_DOUBLE_LE
+# {% endif %}

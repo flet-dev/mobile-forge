@@ -1,23 +1,17 @@
-# This recipe doesn't work on Python 3.9 (due to setuptools_scm issues),
-# or on Python 3.8 (due to numpy availability issues)
 package:
   name: matplotlib
-  version: 3.6.0
+  version: 3.9.0
 
 patches:
-  - setupext.patch
-{% if py_version < (3, 11) %}
-  # This is required because of the inconsistency in old Apple Support versions
-  # in the error raised when subprocess is used.
-  - subprocess.patch
-{% endif %}
+  - pyproject.patch
 
 requirements:
   host:
-    - freetype 2.9.1
-    - libpng 1.6.43
-    - numpy 1.26.0
+    - meson
+    - ninja
+    - numpy 1.26.4
 
-  build:
-    - certifi
-    - setuptools_scm
+build:
+  backend-args:
+    - -Csetup-args=--cross-file
+    - -Csetup-args={MESON_CROSS_FILE}

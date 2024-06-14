@@ -1,0 +1,12 @@
+index fe75b32..a5f3433 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -86,7 +86,7 @@ requires = [
+     #      and disabling build isolation.
+     #   3. The <2.3 upper bound is for matching the numpy deprecation policy,
+     #      it should not be loosened.
+-    "numpy>=2.0.0rc1,<2.3",
++    "numpy>=1.26.4,<2.3",
+ ]
+ 
+ [tool.meson-python.args]
