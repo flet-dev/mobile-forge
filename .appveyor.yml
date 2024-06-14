@@ -91,6 +91,7 @@ for:
       - forge android contourpy:1.2.1
       - forge android numpy:1.26.4
       - forge android matplotlib:3.9.0
+      - forge android blis:0.9.1
       # - forge android aiohttp:3.9.5
       # - forge android bitarray:2.9.2
       # - forge android brotli:1.1.0
@@ -160,6 +161,7 @@ for:
       - forge iOS contourpy:1.2.1
       - forge iOS numpy:1.26.4
       - forge iOS matplotlib:3.9.0
+      - forge iOS blis:0.9.1
       # - forge iOS aiohttp:3.9.5
       # - forge iOS bitarray:2.9.2
       # - forge iOS brotli:1.1.0
