@@ -214,12 +214,6 @@ def main():
                 target_versions = [requested_version]
 
         for version in target_versions:
-            package = Package(
-                package_name_or_recipe,
-                version=version,
-                build_number=build_number,
-            )
-
             # First build of each version must be clean;
             # subsequent builds will be isolated by
 
@@ -232,6 +226,14 @@ def main():
 
             # Build the package for each required platform.
             for sdk, sdk_version, arch in build_platforms:
+                package = Package(
+                    package_name_or_recipe,
+                    version=version,
+                    build_number=str(build_number),
+                    sdk=sdk,
+                    sdk_version=sdk_version,
+                    arch=arch,
+                )
                 cross_venv = CrossVEnv(sdk=sdk, sdk_version=sdk_version, arch=arch)
                 builder = package.builder(cross_venv)
                 success = builder.build(clean=first)
