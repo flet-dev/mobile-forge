@@ -92,6 +92,7 @@ for:
       - forge android numpy:1.26.4
       - forge android matplotlib:3.9.0
       - forge android blis:0.9.1
+      - forge android kiwisolver:1.4.5
       # - forge android aiohttp:3.9.5
       # - forge android bitarray:2.9.2
       # - forge android brotli:1.1.0
@@ -163,6 +164,7 @@ for:
       - forge iOS matplotlib:3.9.0
       - forge iOS blis:0.9.1
       - forge iOS pandas:2.2.2
+      - forge iOS kiwisolver:1.4.5
       # - forge iOS aiohttp:3.9.5
       # - forge iOS bitarray:2.9.2
       # - forge iOS brotli:1.1.0
