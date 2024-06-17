@@ -622,16 +622,16 @@ class PythonPackageBuilder(Builder):
 
     def _build(self):
 
+        env = self.compile_env()
+
+        script_vars = {**env, **self.cross_venv.scheme_paths, **self.cross_venv.sysconfig_data}
+
         # Set up any additional environment variables needed in the script environment.
-        script_env = {}
-        for line in self.package.meta["build"]["script_env"]:
-            key, value = line.split("=", 1)
-            script_env[key] = value.format(**self.cross_venv.scheme_paths)
+        for key, value in self.package.meta["build"]["script_env"].items():
+            env[key] = value.format(**script_vars)
 
         # Set the cross host platform in the environment
-        script_env["_PYTHON_HOST_PLATFORM"] = self.cross_venv.platform_identifier
-
-        env = self.compile_env(**script_env)
+        env["_PYTHON_HOST_PLATFORM"] = self.cross_venv.platform_identifier
 
         meson_cross_file = self._create_meson_cross(env)
 

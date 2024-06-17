@@ -13,7 +13,7 @@ requirements:
 
 build:
   script_env:
-    - NPY_DISABLE_SVML=1
+    NPY_DISABLE_SVML: 1
 
   backend-args:
     - -Csetup-args=-Dblas=none
