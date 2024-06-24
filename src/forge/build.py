@@ -628,7 +628,7 @@ class PythonPackageBuilder(Builder):
 
         # Set up any additional environment variables needed in the script environment.
         for key, value in self.package.meta["build"]["script_env"].items():
-            env[key] = value.format(**script_vars)
+            env[key] = str(value).format(**script_vars)
 
         # Set the cross host platform in the environment
         env["_PYTHON_HOST_PLATFORM"] = self.cross_venv.platform_identifier
