@@ -101,6 +101,7 @@ for:
 
       # cleanup
       - rm dist/ninja-*
+      - rm dist/cmake-*
       - rm dist/bzip2-*
       - rm dist/xz-*
       - rm dist/libffi-*
@@ -172,6 +173,7 @@ for:
 
       # cleanup
       - rm dist/ninja-*
+      - rm dist/cmake-*
       - rm dist/bzip2-*
       - rm dist/xz-*
       - rm dist/libffi-*
