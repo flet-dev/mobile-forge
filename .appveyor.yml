@@ -3,7 +3,7 @@ image: macos-monterey
 skip_branch_with_pr: true
 
 environment:
-  PYTHON_VERSION: 3.12.3
+  PYTHON_VERSION: 3.12.4
   PYTHON_SHORT_VERSION: 3.12
   CF_ACCESS_KEY_ID:
     secure: +m1fzbrEPRecXKCCMn4uA781PAASzJSWAxuJj1c7ctLfWbi5oW4PMnowPK96XtQ5
@@ -53,14 +53,16 @@ for:
       NDK_VERSION: r26d
 
     install:
-      # use python-mobile repo to build Python for Android
-      - git clone -q --branch=main https://github.com/flet-dev/python-mobile.git
-      - pushd python-mobile
-      - ./build-all.sh $PYTHON_VERSION
-      - popd
+      # download Python for Android
+      - curl -#OL https://github.com/flet-dev/python-android/releases/download/v${PYTHON_VERSION}/python-android-install-${PYTHON_VERSION}.tar.gz
+      - mkdir -p python-android
+      - tar -xzf python-android-install-${PYTHON_VERSION}.tar.gz -C python-android
+      
+      # install Android NDK
+      - .ci/install-ndk.sh
 
       # configure forge
-      - export PYTHON_ANDROID_SUPPORT=$(realpath ./python-mobile)
+      - export PYTHON_ANDROID_SUPPORT=$(realpath ./python-android)
       - source ./setup.sh $PYTHON_VERSION
 
       # install Rust
@@ -71,9 +73,6 @@ for:
       - rustup target add arm-linux-androideabi
       - rustup target add x86_64-linux-android
       - rustup target add i686-linux-android
-
-      #- ./ci/package-python-for-android.sh python-mobile/install $PYTHON_VERSION $ANDROID_ABI
-      #- find dist -type f -iname *.tar.gz -exec appveyor PushArtifact -DeploymentName python-dist-android {} \;
 
     build_script:
 
@@ -125,10 +124,10 @@ for:
       APPVEYOR_BUILD_WORKER_IMAGE: macos-sonoma
 
     install:
-      - git clone -q --branch=$PYTHON_VERSION https://github.com/flet-dev/Python-Apple-support
-      - pushd Python-Apple-support
-      - make iOS
-      - popd
+      # download Python for iOS
+      - curl -#OL https://github.com/flet-dev/python-ios/releases/download/v${PYTHON_VERSION}/python-ios-install-${PYTHON_VERSION}.tar.gz
+      - mkdir -p python-ios
+      - tar -xzf python-ios-install-${PYTHON_VERSION}.tar.gz -C python-ios
 
       # install Rust
       - curl https://sh.rustup.rs -sSf | sh -s -- -y
@@ -139,11 +138,10 @@ for:
       - rustup target add x86_64-apple-ios
 
       # configure forge
-      - export PYTHON_APPLE_SUPPORT=$(realpath ./Python-Apple-support)
+      - export PYTHON_APPLE_SUPPORT=$(realpath ./python-ios)
       - source ./setup.sh $PYTHON_VERSION
 
-      #- ./ci/package-python-for-ios.sh Python-Apple-support $PYTHON_VERSION
-      #- find dist -type f -iname *.tar.gz -exec appveyor PushArtifact -DeploymentName python-dist-ios {} \;
+      # refresh PATH
       - export PATH="$PATH:$HOME/.cargo/bin"
 
     build_script:
