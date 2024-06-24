@@ -63,7 +63,7 @@ for:
       - .ci/install_ndk.sh
 
       # configure forge
-      - export PYTHON_ANDROID_SUPPORT=$(realpath ./python-android)
+      - export PYTHON_ANDROID_SUPPORT=$python_android_dir
       - source ./setup.sh $PYTHON_VERSION
 
       # install Rust
@@ -141,7 +141,7 @@ for:
       - rustup target add x86_64-apple-ios
 
       # configure forge
-      - export PYTHON_APPLE_SUPPORT=$(realpath ./python-ios)
+      - export PYTHON_APPLE_SUPPORT=$python_ios_dir
       - source ./setup.sh $PYTHON_VERSION
 
       # refresh PATH
