@@ -129,7 +129,7 @@ for:
       # download Python for iOS
       - python_ios_dir=/home/appveyor/projects/python-ios
       - curl -#OL https://github.com/flet-dev/python-ios/releases/download/v${PYTHON_VERSION}/python-ios-install-${PYTHON_VERSION}.tar.gz
-      - mkdir -p $python_ios_dir
+      - mkdir $python_ios_dir
       - tar -xzf python-ios-install-${PYTHON_VERSION}.tar.gz -C $python_ios_dir
 
       # install Rust
