@@ -54,7 +54,7 @@ for:
 
     install:
       # download Python for Android
-      - python_android_dir=/home/appveyor/projects/python-android
+      - python_android_dir=$HOME/projects/python-android
       - curl -#OL https://github.com/flet-dev/python-android/releases/download/v${PYTHON_VERSION}/python-android-install-${PYTHON_VERSION}.tar.gz
       - mkdir -p $python_android_dir
       - tar -xzf python-android-install-${PYTHON_VERSION}.tar.gz -C $python_android_dir
@@ -127,9 +127,9 @@ for:
 
     install:
       # download Python for iOS
-      - python_ios_dir=/home/appveyor/projects/python-ios
+      - python_ios_dir=$HOME/projects/python-ios
       - curl -#OL https://github.com/flet-dev/python-ios/releases/download/v${PYTHON_VERSION}/python-ios-install-${PYTHON_VERSION}.tar.gz
-      - mkdir $python_ios_dir
+      - mkdir -p $python_ios_dir
       - tar -xzf python-ios-install-${PYTHON_VERSION}.tar.gz -C $python_ios_dir
 
       # install Rust
