@@ -59,7 +59,7 @@ for:
       - tar -xzf python-android-install-${PYTHON_VERSION}.tar.gz -C python-android
       
       # install Android NDK
-      - .ci/install-ndk.sh
+      - .ci/install_ndk.sh
 
       # configure forge
       - export PYTHON_ANDROID_SUPPORT=$(realpath ./python-android)
