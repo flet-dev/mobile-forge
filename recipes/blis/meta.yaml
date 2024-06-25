@@ -4,3 +4,7 @@ package:
 
 patches:
   - mobile.patch
+
+requirements:
+  build:
+    - numpy 1.26.4
