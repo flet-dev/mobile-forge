@@ -17,8 +17,14 @@ environment:
     - job_name: Build Android packages
       job_group: build_android
 
-    - job_name: Build iOS packages
+    - job_name: Build iOS packages - 1
       job_group: build_ios
+
+    # - job_name: Build iOS packages - 2
+    #   job_group: build_ios
+
+    # - job_name: Build iOS packages - 3
+    #   job_group: build_ios
 
     # - job_name: Re-build Simple index
     #   job_group: rebuild_index
@@ -115,15 +121,12 @@ for:
     test: off
 
   # ======================================
-  #      Build Python for iOS
+  #      Build iOS packages - 1
   # ======================================
 
   - matrix:
       only:
         - job_group: build_ios
-
-    environment:
-      APPVEYOR_BUILD_WORKER_IMAGE: macos-sonoma
 
     install:
       # download Python for iOS
@@ -146,6 +149,13 @@ for:
 
       # refresh PATH
       - export PATH="$PATH:$HOME/.cargo/bin"
+
+  - matrix:
+      only:
+        - job_name: Build iOS packages - 1
+
+    environment:
+      APPVEYOR_BUILD_WORKER_IMAGE: macos-sonoma
 
     build_script:
 
