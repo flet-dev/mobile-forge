@@ -6,10 +6,11 @@ patches:
   - pyproject.patch
 
 requirements:
+  build:
+    - numpy 1.26.4
   host:
     - meson
     - ninja
-    - numpy 1.26.4
 
 build:
   backend-args:
