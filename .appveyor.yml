@@ -14,7 +14,7 @@ environment:
   CF_BUCKET_NAME: flet-simple
 
   matrix:
-    - job_name: Build Android packages - 1
+    - job_name: 'Build Android packages: cffi'
       job_group: build_android
       FORGE_PACKAGES: >-
         cffi:1.16.0
@@ -34,7 +34,7 @@ environment:
         brotli:1.1.0
         pydantic-core:2.18.4
 
-    - job_name: Build Android packages - 2
+    - job_name: 'Build Android packages: numpy'
       job_group: build_android
       FORGE_PACKAGES: >-
         numpy:1.26.4
@@ -43,7 +43,7 @@ environment:
         pandas:2.2.2
         opencv-python:4.10.0.82
 
-    - job_name: Build iOS packages - 1
+    - job_name: 'Build iOS packages: libjpeg'
       job_group: build_ios
       FORGE_PACKAGES: >-
         libjpeg:3.0.1
@@ -57,7 +57,7 @@ environment:
         aiohttp:3.9.5
         bitarray:2.9.2
 
-    - job_name: Build iOS packages - 2
+    - job_name: 'Build iOS packages: cffi'
       job_group: build_ios
       FORGE_PACKAGES:  >-
         cffi:1.16.0
@@ -66,12 +66,12 @@ environment:
         cryptography:42.0.7
         brotli:1.1.0
 
-    - job_name: Build iOS packages - 3
+    - job_name: 'Build iOS packages: pydantic-core'
       job_group: build_ios
       FORGE_PACKAGES: >-
         pydantic-core:2.18.4
 
-    - job_name: Build iOS packages - 4
+    - job_name: 'Build iOS packages: numpy'
       job_group: build_ios
       FORGE_PACKAGES: >-
         numpy:1.26.4
