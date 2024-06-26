@@ -13,7 +13,7 @@ from forge import subprocess
 
 class CrossVEnv:
     BASE_VERSION = {
-        "android": "21",
+        "android": "24",
         "iOS": "12.0",
         "tvOS": "7.0",
         "watchOS": "4.0",
@@ -21,10 +21,10 @@ class CrossVEnv:
 
     HOST_SDKS = {
         "android": [
-            ("android", "armeabi-v7a"),
             ("android", "arm64-v8a"),
-            ("android", "x86"),
+            ("android", "armeabi-v7a"),
             ("android", "x86_64"),
+            ("android", "x86"),
         ],
         "iOS": [
             ("iphoneos", "arm64"),
@@ -42,6 +42,7 @@ class CrossVEnv:
             ("watchsimulator", "x86_64"),
         ],
     }
+
     PLATFORM_TRIPLET = {
         "android": "linux-android",
         "iphoneos": "apple-ios",
@@ -52,18 +53,33 @@ class CrossVEnv:
         "watchsimulator": "apple-watchos-simulator",
     }
 
+    ANDROID_PLATFORM_TRIPLET = {
+        "arm64-v8a": "aarch64-linux-android",
+        "armeabi-v7a": "arm-linux-androideabi",
+        "x86_64": "x86_64-linux-android",
+        "x86": "i686-linux-android",
+    }
+
     def __init__(self, sdk, sdk_version, arch):
         self.sdk = sdk
         self.sdk_version = sdk_version
         self.arch = arch
 
         self.platform_identifier = self._platform_identifier(sdk, sdk_version, arch)
-        self.tag = self.platform_identifier.replace("-", "_").replace(".", "_")
+        self.tag = (
+            self._platform_identifier(sdk, sdk_version, arch)
+            .replace("-", "_")
+            .replace(".", "_")
+        )
         self.venv_name = f"venv3.{sys.version_info.minor}-{self.tag}"
-        self.platform_triplet = f"{self.arch}-{self.PLATFORM_TRIPLET[sdk]}"
+        if sdk == "android":
+            self.platform_triplet = self.ANDROID_PLATFORM_TRIPLET[arch]
+        else:
+            self.platform_triplet = f"{self.arch}-{self.PLATFORM_TRIPLET[sdk]}"
 
         # Prime the on-demand variable cache
         self._sysconfig_data = None
+        self._scheme_paths = None
         self._install_root = None
         self._sdk_root = None
 
@@ -102,6 +118,28 @@ class CrossVEnv:
             self._sysconfig_data = config["data"]
 
         return self._sysconfig_data
+
+    @property
+    def scheme_paths(self) -> dict[str, str]:
+        """The install scheme paths for the cross environment."""
+        if self._scheme_paths is None:
+            # Run a script in the cross-venv that outputs the config variables
+            config_var_repr = self.check_output(
+                [
+                    "python",
+                    "-c",
+                    "import sysconfig; print(sysconfig.get_paths())",
+                ],
+                encoding="UTF-8",
+            )
+
+            # Parse the output of the previous command as Python,
+            # turning it back into a dict.
+            config = {}
+            exec(f"data = {config_var_repr}", config, config)
+            self._scheme_paths = config["data"]
+
+        return self._scheme_paths
 
     @property
     def install_root(self) -> Path:
@@ -149,7 +187,7 @@ class CrossVEnv:
         return self._sdk_root
 
     @classmethod
-    def _platform_identifier(self, sdk, version, arch):
+    def _platform_identifier(cls, sdk, version, arch):
         if sdk == "android":
             if version is None:
                 version = 21
@@ -157,15 +195,15 @@ class CrossVEnv:
         elif sdk in {"iphoneos", "iphonesimulator"}:
             if version is None:
                 version = "12.0"
-            identifier = f"ios-{version}-{sdk}-{arch}"
+            identifier = f"ios-{version}-{arch}-{sdk}"
         elif sdk in {"appletvos", "appletvsimulator"}:
             if version is None:
                 version = "7.0"
-            identifier = f"tvos-{version}-{sdk}-{arch}"
+            identifier = f"tvos-{version}-{arch}-{sdk}"
         elif sdk in {"watchos", "watchsimulator"}:
             if version is None:
                 version = "4.0"
-            identifier = f"watchos-{version}-{sdk}-{arch}"
+            identifier = f"watchos-{version}-{arch}-{sdk}"
         else:
             raise ValueError(f"Don't know how to build wheels for {sdk}")
         return identifier
@@ -184,7 +222,9 @@ class CrossVEnv:
         :raises: ``RuntimeError`` if an environment matching the requested host already
             exists, and ``clean=False``.
         """
-        env_key = f"MOBILE_FORGE_{self.sdk.upper()}_{self.arch.upper()}"
+        env_key = (
+            f"MOBILE_FORGE_{self.sdk.upper()}_{self.arch.upper().replace('-', '_')}"
+        )
         host_python = os.getenv(env_key)
         if host_python is None:
             raise RuntimeError(
@@ -297,6 +337,7 @@ class CrossVEnv:
             if not (
                 # Exclude rbenv, npm, and other language environments
                 p.startswith(f"{Path.home()}/.")
+                and not p.startswith(f"{Path.home()}/.cargo")
                 # Exclude homebrew
                 or p.startswith("/opt")
                 # Exclude local python installs
@@ -376,10 +417,7 @@ class CrossVEnv:
         self.run(
             logfile,
             (["build-pip"] if build else ["python", "-m", "pip"])
-            + [
-                "install",
-                "--disable-pip-version-check",
-            ]
+            + ["install", "--disable-pip-version-check"]
             # If we're doing a host build, require binary packages.
             # build environment can use non-binary packages.
             + (

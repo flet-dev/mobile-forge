@@ -19,8 +19,18 @@ from forge.cross import CrossVEnv
 
 class Package:
     def __init__(
-        self, package_name_or_recipe: str, version: str | None, build_number: str | None
+        self,
+        package_name_or_recipe: str,
+        version: str | None,
+        build_number: str | None,
+        sdk: str,
+        sdk_version: str,
+        arch: str,
     ):
+        self.sdk = sdk
+        self.sdk_version = sdk_version
+        self.arch = arch
+
         if "/" in package_name_or_recipe:
             self.recipe_path = Path(package_name_or_recipe)
         else:
@@ -70,9 +80,14 @@ class Package:
 
         # Render the meta template.
         meta_str = jinja2.Template(meta_template).render(
-            version=tuple(int(v) for v in override_version.split("."))
-            if override_version
-            else None,
+            sdk=self.sdk,
+            sdk_version=self.sdk_version,
+            arch=self.arch,
+            version=(
+                tuple(int(v) for v in override_version.split("."))
+                if override_version
+                else None
+            ),
             py_version=sys.version_info,
         )
 

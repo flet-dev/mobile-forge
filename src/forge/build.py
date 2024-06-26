@@ -7,7 +7,7 @@ import shutil
 import sys
 import tarfile
 import zipfile
-from abc import ABC, abstractmethod, abstractproperty
+from abc import ABC, abstractmethod
 from email import generator, message
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -18,6 +18,7 @@ from packaging.utils import canonicalize_name, canonicalize_version
 from forge import subprocess
 from forge.logger import log, log_exception
 from forge.pypi import get_pypi_source_urls
+from forge.utils import merge_dicts
 
 try:
     import tomllib
@@ -35,13 +36,15 @@ class Builder(ABC):
         self.cross_venv = cross_venv
         self.package = package
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def build_path(self) -> Path:
         """The path in which all environment and sources for the build will be
         created."""
         ...
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def log_file_path(self) -> Path:
         """The path where build logs should be written."""
         ...
@@ -51,7 +54,8 @@ class Builder(ABC):
         """The path for the log file if a build error occurs."""
         return self.log_file_path.parent.parent / "errors" / self.log_file_path.name
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def source_archive_path(self) -> Path:
         """The source archive file for the package."""
         ...
@@ -61,7 +65,12 @@ class Builder(ABC):
         for requirement in self.package.meta["requirements"][target]:
             try:
                 package, version = requirement.split()
-                specifier = f"{package}=={version}"
+                if version.startswith("^"):
+                    specifier = f"{package}>={version[1:]}"
+                elif version.startswith("~"):
+                    specifier = f"{package}~={version[1:]}"
+                else:
+                    specifier = f"{package}=={version}"
             except ValueError:
                 specifier = requirement
             requirements.append(specifier)
@@ -77,8 +86,7 @@ class Builder(ABC):
             log(self.log_file, f"No {target} requirements.")
 
     @abstractmethod
-    def download_source_url(self):
-        ...
+    def download_source_url(self): ...
 
     def download_source(self):
         """Download the source tarball."""
@@ -191,50 +199,106 @@ class Builder(ABC):
         log(self.log_file, f"\n[{self.cross_venv}] Install forge build requirements")
         self.install_requirements("build")
 
-    def compile_env(self, **kwargs) -> dict[str:str]:
+    def compile_env(self, **kwargs) -> dict[str, str]:
         sysconfig_data = self.cross_venv.sysconfig_data
         install_root = self.cross_venv.install_root
-        sdk_root = self.cross_venv.sdk_root
 
         ar = sysconfig_data["AR"]
-
         cc = sysconfig_data["CC"]
+        cxx = sysconfig_data["CXX"]
+        strip = (
+            str(Path(ar).parent.joinpath("llvm-strip"))
+            if ar and self.cross_venv.sdk == "android"
+            else "strip"
+        )
 
         cflags = self.cross_venv.sysconfig_data["CFLAGS"]
-        # Pre Python 3.11 versions included BZip2 and XZ includes in CFLAGS. Remove them.
-        cflags = re.sub(r"-I.*/merge/iOS/.*/bzip2-.*/include", "", cflags)
-        cflags = re.sub(r"-I.*/merge/iOS/.*/xs-.*/include", "", cflags)
+        cppflags = self.cross_venv.sysconfig_data["CPPFLAGS"]
 
-        # Replace any hard-coded reference to --sysroot=<sysroot> with the actual reference
-        cflags = re.sub(r"--sysroot=\w+", f"--sysroot={sdk_root}", cflags)
-
-        # Add the install root and SDK root includes
+        # Add install root include
         if (install_root / "include").is_dir():
             cflags += f" -I{install_root}/include"
-        if (sdk_root / "usr" / "include").is_dir():
-            cflags += f" -I{sdk_root}/usr/include"
+
+        if self.cross_venv.sdk != "android":
+
+            # Pre Python 3.11 versions included BZip2 and XZ includes in CFLAGS. Remove them.
+            cflags = re.sub(r"-I.*/merge/iOS/.*/bzip2-.*/include", "", cflags)
+            cflags = re.sub(r"-I.*/merge/iOS/.*/xs-.*/include", "", cflags)
+
+            # Replace any hard-coded reference to --sysroot=<sysroot> with the actual reference
+            cflags = re.sub(
+                r"--sysroot=\w+", f"--sysroot={self.cross_venv.sdk_root}", cflags
+            )
+
+            # Add SDK root include
+            if (self.cross_venv.sdk_root / "usr" / "include").is_dir():
+                cflags += f" -I{self.cross_venv.sdk_root}/usr/include"
 
         ldflags = self.cross_venv.sysconfig_data["LDFLAGS"]
-        # Pre Python 3.11 versions included BZip2 and XZ includes in CFLAGS. Remove them.
-        cflags = re.sub(r"-I.*/merge/iOS/.*/bzip2-.*/include", "", cflags)
-        cflags = re.sub(r"-I.*/merge/iOS/.*/xs-.*/include", "", cflags)
 
-        # Replace any hard-coded reference to -isysroot <sysroot> with the actual reference
-        cflags = re.sub(r"-isysroot \w+", f"-isysroot={sdk_root}", cflags)
+        # -lpython3.x
+        ldflags += " -L{}/lib".format(self.cross_venv.sysconfig_data["prefix"])
 
-        # Add the install root and SDK root includes
+        # Add install root lib
         if (install_root / "lib").is_dir():
             ldflags += f" -L{install_root}/lib"
-        if (sdk_root / "usr" / "lib").is_dir():
-            ldflags += f" -L{sdk_root}/usr/lib"
+
+        # cargo_ldflags = re.sub(r"-march=[\w-]+", "", ldflags)
+        cargo_ldflags = " -L{}/lib".format(self.cross_venv.sysconfig_data["prefix"])
+        cargo_ldflags += " -C link-arg=-undefined -C link-arg=dynamic_lookup"
+
+        if self.cross_venv.sdk != "android":
+
+            # Replace any hard-coded reference to -isysroot <sysroot> with the actual reference
+            ldflags = re.sub(
+                r"-isysroot \w+", f"-isysroot={self.cross_venv.sdk_root}", ldflags
+            )
+
+            # Add SDK root lib
+            if (self.cross_venv.sdk_root / "usr" / "lib").is_dir():
+                ldflags += f" -L{self.cross_venv.sdk_root}/usr/lib"
+
+        cargo_build_target = (
+            {
+                "arm64-apple-ios": "aarch64-apple-ios",
+                "arm64-apple-ios-simulator": "aarch64-apple-ios-sim",
+                # This one is odd; Rust doesn't provide an `x86_64-apple-ios-simulator`,
+                # but there's no such thing as an x86_64 ios *device*.
+                "x86_64-apple-ios-simulator": "x86_64-apple-ios",
+            }[self.cross_venv.platform_triplet]
+            if self.cross_venv.sdk != "android"
+            else self.cross_venv.platform_triplet
+        )
 
         env = {
             "AR": ar,
             "CC": cc,
+            "CXX": cxx,
+            "STRIP": strip,
             "CFLAGS": cflags,
+            "CPPFLAGS": cppflags,
             "LDFLAGS": ldflags,
+            "CROSS_VENV_SDK": self.cross_venv.sdk,
+            "CARGO_BUILD_TARGET": cargo_build_target,
+            "CARGO_TARGET_{}_LINKER".format(
+                cargo_build_target.replace("-", "_").upper()
+            ): cc,
+            "CARGO_TARGET_{}_RUSTFLAGS".format(
+                cargo_build_target.replace("-", "_").upper()
+            ): cargo_ldflags,
+            "PYO3_CROSS_PYTHON_VERSION": self.cross_venv.sysconfig_data[
+                "py_version_short"
+            ],
+            "PYO3_CROSS_LIB_DIR": "{}/lib".format(
+                self.cross_venv.sysconfig_data["prefix"]
+            ),
         }
         env.update(kwargs)
+
+        if self.cross_venv.sdk == "android":
+            cc_parts = cc.split("/")
+            env["NDK_ROOT"] = "/".join(cc_parts[: cc_parts.index("toolchains")])
+            env["ANDROID_ABI"] = self.cross_venv.arch
 
         # Add in some user environment keys that are useful
         for key in [
@@ -498,15 +562,96 @@ class PythonPackageBuilder(Builder):
             )
             self.cross_venv.pip_install(self.log_file, ["build", "wheel"], build=True)
 
+    def _create_meson_cross(self, env: dict[str, str]):
+        cpu_family = {
+            "arm64-v8a": "aarch64",
+            "arm64": "aarch64",
+            "armeabi-v7a": "arm",
+            "x86_64": "x86_64",
+            "x86": "x86",
+        }[self.cross_venv.arch]
+        cpu = {
+            "arm64-v8a": "aarch64",
+            "arm64": "aarch64",
+            "armeabi-v7a": "armv7",
+            "x86_64": "x86_64",
+            "x86": "i686",
+        }[self.cross_venv.arch]
+
+        master_meson_config = {
+            "binaries": {
+                "c": env["CC"],
+                "cpp": env["CXX"],
+                "ar": env["AR"],
+                "strip": env["STRIP"],
+            },
+            "built-in options": {
+                "c_args": env["CFLAGS"],
+                "cpp_args": env["CPPFLAGS"],
+                "c_links_args": env["LDFLAGS"],
+                "cpp_links_args": env["LDFLAGS"],
+            },
+            "properties": {"needs_exe_wrapper": True},
+            "host_machine": {
+                "cpu_family": cpu_family,
+                "cpu": cpu,
+                "endian": "little",
+                "system": self.cross_venv.sdk,
+            },
+        }
+
+        package_meson_config = (
+            self.package.meta["build"]["meson"]
+            if "build" in self.package.meta and "meson" in self.package.meta["build"]
+            else {}
+        )
+
+        meson_config = merge_dicts(master_meson_config, package_meson_config)
+
+        meson_cross = str(self.build_path / "meson.cross")
+        with open(meson_cross, "w") as m:
+            for section in meson_config.keys():
+                m.write(f"[{section}]\n")
+                for k, v in meson_config[section].items():
+                    m.write(
+                        "{} = {}\n".format(
+                            k, f"'{v}'" if isinstance(v, str) else str(v).lower()
+                        )
+                    )
+        return meson_cross
+
     def _build(self):
+
+        env = self.compile_env()
+
+        script_vars = {**env, **self.cross_venv.scheme_paths, **self.cross_venv.sysconfig_data}
+
         # Set up any additional environment variables needed in the script environment.
-        script_env = {}
-        for line in self.package.meta["build"]["script_env"]:
-            key, value = line.split("=", 1)
-            script_env[key] = value
+        for key, value in self.package.meta["build"]["script_env"].items():
+            env[key] = str(value).format(**script_vars)
 
         # Set the cross host platform in the environment
-        script_env["_PYTHON_HOST_PLATFORM"] = self.cross_venv.platform_identifier
+        env["_PYTHON_HOST_PLATFORM"] = self.cross_venv.platform_identifier
+
+        meson_cross_file = self._create_meson_cross(env)
+
+        # final environment
+        env.update(
+            {
+                "PACKAGE_BUILD_PATH": str(self.build_path),
+                "MESON_CROSS_FILE": meson_cross_file,
+            }
+        )
+
+        backend_args = (
+            [
+                arg.format(**self.cross_venv.scheme_paths, **env)
+                for arg in self.package.meta["build"]["backend-args"]
+            ]
+            if "build" in self.package.meta
+            and "backend-args" in self.package.meta["build"]
+            else []
+        )
 
         self.cross_venv.run(
             self.log_file,
@@ -518,7 +663,8 @@ class PythonPackageBuilder(Builder):
                 "--wheel",
                 "--outdir",
                 str(Path.cwd() / "dist"),
-            ],
+            ]
+            + backend_args,
             cwd=self.build_path,
-            env=self.compile_env(**script_env),
+            env=env,
         )

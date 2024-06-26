@@ -1,13 +1,22 @@
-Common subdirectories: Pillow-9.4.0-orig/Tests and Pillow-9.4.0/Tests
-Common subdirectories: Pillow-9.4.0-orig/depends and Pillow-9.4.0/depends
-Common subdirectories: Pillow-9.4.0-orig/docs and Pillow-9.4.0/docs
-diff -u Pillow-9.4.0-orig/setup.py Pillow-9.4.0/setup.py
---- Pillow-9.4.0-orig/setup.py	2023-01-02 08:17:32
-+++ Pillow-9.4.0/setup.py	2023-09-21 10:16:17
-@@ -408,10 +408,19 @@
+diff --git a/setup.py b/setup.py
+index ac401dd..a5a9938 100644
+--- a/setup.py
++++ b/setup.py
+@@ -341,9 +341,7 @@ class pil_build_ext(build_ext):
+         return True if value in configuration.get(option, []) else None
+ 
+     def initialize_options(self):
+-        self.disable_platform_guessing = self.check_configuration(
+-            "platform-guessing", "disable"
+-        )
++        self.disable_platform_guessing = True
+         self.add_imaging_libs = ""
+         build_ext.initialize_options(self)
+         for x in self.feature:
+@@ -421,10 +419,19 @@ class pil_build_ext(build_ext):
                  self.extensions.remove(extension)
                  break
-
+ 
 -    def get_macos_sdk_path(self):
 +    def get_apple_sdk_path(self):
          try:
@@ -26,20 +35,21 @@ diff -u Pillow-9.4.0-orig/setup.py Pillow-9.4.0/setup.py
                  .strip()
                  .decode("latin1")
              )
-@@ -556,10 +564,15 @@
+@@ -577,11 +584,15 @@ class pil_build_ext(build_ext):
                  _add_directory(library_dirs, "/usr/X11/lib")
                  _add_directory(include_dirs, "/usr/X11/include")
-
+ 
 -            sdk_path = self.get_macos_sdk_path()
-+            sdk_path = self.get_apple_sdk_path()
-             if sdk_path:
-                 _add_directory(library_dirs, os.path.join(sdk_path, "usr", "lib"))
-                 _add_directory(include_dirs, os.path.join(sdk_path, "usr", "include"))
-+        elif sys.platform in ("ios", "tvos", "watchos"):
 +            sdk_path = self.get_apple_sdk_path()
 +            if sdk_path:
 +                _add_directory(library_dirs, os.path.join(sdk_path, "usr", "lib"))
 +                _add_directory(include_dirs, os.path.join(sdk_path, "usr", "include"))
++        elif sys.platform in ("ios", "tvos", "watchos"):
++            sdk_path = self.get_apple_sdk_path()
+             if sdk_path:
+                 _add_directory(library_dirs, os.path.join(sdk_path, "usr", "lib"))
+                 _add_directory(include_dirs, os.path.join(sdk_path, "usr", "include"))
+-
+                 for extension in self.extensions:
+                     extension.extra_compile_args = ["-Wno-nullability-completeness"]
          elif (
-             sys.platform.startswith("linux")
-             or sys.platform.startswith("gnu")

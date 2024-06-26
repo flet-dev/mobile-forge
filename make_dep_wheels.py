@@ -26,7 +26,7 @@ def make_wheel(package, os_name, target):
     :param os_name: The OS name to target (e.g., "iOS")
     :param target: The target specifier (e.g., "iphoneos.arm64")
     """
-    support = Path(os.environ["PYTHON_APPLE_SUPPORT"])
+    support = Path(os.environ["PYTHON_ANDROID_SUPPORT" if os_name == "android" else "PYTHON_APPLE_SUPPORT"])
 
     versions_file = (
         support
@@ -43,7 +43,10 @@ def make_wheel(package, os_name, target):
 
     package_version, package_build = package_version_build.split("-")
 
-    wheel_tag = f"py3-none-{os_name}_{min_version}_{target}".lower().replace(".", "_")
+    target_parts = target.split(".")
+    target_parts.reverse()
+    wheel_target = "_".join(target_parts)
+    wheel_tag = f"py3-none-{os_name}_{min_version}_{wheel_target.replace('-', '_')}".lower().replace(".", "_")
 
     wheel_file = (
         Path("dist") / f"{package.lower()}-{package_version_build}-{wheel_tag}.whl"
@@ -71,7 +74,8 @@ def make_wheel(package, os_name, target):
         distinfo_path.mkdir()
 
         # Copy the installed content.
-        shutil.copytree(install_path, wheel_path / "opt")
+        # TODO: Enable ignore_dangling_symlinks because of https://github.com/beeware/cpython-android-source-deps/issues/2
+        shutil.copytree(install_path, wheel_path / "opt", ignore_dangling_symlinks=True)
 
         # Write package metadata
         with (distinfo_path / "METADATA").open("w", encoding="utf-8") as f:
@@ -121,6 +125,12 @@ def make_wheel(package, os_name, target):
 if __name__ == "__main__":
     os_name = sys.argv[1]
     for target in {
+        "android": [
+            "arm64-v8a",
+            "armeabi-v7a",
+            "x86_64",
+            "x86"
+        ],
         "iOS": [
             "iphoneos.arm64",
             "iphonesimulator.arm64",

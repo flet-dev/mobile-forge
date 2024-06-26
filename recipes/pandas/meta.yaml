@@ -1,3 +1,18 @@
 package:
   name: pandas
-  version: 1.5.3
+  version: 2.2.2
+
+patches:
+  - pyproject.patch
+
+requirements:
+  build:
+    - numpy 1.26.4
+  host:
+    - meson
+    - ninja
+
+build:
+  backend-args:
+    - -Csetup-args=--cross-file
+    - -Csetup-args={MESON_CROSS_FILE}

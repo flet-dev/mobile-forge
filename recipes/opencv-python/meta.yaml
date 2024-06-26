@@ -1,0 +1,33 @@
+package:
+  name: opencv-python
+  version: 4.10.0.82
+
+patches:
+  - mobile.patch
+
+build:
+  script_env:
+    CMAKE_ARGS: >-
+      -DANDROID=ON
+      -DWITH_IPP=OFF
+      -DWITH_ITT=OFF
+      -DBUILD_ANDROID_PROJECTS=OFF
+      -DBUILD_ANDROID_EXAMPLES=OFF
+      -DBUILD_TESTS=OFF
+      -DBUILD_PERF_TESTS=OFF
+      -DENABLE_TESTING=OFF
+      -DBUILD_EXAMPLES=OFF
+      -DANDROID_ABI={ANDROID_ABI}
+      -DANDROID_STANDALONE_TOOLCHAIN={NDK_ROOT}
+      -DANDROID_NATIVE_API_LEVEL={ANDROID_API_LEVEL}
+      -DANDROID_ALLOW_UNDEFINED_VERSION_SCRIPT_SYMBOLS=1
+      -DCMAKE_TOOLCHAIN_FILE={NDK_ROOT}/build/cmake/android.toolchain.cmake
+      -DOPENCV_FORCE_PYTHON_LIBS=ON
+      -DPYTHON3_INCLUDE_PATH={prefix}/include/python{py_version_short}
+      -DPYTHON3_LIBRARIES={prefix}/lib/libpython{py_version_short}.so
+      -DPYTHON3_NUMPY_INCLUDE_DIRS={platlib}/numpy/core/include
+
+requirements:
+  build:
+    - cmake
+    - scikit-build @ git+https://github.com/flet-dev/scikit-build@ios-android-support
