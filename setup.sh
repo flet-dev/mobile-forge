@@ -203,13 +203,6 @@ if ! [ -f "dist/ninja-1.11.1-py3-none-any.whl" ]; then
     echo "Downloading Ninja"
     python -m pip wheel --no-deps -w dist ninja==1.11.1
     mv dist/ninja-1.11.1-*.whl dist/ninja-1.11.1-py3-none-any.whl
-    # cp dist/ninja-1.11.1-py3-none-ios_12_0_arm64_iphoneos.whl dist/ninja-1.11.1-py3-none-ios_12_0_x86_64_iphonesimulator.whl
-    # cp dist/ninja-1.11.1-py3-none-ios_12_0_arm64_iphoneos.whl dist/ninja-1.11.1-py3-none-ios_12_0_arm64_iphonesimulator.whl
-
-    # cp dist/ninja-1.11.1-py3-none-ios_12_0_arm64_iphoneos.whl dist/ninja-1.11.1-py3-none-android_24_arm64_v8a.whl
-    # cp dist/ninja-1.11.1-py3-none-ios_12_0_arm64_iphoneos.whl dist/ninja-1.11.1-py3-none-android_24_armeabi_v7a.whl
-    # cp dist/ninja-1.11.1-py3-none-ios_12_0_arm64_iphoneos.whl dist/ninja-1.11.1-py3-none-android_24_x86_64.whl
-    # cp dist/ninja-1.11.1-py3-none-ios_12_0_arm64_iphoneos.whl dist/ninja-1.11.1-py3-none-android_24_x86.whl
 fi
 
 # Create wheels for cmake that can be installed in the host environment
