@@ -5,6 +5,7 @@ package:
 patches:
   - mobile.patch
 
+# {% if sdk == 'android' %}
 build:
   script_env:
     CMAKE_ARGS: >-
@@ -26,8 +27,30 @@ build:
       -DPYTHON3_INCLUDE_PATH={prefix}/include/python{py_version_short}
       -DPYTHON3_LIBRARIES={prefix}/lib/libpython{py_version_short}.so
       -DPYTHON3_NUMPY_INCLUDE_DIRS={platlib}/numpy/core/include
+# {% else %}
+build:
+  script_env:
+    CMAKE_ARGS: >-
+      -DAPPLE_FRAMEWORK=ON
+      -DCMAKE_SYSTEM_NAME=iOS
+      -DCMAKE_SYSTEM_PROCESSOR=aarch64
+      -DCMAKE_OSX_SYSROOT=iphoneos
+      -DCMAKE_OSX_ARCHITECTURES=arm64
+      -DWITH_IPP=OFF
+      -DWITH_ITT=OFF
+      -DBUILD_TESTS=OFF
+      -DBUILD_PERF_TESTS=OFF
+      -DENABLE_TESTING=OFF
+      -DBUILD_EXAMPLES=OFF
+      -DWITH_OPENCL=OFF
+      -DOPENCV_FORCE_PYTHON_LIBS=ON
+      -DPYTHON3_INCLUDE_PATH={prefix}/include/python{py_version_short}
+      -DPYTHON3_LIBRARIES={prefix}/lib/libpython{py_version_short}.so
+      -DPYTHON3_NUMPY_INCLUDE_DIRS={platlib}/numpy/core/include
+# {% endif %}
 
 requirements:
   build:
     - cmake
     - scikit-build @ git+https://github.com/flet-dev/scikit-build@ios-android-support
+    - numpy 1.26.4

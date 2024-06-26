@@ -1,17 +1,31 @@
+diff --git a/opencv/CMakeLists.txt b/opencv/CMakeLists.txt
+index f5e39b4..0775040 100644
+--- a/opencv/CMakeLists.txt
++++ b/opencv/CMakeLists.txt
+@@ -674,9 +674,7 @@ endif()
+ ocv_cmake_hook(POST_CMAKE_BUILD_OPTIONS)
+ 
+ # --- Python Support ---
+-if(NOT IOS AND NOT XROS)
+-  include(cmake/OpenCVDetectPython.cmake)
+-endif()
++include(cmake/OpenCVDetectPython.cmake)
+ 
+ include(cmake/OpenCVCompilerOptions.cmake)
+ 
 diff --git a/opencv/cmake/OpenCVDetectPython.cmake b/opencv/cmake/OpenCVDetectPython.cmake
-index a23fba6..a98b175 100644
+index a23fba6..cab1a2f 100644
 --- a/opencv/cmake/OpenCVDetectPython.cmake
 +++ b/opencv/cmake/OpenCVDetectPython.cmake
-@@ -123,7 +123,7 @@ if(NOT ${found})
+@@ -123,7 +123,6 @@ if(NOT ${found})
    if(_found)
      set(_version_major_minor "${_version_major}.${_version_minor}")
  
 -    if(NOT ANDROID AND NOT APPLE_FRAMEWORK)
-+    if(NOT APPLE_FRAMEWORK)
        ocv_check_environment_variables(${library_env} ${include_dir_env})
        if(NOT ${${library_env}} STREQUAL "")
            set(PYTHON_LIBRARY "${${library_env}}")
-@@ -144,8 +144,8 @@ if(NOT ${found})
+@@ -144,8 +143,8 @@ if(NOT ${found})
          # Copy outputs
          set(_libs_found ${PYTHONLIBS_FOUND})
          set(_libraries ${PYTHON_LIBRARIES})
@@ -22,26 +36,26 @@ index a23fba6..a98b175 100644
          set(_debug_libraries ${PYTHON_DEBUG_LIBRARIES})
          set(_libs_version_string ${PYTHONLIBS_VERSION_STRING})
          set(_debug_library ${PYTHON_DEBUG_LIBRARY})
-@@ -175,7 +175,7 @@ if(NOT ${found})
+@@ -173,9 +172,7 @@ if(NOT ${found})
+         unset(PYTHON_INCLUDE_DIR CACHE)
+         unset(PYTHON_INCLUDE_DIR2 CACHE)
        endif()
-     endif()
+-    endif()
  
 -    if(NOT ANDROID AND NOT IOS AND NOT XROS)
-+    if(NOT IOS AND NOT XROS)
        if(CMAKE_HOST_UNIX)
          execute_process(COMMAND ${_executable} -c "from sysconfig import *; print(get_path('purelib'))"
                          RESULT_VARIABLE _cvpy_process
-@@ -240,7 +240,7 @@ if(NOT ${found})
+@@ -240,7 +237,6 @@ if(NOT ${found})
                            OUTPUT_STRIP_TRAILING_WHITESPACE)
          endif()
        endif()
 -    endif(NOT ANDROID AND NOT IOS AND NOT XROS)
-+    endif(NOT IOS AND NOT XROS)
    endif()
  
    # Export return values
 diff --git a/opencv/modules/python/CMakeLists.txt b/opencv/modules/python/CMakeLists.txt
-index 93eab8c..ffbc435 100644
+index 93eab8c..e41b720 100644
 --- a/opencv/modules/python/CMakeLists.txt
 +++ b/opencv/modules/python/CMakeLists.txt
 @@ -3,7 +3,7 @@
@@ -49,12 +63,12 @@ index 93eab8c..ffbc435 100644
  if(DEFINED OPENCV_INITIAL_PASS)  # OpenCV build
  
 -if(ANDROID OR APPLE_FRAMEWORK OR WINRT)
-+if(APPLE_FRAMEWORK OR WINRT)
++if(WINRT)
    ocv_module_disable_(python2)
    ocv_module_disable_(python3)
    return()
 diff --git a/pyproject.toml b/pyproject.toml
-index 7486f13..72ca9cf 100644
+index 7486f13..cf63d1d 100644
 --- a/pyproject.toml
 +++ b/pyproject.toml
 @@ -13,5 +13,5 @@ requires = [
@@ -62,8 +76,10 @@ index 7486f13..72ca9cf 100644
    "pip",
    "scikit-build>=0.14.0",
 -  "setuptools==59.2.0",
+-]
 +  "setuptools",
- ]
++]
+\ No newline at end of file
 diff --git a/setup.py b/setup.py
 index 48d5a65..2072acb 100644
 --- a/setup.py
