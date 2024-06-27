@@ -2,12 +2,9 @@ package:
   name: pandas
   version: 2.2.2
 
-patches:
-  - pyproject.patch
-
 requirements:
   build:
-    - numpy 1.26.4
+    - numpy 2.0.0
   host:
     - meson
     - ninja
