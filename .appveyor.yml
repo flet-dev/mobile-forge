@@ -14,20 +14,23 @@ environment:
   CF_BUCKET_NAME: flet-simple
 
   matrix:
-    - job_name: 'Build Android packages: opencv-python'
+    - job_name: 'Build Android packages for arm64-v8a: numpy, opencv-python'
       job_group: build_android
+      FORGE_ARCH: 'android:arm64-v8a'
       FORGE_PACKAGES: >-
         numpy:2.0.0
         opencv-python:4.10.0.84
 
-    - job_name: 'Build iOS packages: opencv-python'
+    - job_name: 'Build iOS packages for iphoneis: numpy, opencv-python'
       job_group: build_ios
+      FORGE_ARCH: 'iphoneos:arm64'
       FORGE_PACKAGES: >-
         numpy:2.0.0
         opencv-python:4.10.0.84
 
     - job_name: 'Build Android packages: cffi'
       job_group: build_android
+      FORGE_ARCH: android
       FORGE_PACKAGES: >-
         cffi:1.16.0
         libjpeg:3.0.1
@@ -48,6 +51,7 @@ environment:
 
     - job_name: 'Build Android packages: numpy'
       job_group: build_android
+      FORGE_ARCH: android
       FORGE_PACKAGES: >-
         numpy:1.26.4
         numpy:2.0.0
@@ -57,6 +61,7 @@ environment:
 
     - job_name: 'Build iOS packages: libjpeg'
       job_group: build_ios
+      FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
         libjpeg:3.0.1
         libpng:1.6.43
@@ -71,6 +76,7 @@ environment:
 
     - job_name: 'Build iOS packages: cffi'
       job_group: build_ios
+      FORGE_ARCH: iOS
       FORGE_PACKAGES:  >-
         cffi:1.16.0
         argon2-cffi-bindings:21.2.0
@@ -80,11 +86,13 @@ environment:
 
     - job_name: 'Build iOS packages: pydantic-core'
       job_group: build_ios
+      FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
         pydantic-core:2.18.4
 
     - job_name: 'Build iOS packages: numpy'
       job_group: build_ios
+      FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
         numpy:1.26.4
         numpy:2.0.0
@@ -151,7 +159,7 @@ for:
       - sh: |
           IFS=' ' read -r -a packages <<< "$FORGE_PACKAGES"
           for package in "${packages[@]}"; do
-              forge android $package
+              forge $FORGE_ARCH $package
           done
 
       # cleanup
@@ -205,7 +213,7 @@ for:
       - sh: |
           IFS=' ' read -r -a packages <<< "$FORGE_PACKAGES"
           for package in "${packages[@]}"; do
-              forge iOS $package
+              forge $FORGE_ARCH $package
           done
 
       # cleanup
