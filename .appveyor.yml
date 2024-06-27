@@ -17,16 +17,37 @@ environment:
     - job_name: 'Build Android packages for arm64-v8a: numpy, opencv-python'
       job_group: build_android
       FORGE_ARCH: 'android:arm64-v8a'
-      FORGE_PACKAGES: >-
-        numpy:2.0.0
-        opencv-python:4.10.0.84
+      FORGE_PACKAGES: numpy:2.0.0 opencv-python:4.10.0.84
+
+    - job_name: 'Build Android packages for armeabi-v7a: numpy, opencv-python'
+      job_group: build_android
+      FORGE_ARCH: 'android:armeabi-v7a'
+      FORGE_PACKAGES: numpy:2.0.0 opencv-python:4.10.0.84
+
+    - job_name: 'Build Android packages for x86_64: numpy, opencv-python'
+      job_group: build_android
+      FORGE_ARCH: 'android:x86_64'
+      FORGE_PACKAGES: numpy:2.0.0 opencv-python:4.10.0.84
+
+    - job_name: 'Build Android packages for x86: numpy, opencv-python'
+      job_group: build_android
+      FORGE_ARCH: 'android:x86'
+      FORGE_PACKAGES: numpy:2.0.0 opencv-python:4.10.0.84
 
     - job_name: 'Build iOS packages for iphoneis: numpy, opencv-python'
       job_group: build_ios
       FORGE_ARCH: 'iphoneos:arm64'
-      FORGE_PACKAGES: >-
-        numpy:2.0.0
-        opencv-python:4.10.0.84
+      FORGE_PACKAGES: numpy:2.0.0 opencv-python:4.10.0.84
+
+    - job_name: 'Build iOS packages for iphonesimulator arm64: numpy, opencv-python'
+      job_group: build_ios
+      FORGE_ARCH: 'iphonesimulator:arm64'
+      FORGE_PACKAGES: numpy:2.0.0 opencv-python:4.10.0.84
+
+    - job_name: 'Build iOS packages for iphonesimulator x86_64: numpy, opencv-python'
+      job_group: build_ios
+      FORGE_ARCH: 'iphonesimulator:x86_64'
+      FORGE_PACKAGES: numpy:2.0.0 opencv-python:4.10.0.84
 
     - job_name: 'Build Android packages: cffi'
       job_group: build_android
