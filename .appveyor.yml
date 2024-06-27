@@ -34,7 +34,7 @@ environment:
       FORGE_ARCH: 'android:x86'
       FORGE_PACKAGES: numpy:2.0.0 opencv-python:4.10.0.84
 
-    - job_name: 'iOS: opencv-python'
+    - job_name: 'iOS iphone arm64: opencv-python'
       job_group: build_ios
       FORGE_ARCH: 'iphoneos:arm64'
       FORGE_PACKAGES: numpy:2.0.0 opencv-python:4.10.0.84
