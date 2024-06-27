@@ -2,14 +2,11 @@ package:
   name: matplotlib
   version: 3.9.0
 
-patches:
-  - pyproject.patch
-
 requirements:
   host:
     - meson
     - ninja
-    - numpy 1.26.4
+    - numpy 2.0.0
 
 build:
   backend-args:

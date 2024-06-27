@@ -1,3 +1,6 @@
+diff --git a/a.diff b/a.diff
+new file mode 100644
+index 0000000..e69de29
 diff --git a/opencv/CMakeLists.txt b/opencv/CMakeLists.txt
 index f5e39b4..1bd8629 100644
 --- a/opencv/CMakeLists.txt
@@ -348,18 +351,16 @@ index e729c86..c5779d3 100644
          return (failmsgp("Incorrect type of self (must be 'VideoCapture' or its derivative)") != nullptr);
  
 diff --git a/pyproject.toml b/pyproject.toml
-index 7486f13..cf63d1d 100644
+index 71de7f9..740eabe 100644
 --- a/pyproject.toml
 +++ b/pyproject.toml
-@@ -13,5 +13,5 @@ requires = [
-   "numpy>=1.26.4; python_version>='3.12'",
+@@ -9,5 +9,5 @@ requires = [
+   "numpy>=2.0.0;  python_version>='3.9'",
    "pip",
    "scikit-build>=0.14.0",
 -  "setuptools==59.2.0",
--]
 +  "setuptools",
-+]
-\ No newline at end of file
+ ]
 diff --git a/setup.py b/setup.py
 index 48d5a65..125b9b4 100644
 --- a/setup.py

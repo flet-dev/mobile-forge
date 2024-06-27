@@ -8,3 +8,5 @@ patches:
 requirements:
   build:
     - numpy 1.26.4
+  host:
+    - numpy 1.26.4
