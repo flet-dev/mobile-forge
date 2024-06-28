@@ -7,15 +7,15 @@ from argparse import ArgumentParser
 import boto3
 
 
-def get_file_sha256(filepath):
-    with open(filepath, "rb") as f:
-        return get_content_sha256(f.read())
-
-
 def get_content_sha256(content):
     hasher = hashlib.sha256()
     hasher.update(content)
     return hasher.hexdigest()
+
+
+def get_file_sha256(filepath):
+    with open(filepath, "rb") as f:
+        return get_content_sha256(f.read())
 
 
 def upload_file(
@@ -78,32 +78,31 @@ def main():
     )
 
     # Loop through files in the directory
-    for file in glob.glob(f"{dist_dir}/*.whl"):
-        remote_file_path = os.path.basename(file)
+    for wheel in glob.glob(f"{dist_dir}/*.whl"):
+        remote_wheel_path = os.path.basename(wheel)
 
         # extract and upload metadata
-        zip = zipfile.ZipFile(file)
-        metadata_filename = next(
-            filter(lambda f: f.endswith(".dist-info/METADATA"), zip.namelist())
-        )
-        f = zip.open(metadata_filename)
-        content = f.read()
-        f.close()
-        s3_client.put_object(
-            Key=f"{remote_file_path}.metadata",
-            Body=content,
-            Bucket=cf_bucket_name,
-            ContentType="application/octet-stream",
-        )
+        with zipfile.ZipFile(wheel) as zip:
+            metadata_filename = next(
+                filter(lambda f: f.endswith(".dist-info/METADATA"), zip.namelist())
+            )
+            with zip.open(metadata_filename) as f:
+                metadata = f.read()
+                s3_client.put_object(
+                    Key=f"{remote_wheel_path}.metadata",
+                    Body=metadata,
+                    Bucket=cf_bucket_name,
+                    ContentType="application/octet-stream",
+                )
 
         # upload wheel
         upload_file(
             s3_client,
             cf_bucket_name,
-            file,
-            remote_file_path,
-            wheel_hash=get_file_sha256(file),
-            metadata_hash=get_content_sha256(content),
+            wheel,
+            remote_wheel_path,
+            wheel_hash=get_file_sha256(wheel),
+            metadata_hash=get_content_sha256(metadata),
         )
 
     print("All files uploaded!")
