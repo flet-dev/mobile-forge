@@ -76,6 +76,7 @@ def main():
         Key="simple/index.html",
         Body="\n".join(lines).encode("utf8"),
         Bucket=cf_bucket_name,
+        ContentType="text/html",
     )
 
     print("Updating package indexes")
@@ -95,6 +96,7 @@ def main():
                 Key=key,
                 Body="\n".join(lines).encode("utf8"),
                 Bucket=cf_bucket_name,
+                ContentType="text/html",
             )
 
 
