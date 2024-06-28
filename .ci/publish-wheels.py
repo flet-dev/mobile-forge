@@ -1,5 +1,7 @@
+import glob
 import hashlib
 import os
+import zipfile
 from argparse import ArgumentParser
 
 import boto3
@@ -72,12 +74,24 @@ def main():
     )
 
     # Loop through files in the directory
-    for file in os.listdir(dist_dir):
-        local_file_path = os.path.join(dist_dir, file)
-        remote_file_path = (
-            file  # Upload with the same filename in the bucket (can be modified)
+    for file in glob.glob(f"{dist_dir}/*.whl"):
+        remote_file_path = os.path.basename(file)
+        upload_file(s3_client, cf_bucket_name, file, remote_file_path)
+
+        # extract and upload metadata
+        zip = zipfile.ZipFile(file)
+        metadata_filename = next(
+            filter(lambda f: f.endswith(".dist-info/METADATA"), zip.namelist())
         )
-        upload_file(s3_client, cf_bucket_name, local_file_path, remote_file_path)
+        f = zip.open(metadata_filename)
+        content = f.read()
+        f.close()
+        s3_client.put_object(
+            Key=f"{remote_file_path}.metadata",
+            Body=content,
+            Bucket=cf_bucket_name,
+            ContentType="application/octet-stream",
+        )
 
     print("All files uploaded!")
 
