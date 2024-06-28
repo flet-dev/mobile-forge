@@ -7,20 +7,24 @@ from argparse import ArgumentParser
 import boto3
 
 
-def get_sha256(filepath):
-    """Calculates the SHA256 hash of a file."""
+def get_file_sha256(filepath):
     with open(filepath, "rb") as f:
-        hasher = hashlib.sha256()
-        hasher.update(f.read())
-        return hasher.hexdigest()
+        return get_content_sha256(f.read())
 
 
-def upload_file(s3_client, bucket_name, local_file_path, remote_file_path):
+def get_content_sha256(content):
+    hasher = hashlib.sha256()
+    hasher.update(content)
+    return hasher.hexdigest()
+
+
+def upload_file(
+    s3_client, bucket_name, local_file_path, remote_file_path, wheel_hash, metadata_hash
+):
     """Uploads a file to Cloudflare S2 storage with SHA256 hash in metadata."""
     try:
         with open(local_file_path, "rb") as f:
-            sha256_hash = get_sha256(local_file_path)
-            metadata = {"sha256": sha256_hash}
+            metadata = {"wheel_hash": wheel_hash, "metadata_hash": metadata_hash}
             s3_client.upload_fileobj(
                 f,
                 bucket_name,
@@ -76,7 +80,6 @@ def main():
     # Loop through files in the directory
     for file in glob.glob(f"{dist_dir}/*.whl"):
         remote_file_path = os.path.basename(file)
-        upload_file(s3_client, cf_bucket_name, file, remote_file_path)
 
         # extract and upload metadata
         zip = zipfile.ZipFile(file)
@@ -91,6 +94,16 @@ def main():
             Body=content,
             Bucket=cf_bucket_name,
             ContentType="application/octet-stream",
+        )
+
+        # upload wheel
+        upload_file(
+            s3_client,
+            cf_bucket_name,
+            file,
+            remote_file_path,
+            wheel_hash=get_file_sha256(file),
+            metadata_hash=get_content_sha256(content),
         )
 
     print("All files uploaded!")
