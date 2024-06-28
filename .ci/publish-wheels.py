@@ -82,11 +82,11 @@ def main():
         remote_wheel_path = os.path.basename(wheel)
 
         # extract and upload metadata
-        with zipfile.ZipFile(wheel) as zip:
+        with zipfile.ZipFile(wheel) as z:
             metadata_filename = next(
-                filter(lambda f: f.endswith(".dist-info/METADATA"), zip.namelist())
+                filter(lambda f: f.endswith(".dist-info/METADATA"), z.namelist())
             )
-            with zip.open(metadata_filename) as f:
+            with z.open(metadata_filename) as f:
                 metadata = f.read()
                 s3_client.put_object(
                     Key=f"{remote_wheel_path}.metadata",
