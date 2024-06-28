@@ -56,7 +56,7 @@ def main():
                 package_name = parts[1]
             if not package_name in index:
                 index[package_name] = []
-        elif not key.endswith("index.html"):
+        elif not key.endswith("index.html") and key.endswith(".whl"):
             print(key)
             package_name = normalize(key.split("-")[0])
             wheels = index.get(package_name, None)
