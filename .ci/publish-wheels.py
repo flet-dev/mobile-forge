@@ -1,24 +1,30 @@
+import glob
 import hashlib
 import os
+import zipfile
 from argparse import ArgumentParser
 
 import boto3
 
 
-def get_sha256(filepath):
-    """Calculates the SHA256 hash of a file."""
+def get_content_sha256(content):
+    hasher = hashlib.sha256()
+    hasher.update(content)
+    return hasher.hexdigest()
+
+
+def get_file_sha256(filepath):
     with open(filepath, "rb") as f:
-        hasher = hashlib.sha256()
-        hasher.update(f.read())
-        return hasher.hexdigest()
+        return get_content_sha256(f.read())
 
 
-def upload_file(s3_client, bucket_name, local_file_path, remote_file_path):
+def upload_file(
+    s3_client, bucket_name, local_file_path, remote_file_path, wheel_hash, metadata_hash
+):
     """Uploads a file to Cloudflare S2 storage with SHA256 hash in metadata."""
     try:
         with open(local_file_path, "rb") as f:
-            sha256_hash = get_sha256(local_file_path)
-            metadata = {"sha256": sha256_hash}
+            metadata = {"wheel_hash": wheel_hash, "metadata_hash": metadata_hash}
             s3_client.upload_fileobj(
                 f,
                 bucket_name,
@@ -72,12 +78,32 @@ def main():
     )
 
     # Loop through files in the directory
-    for file in os.listdir(dist_dir):
-        local_file_path = os.path.join(dist_dir, file)
-        remote_file_path = (
-            file  # Upload with the same filename in the bucket (can be modified)
+    for wheel in glob.glob(f"{dist_dir}/*.whl"):
+        remote_wheel_path = os.path.basename(wheel)
+
+        # extract and upload metadata
+        with zipfile.ZipFile(wheel) as z:
+            metadata_filename = next(
+                filter(lambda f: f.endswith(".dist-info/METADATA"), z.namelist())
+            )
+            with z.open(metadata_filename) as f:
+                metadata = f.read()
+                s3_client.put_object(
+                    Key=f"{remote_wheel_path}.metadata",
+                    Body=metadata,
+                    Bucket=cf_bucket_name,
+                    ContentType="application/octet-stream",
+                )
+
+        # upload wheel
+        upload_file(
+            s3_client,
+            cf_bucket_name,
+            wheel,
+            remote_wheel_path,
+            wheel_hash=get_file_sha256(wheel),
+            metadata_hash=get_content_sha256(metadata),
         )
-        upload_file(s3_client, cf_bucket_name, local_file_path, remote_file_path)
 
     print("All files uploaded!")
 

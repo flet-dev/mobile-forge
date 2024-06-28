@@ -14,6 +14,18 @@ environment:
   CF_BUCKET_NAME: flet-simple
 
   matrix:
+    # - job_name: 'Android: websockets'
+    #   job_group: build_android
+    #   FORGE_ARCH: android
+    #   FORGE_PACKAGES: >-
+    #     websockets:12.0
+
+    # - job_name: 'iOS: websockets'
+    #   job_group: build_ios
+    #   FORGE_ARCH: iOS
+    #   FORGE_PACKAGES: >-
+    #     websockets:12.0
+
     - job_name: 'Android arm64-v8a: opencv-python'
       job_group: build_android
       FORGE_ARCH: 'android:arm64-v8a'
@@ -49,7 +61,7 @@ environment:
       FORGE_ARCH: 'iphonesimulator:x86_64'
       FORGE_PACKAGES: numpy:2.0.0 opencv-python:4.10.0.84
 
-    - job_name: 'Android: pydantic-core, pillow, lru-dict, contourpy, kiwisolver, aiohttp, bitarray, argon2-cffi-binding, bcrypt, cryptography, brotli'
+    - job_name: 'Android: pydantic-core, pillow, lru-dict, contourpy, kiwisolver, aiohttp, bitarray, argon2-cffi-binding, bcrypt, cryptography, brotli, websockets'
       job_group: build_android
       FORGE_ARCH: android
       FORGE_PACKAGES: >-
@@ -69,6 +81,7 @@ environment:
         cryptography:42.0.7
         brotli:1.1.0
         pydantic-core:2.18.4
+        websockets:12.0
 
     - job_name: 'Android: numpy, matplotlib, pandas, blis'
       job_group: build_android
@@ -80,7 +93,7 @@ environment:
         pandas:2.2.2
         blis:0.9.1
 
-    - job_name: 'iOS: pillow, lru-dict, yarl, contourpy, kiwisolver, aiohttp, bitarray'
+    - job_name: 'iOS: pillow, lru-dict, yarl, contourpy, kiwisolver, aiohttp, bitarray, websockets'
       job_group: build_ios
       FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
@@ -94,6 +107,7 @@ environment:
         kiwisolver:1.4.5
         aiohttp:3.9.5
         bitarray:2.9.2
+        websockets:12.0
 
     - job_name: 'iOS: cffi, argon2-cffi-bindings, bcrypt, cryptography, brotli'
       job_group: build_ios

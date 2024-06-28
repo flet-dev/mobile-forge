@@ -5,7 +5,7 @@ import boto3
 
 html_header = "<!DOCTYPE html><html><body>\n"
 html_root_anchor = '<a href="{0}/">{0}</a></br>\n'
-html_package_anchor = '<a href="https://pypi.flet.dev/{key}#sha256={sha256}" data-dist-info-metadata="sha256={sha256}" data-core-metadata="sha256={sha256}">{key}</a></br>\n'
+html_package_anchor = '<a href="https://pypi.flet.dev/{key}#sha256={wheel_hash}" data-dist-info-metadata="sha256={metadata_hash}" data-core-metadata="sha256={metadata_hash}">{key}</a></br>\n'
 html_footer = "</body></html>\n"
 
 
@@ -56,7 +56,7 @@ def main():
                 package_name = parts[1]
             if not package_name in index:
                 index[package_name] = []
-        elif not key.endswith("index.html"):
+        elif key.endswith(".whl"):
             print(key)
             package_name = normalize(key.split("-")[0])
             wheels = index.get(package_name, None)
@@ -64,7 +64,13 @@ def main():
                 wheels = []
                 index[package_name] = wheels
             metadata = s3_client.head_object(Bucket=cf_bucket_name, Key=obj["Key"])
-            wheels.append({"key": key, "sha256": metadata["Metadata"]["sha256"]})
+            wheels.append(
+                {
+                    "key": key,
+                    "wheel_hash": metadata["Metadata"].get("wheel_hash", ""),
+                    "metadata_hash": metadata["Metadata"].get("metadata_hash", ""),
+                }
+            )
 
     print("Writing root index")
     packages = [
@@ -76,13 +82,19 @@ def main():
         Key="simple/index.html",
         Body="\n".join(lines).encode("utf8"),
         Bucket=cf_bucket_name,
+        ContentType="text/html",
     )
 
     print("Updating package indexes")
     for package_name, files in index.items():
         files.sort(key=lambda f: f["key"])
         versions = [
-            html_package_anchor.format(key=f["key"], sha256=f["sha256"]) for f in files
+            html_package_anchor.format(
+                key=f["key"],
+                wheel_hash=f["wheel_hash"],
+                metadata_hash=f["metadata_hash"],
+            )
+            for f in files
         ]
         key = f"simple/{package_name}/index.html"
         if len(versions) == 0:
@@ -95,6 +107,7 @@ def main():
                 Key=key,
                 Body="\n".join(lines).encode("utf8"),
                 Bucket=cf_bucket_name,
+                ContentType="text/html",
             )
 
 
