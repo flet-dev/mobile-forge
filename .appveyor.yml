@@ -194,7 +194,7 @@ for:
       - sh: |
           IFS=' ' read -r -a packages <<< "$FORGE_PACKAGES"
           for package in "${packages[@]}"; do
-              forge $FORGE_ARCH $package
+              forge $FORGE_ARCH $package || exit 1
           done
 
       # cleanup
@@ -248,7 +248,7 @@ for:
       - sh: |
           IFS=' ' read -r -a packages <<< "$FORGE_PACKAGES"
           for package in "${packages[@]}"; do
-              forge $FORGE_ARCH $package
+              forge $FORGE_ARCH $package || exit 1
           done
 
       # cleanup

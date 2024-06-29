@@ -7,3 +7,6 @@ source:
 
 build:
   number: 1
+
+patches:
+  - cmake.patch
