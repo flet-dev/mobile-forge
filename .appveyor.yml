@@ -66,7 +66,7 @@ environment:
       FORGE_ARCH: android
       FORGE_PACKAGES: >-
         cffi:1.16.0
-        libjpeg:3.0.1
+        libjpeg:3.0.3
         libpng:1.6.43
         freetype:2.13.2
         pillow:10.3.0
@@ -97,7 +97,7 @@ environment:
       job_group: build_ios
       FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
-        libjpeg:3.0.1
+        libjpeg:3.0.3
         libpng:1.6.43
         freetype:2.13.2
         pillow:10.3.0

@@ -8,5 +8,5 @@ patches:
 requirements:
   host:
     # PNG support is internal: libpng is not used.
-    - libjpeg 3.0.1
+    - libjpeg 3.0.3
     - freetype 2.13.2

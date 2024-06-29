@@ -1,9 +1,0 @@
-index 5ad0718..21cc99c 100644
---- a/CMakeLists.txt
-+++ b/CMakeLists.txt
-@@ -1,4 +1,4 @@
--cmake_minimum_required(VERSION 2.8.12)
-+cmake_minimum_required(VERSION 3.3)
- # When using CMake 3.4 and later, don't export symbols from executables unless
- # the CMAKE_ENABLE_EXPORTS variable is set.
- if(POLICY CMP0065)
