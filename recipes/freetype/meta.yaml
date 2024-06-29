@@ -6,7 +6,7 @@ build:
   number: 1
 
 source:
-  url: https://download.savannah.gnu.org/releases/freetype/freetype-2.13.2.tar.gz
+  url: https://download.flet.dev/freetype/freetype-2.13.2.tar.gz
 
 patches:
   - config.patch
