@@ -7,7 +7,7 @@ import shutil
 import sys
 import tarfile
 import zipfile
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod, abstractproperty
 from email import generator, message
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -36,15 +36,13 @@ class Builder(ABC):
         self.cross_venv = cross_venv
         self.package = package
 
-    @property
-    @abstractmethod
+    @abstractproperty
     def build_path(self) -> Path:
         """The path in which all environment and sources for the build will be
         created."""
         ...
 
-    @property
-    @abstractmethod
+    @abstractproperty
     def log_file_path(self) -> Path:
         """The path where build logs should be written."""
         ...
@@ -54,8 +52,7 @@ class Builder(ABC):
         """The path for the log file if a build error occurs."""
         return self.log_file_path.parent.parent / "errors" / self.log_file_path.name
 
-    @property
-    @abstractmethod
+    @abstractproperty
     def source_archive_path(self) -> Path:
         """The source archive file for the package."""
         ...
@@ -79,7 +76,7 @@ class Builder(ABC):
             self.cross_venv.pip_install(
                 self.log_file,
                 requirements,
-                wheels_path=Path.cwd() / "dist",
+                paths=[Path.cwd() / "dist"],
                 build=target == "build",
             )
         else:
@@ -106,6 +103,13 @@ class Builder(ABC):
             self.log_file,
             f"Unpacking {self.source_archive_path.relative_to(Path.cwd())}...",
         )
+        # Determine the stripping level. By default, this is 1;
+        # but some source types can override.
+        try:
+            strip = self.package.meta["source"]["strip"]
+        except (TypeError, KeyError):
+            strip = 1
+
         # Some packages (e.g., brotli) have uploaded a .tar.gz file... that is
         # actually a zipfile (!).
         if tarfile.is_tarfile(self.source_archive_path):
@@ -123,7 +127,7 @@ class Builder(ABC):
             with tarfile.open(self.source_archive_path) as tf:
                 tf.extractall(
                     path=self.build_path,
-                    members=members(tf, strip=1),
+                    members=members(tf, strip=strip) if strip else None,
                 )
         elif zipfile.is_zipfile(self.source_archive_path):
             # Strip the top level folder.
@@ -141,7 +145,7 @@ class Builder(ABC):
 
             zf.extractall(
                 path=self.build_path,
-                members=members(zf, strip=1),
+                members=members(zf, strip=strip) if strip else None,
             )
         else:
             raise RuntimeError(
@@ -160,7 +164,14 @@ class Builder(ABC):
             # not anything dependent on the Python environment.
             subprocess.run(
                 self.log_file,
-                ["patch", "-p1", "--ignore-whitespace", "--input", str(patchfile)],
+                [
+                    "patch",
+                    "-p1",
+                    "--ignore-whitespace",
+                    "--quiet",
+                    "--input",
+                    str(patchfile),
+                ],
                 cwd=self.build_path,
             )
             patched = True
@@ -245,7 +256,7 @@ class Builder(ABC):
 
         # cargo_ldflags = re.sub(r"-march=[\w-]+", "", ldflags)
         cargo_ldflags = " -L{}/lib".format(self.cross_venv.sysconfig_data["prefix"])
-        cargo_ldflags += " -C link-arg=-undefined -C link-arg=dynamic_lookup"
+        # cargo_ldflags += " -C link-arg=-undefined -C link-arg=dynamic_lookup"
 
         if self.cross_venv.sdk != "android":
 
@@ -257,6 +268,9 @@ class Builder(ABC):
             # Add SDK root lib
             if (self.cross_venv.sdk_root / "usr" / "lib").is_dir():
                 ldflags += f" -L{self.cross_venv.sdk_root}/usr/lib"
+
+            # Add the framework path
+            ldflags += f' -F "{self.cross_venv.host_python_home}"'
 
         cargo_build_target = (
             {
@@ -361,7 +375,7 @@ class SimplePackageBuilder(Builder):
 
     @property
     def source_archive_path(self) -> Path:
-        url = self.package.meta["source"]["url"]
+        url = self.download_source_url()
         filename = url.split("/")[-1]
         return Path.cwd() / "downloads" / filename
 
@@ -389,7 +403,12 @@ class SimplePackageBuilder(Builder):
         )
 
     def download_source_url(self):
-        return self.package.meta["source"]["url"]
+        return self.package.meta["source"]["url"].format(
+            version=self.package.meta["package"]["version"],
+            build=self.package.meta["build"]["number"],
+            sdk=self.cross_venv.sdk,
+            arch=self.cross_venv.arch,
+        )
 
     def prepare(self, clean=True):
         # Always clean a non-Python build.
@@ -414,7 +433,7 @@ class SimplePackageBuilder(Builder):
         info_path = self.build_path / "wheel" / f"{name}-{version}.dist-info"
 
         log(self.log_file, f"\n[{self.cross_venv}] Writing wheel metadata")
-        info_path.mkdir()
+        info_path.mkdir(exist_ok=True)
 
         # Write the packaging metadata
         self.write_message_file(
@@ -537,14 +556,14 @@ class PythonPackageBuilder(Builder):
                 self.cross_venv.pip_install(
                     self.log_file,
                     ["build", "wheel"] + pyproject["build-system"]["requires"],
-                    wheels_path=Path.cwd() / "dist",
+                    paths=[Path.cwd() / "dist"],
                 )
 
                 # Install the build requirements in the build environment
                 self.cross_venv.pip_install(
                     self.log_file,
                     ["build", "wheel"] + pyproject["build-system"]["requires"],
-                    wheels_path=Path.cwd() / "dist",
+                    paths=[Path.cwd() / "dist"],
                     build=True,
                 )
         else:
@@ -624,11 +643,18 @@ class PythonPackageBuilder(Builder):
 
         env = self.compile_env()
 
-        script_vars = {**env, **self.cross_venv.scheme_paths, **self.cross_venv.sysconfig_data}
+        script_vars = {
+            **env,
+            **self.cross_venv.scheme_paths,
+            **self.cross_venv.sysconfig_data,
+        }
 
         # Set up any additional environment variables needed in the script environment.
         for key, value in self.package.meta["build"]["script_env"].items():
-            env[key] = str(value).format(**script_vars)
+            if key == "LDFLAGS":
+                env[key] += " " + value
+            else:
+                env[key] = str(value).format(**script_vars)
 
         # Set the cross host platform in the environment
         env["_PYTHON_HOST_PLATFORM"] = self.cross_venv.platform_identifier

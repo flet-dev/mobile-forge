@@ -1,12 +1,18 @@
 package:
   name: Pillow
-  version: 10.3.0
+  version: 10.4.0
 
 patches:
   - setup.patch
 
+build:
+  script_env:
+    # libfreetype references both libz and libbz2
+    # but doesn't link them into the static library
+    LDFLAGS: -lz -lbz2
+
 requirements:
   host:
     # PNG support is internal: libpng is not used.
-    - libjpeg 3.0.3
-    - freetype 2.13.2
+    - libjpeg
+    - freetype

@@ -65,11 +65,11 @@ environment:
       job_group: build_android
       FORGE_ARCH: android
       FORGE_PACKAGES: >-
-        cffi:1.16.0
+        cffi:1.17.1
         libjpeg:3.0.3
         libpng:1.6.43
-        freetype:2.13.2
-        pillow:10.3.0
+        freetype:2.13.3
+        pillow:10.4.0
         lru-dict:1.3.0
         yarl:1.9.4
         contourpy:1.2.1
@@ -77,8 +77,8 @@ environment:
         aiohttp:3.9.5
         bitarray:2.9.2
         argon2-cffi-bindings:21.2.0
-        bcrypt:4.1.3
-        cryptography:42.0.7
+        bcrypt:4.2.0
+        cryptography:43.0.1
         brotli:1.1.0
         pydantic-core:2.18.4
         websockets:12.0
@@ -99,8 +99,8 @@ environment:
       FORGE_PACKAGES: >-
         libjpeg:3.0.3
         libpng:1.6.43
-        freetype:2.13.2
-        pillow:10.3.0
+        freetype:2.13.3
+        pillow:10.4.0
         lru-dict:1.3.0
         yarl:1.9.4
         contourpy:1.2.1
@@ -113,10 +113,10 @@ environment:
       job_group: build_ios
       FORGE_ARCH: iOS
       FORGE_PACKAGES:  >-
-        cffi:1.16.0
+        cffi:1.17.1
         argon2-cffi-bindings:21.2.0
-        bcrypt:4.1.3
-        cryptography:42.0.7
+        bcrypt:4.2.0
+        cryptography:43.0.1
         brotli:1.1.0
 
     - job_name: 'iOS: pydantic-core'

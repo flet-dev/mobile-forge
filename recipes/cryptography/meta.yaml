@@ -1,16 +1,18 @@
 package:
   name: cryptography
-  version: 42.0.7
+  version: 43.0.1
 
 build:
   script_env:
-    OPENSSL_STATIC: 1
+    #OPENSSL_STATIC: 1
     OPENSSL_DIR: '{platlib}/opt'
+    #PYO3_USE_ABI3_FORWARD_COMPATIBILITY: 1
 
 requirements:
   build:
     - setuptools_rust @ git+https://github.com/flet-dev/setuptools-rust@ios-support
 
   host:
-    - cffi 1.16.0
+    - cffi
     - openssl ^3.0.12
+    - maturin @ git+https://github.com/PyO3/maturin

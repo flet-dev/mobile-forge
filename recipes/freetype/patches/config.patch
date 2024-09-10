@@ -1,29 +1,30 @@
-index 6ae2502..ab90b57 100755
+diff --git a/builds/unix/config.sub b/builds/unix/config.sub
+index 4aaae46..526f2d4 100755
 --- a/builds/unix/config.sub
 +++ b/builds/unix/config.sub
-@@ -146,6 +146,7 @@ case $1 in
-                        | uclinux-gnu* | kfreebsd*-gnu* | knetbsd*-gnu* | netbsd*-gnu* \
-                        | netbsd*-eabi* | kopensolaris*-gnu* | cloudabi*-eabi* \
-                        | storm-chaos* | os2-emx* | rtmk-nova* | managarm-* \
-+                       | ios*-simulator | tvos*-simulator | watchos*-simulator \
-                        | windows-* )
-                                basic_machine=$field1
-                                basic_os=$maybe_os
-@@ -1492,6 +1493,8 @@ case $os in
-                        ;;
-                esac
-                ;;
-+       ios | ios-simulator)
-+               ;;
-        *)
-                # No normalization, but not necessarily accepted, that comes below.
-                ;;
-@@ -1797,6 +1800,8 @@ case $kernel-$os in
-                # None (no kernel, i.e. freestanding / bare metal),
-                # can be paired with an output format "OS"
-                ;;
-+       ios-simulator)
-+               ;;
-        -*)
-                # Blank kernel with real OS is always fine.
-                ;;
+@@ -155,6 +155,7 @@ case $1 in
+ 			| storm-chaos* \
+ 			| uclinux-gnu* \
+ 			| uclinux-uclibc* \
++			| ios*-simulator \
+ 			| windows-* )
+ 				basic_machine=$field1
+ 				basic_os=$maybe_os
+@@ -1727,6 +1728,8 @@ case $os in
+ 		obj=$os
+ 		os=
+ 		;;
++	ios | ios-simulator)
++		;;
+ 	*)
+ 		# No normalization, but not necessarily accepted, that comes below.
+ 		;;
+@@ -2253,6 +2256,8 @@ case $kernel-$os-$obj in
+ 		# None (no kernel, i.e. freestanding / bare metal),
+ 		# can be paired with an machine code file format
+ 		;;
++	ios-simulator)
++		;;
+ 	-*-)
+ 		# Blank kernel with real OS is always fine.
+ 		;;

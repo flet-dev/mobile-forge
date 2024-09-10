@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import itertools
 import os
 import shutil
 import sys
@@ -14,8 +15,8 @@ from forge import subprocess
 class CrossVEnv:
     BASE_VERSION = {
         "android": "24",
-        "iOS": "12.0",
-        "tvOS": "7.0",
+        "iOS": "13.0",
+        "tvOS": "12.0",
         "watchOS": "4.0",
     }
 
@@ -65,6 +66,9 @@ class CrossVEnv:
         self.sdk_version = sdk_version
         self.arch = arch
 
+        self.host_os = {
+            sdk: host_os for host_os, sdks in self.HOST_SDKS.items() for sdk, _ in sdks
+        }[self.sdk]
         self.platform_identifier = self._platform_identifier(sdk, sdk_version, arch)
         self.tag = (
             self._platform_identifier(sdk, sdk_version, arch)
@@ -89,6 +93,19 @@ class CrossVEnv:
     def exists(self) -> bool:
         """Does the cross environment exist?"""
         return self.venv_path.is_dir()
+
+    @property
+    def host_python_home(self):
+        support_path = Path(
+            os.getenv(f"MOBILE_FORGE_{self.host_os.upper()}_SUPPORT_PATH")
+        )
+        return (
+            support_path
+            / "install"
+            / self.host_os
+            / self.platform_triplet
+            / f"python-3.{sys.version_info.minor}.{sys.version_info.micro}"
+        )
 
     @property
     def venv_path(self) -> Path:
@@ -187,18 +204,18 @@ class CrossVEnv:
         return self._sdk_root
 
     @classmethod
-    def _platform_identifier(cls, sdk, version, arch):
+    def _platform_identifier(self, sdk, version, arch):
         if sdk == "android":
             if version is None:
                 version = 21
             identifier = f"{sdk}-{version}-{arch}"
         elif sdk in {"iphoneos", "iphonesimulator"}:
             if version is None:
-                version = "12.0"
+                version = "13.0"
             identifier = f"ios-{version}-{arch}-{sdk}"
         elif sdk in {"appletvos", "appletvsimulator"}:
             if version is None:
-                version = "7.0"
+                version = "12.0"
             identifier = f"tvos-{version}-{arch}-{sdk}"
         elif sdk in {"watchos", "watchsimulator"}:
             if version is None:
@@ -222,17 +239,17 @@ class CrossVEnv:
         :raises: ``RuntimeError`` if an environment matching the requested host already
             exists, and ``clean=False``.
         """
-        env_key = (
-            f"MOBILE_FORGE_{self.sdk.upper()}_{self.arch.upper().replace('-', '_')}"
+        host_python = self.host_python_home / f"bin/python3.{sys.version_info.minor}"
+        if not host_python.is_file():
+            raise RuntimeError(f"Can't find host python {host_python}")
+
+        host_sysconfig = (
+            self.host_python_home
+            / f"lib/python3.{sys.version_info.minor}"
+            / f"_sysconfigdata__{self.host_os.lower()}_{self.arch}-{self.sdk}.py"
         )
-        host_python = os.getenv(env_key)
-        if host_python is None:
-            raise RuntimeError(
-                f"Host Python not defined. Set the {env_key} environment variable with "
-                "the location of the host Python's binary."
-            )
-        elif not Path(host_python).is_file():
-            raise RuntimeError(f"Environment {self} already exists.")
+        if not host_sysconfig.is_file():
+            raise RuntimeError(f"Can't find host sysconfig {host_sysconfig}")
 
         self.location = Path(location).resolve() if location else Path.cwd()
         if self.exists():
@@ -250,9 +267,12 @@ class CrossVEnv:
                     sys.executable,
                     "-m",
                     "crossenv",
+                    "--sysconfigdata-file",
+                    str(host_sysconfig),
                     str(host_python),
                     self.venv_path,
                 ],
+                **self.cross_kwargs({}),
             )
         except subprocess.CalledProcessError:
             raise RuntimeError(f"Unable to create cross platform environment {self}.")
@@ -348,8 +368,10 @@ class CrossVEnv:
             )
         ]
 
+        # Ensure the path is clean, and doesn't include any non-iOS paths.
         env["PATH"] = os.pathsep.join(
             [
+                str(self.host_python_home / "bin"),
                 str(self.venv_path / "bin"),
                 str(self.venv_path / self.venv_path.name / "bin"),
             ]
@@ -402,7 +424,7 @@ class CrossVEnv:
         packages,
         update=False,
         build=False,
-        wheels_path=None,
+        paths=None,
     ):
         """Install packages into the cross environment.
 
@@ -410,14 +432,17 @@ class CrossVEnv:
         :param update: Should the package be updated ("-U")
         :param build: Should the package be installed in the build environment? Defaults
             to installing in the host environment.
-        :param wheels_path: A path to search for additional wheels ("--find-links").
+        :param paths: The paths to search for additional wheels ("--find-links").
         """
         # build-pip is a script; pip is a shim with a hashbang that points
         # at a python interpreter, which we can't invoke with subprocess.
         self.run(
             logfile,
             (["build-pip"] if build else ["python", "-m", "pip"])
-            + ["install", "--disable-pip-version-check"]
+            + [
+                "install",
+                "--disable-pip-version-check",
+            ]
             # If we're doing a host build, require binary packages.
             # build environment can use non-binary packages.
             + (
@@ -430,8 +455,12 @@ class CrossVEnv:
             )
             # Update packages if requested
             + (["-U"] if update else [])
-            # Include the local wheels path if provided.
-            + (["--find-links", str(wheels_path)] if wheels_path else [])
+            # Include the local wheels paths if provided.
+            + (
+                list(itertools.chain(*(["--find-links", str(path)] for path in paths)))
+                if paths
+                else []
+            )
             # Finally, the list of packages to install.
             + packages,
         )
@@ -463,12 +492,6 @@ def main():
     parser.add_argument(
         "--arch", required=True, help="The CPU architecture for the host."
     )
-    parser.add_argument(
-        "host_python",
-        metavar="DIR",
-        type=abspath,
-        help="Path to the python executable of the Python built for the host platform.",
-    )
 
     args = parser.parse_args()
 
@@ -478,10 +501,7 @@ def main():
             sdk_version=args.sdk_version,
             arch=args.arch,
         )
-        cross_venv.create(
-            host_python=Path(args.host_python),
-            clean=args.clean,
-        )
+        cross_venv.create(clean=args.clean)
     except RuntimeError as e:
         print()
         print(f"ERROR: {e}")

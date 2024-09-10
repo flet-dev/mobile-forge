@@ -1,12 +1,12 @@
 package:
   name: freetype
-  version: 2.13.2
+  version: 2.13.3
 
 build:
   number: 1
 
 source:
-  url: https://download.flet.dev/freetype/freetype-2.13.2.tar.gz
+  url: https://download.savannah.gnu.org/releases/freetype/freetype-2.13.3.tar.gz
 
 patches:
   - config.patch

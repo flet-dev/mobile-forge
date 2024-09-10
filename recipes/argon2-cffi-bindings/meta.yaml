@@ -4,4 +4,4 @@ package:
 
 requirements:
   build:
-    - cffi 1.16.0
+    - cffi

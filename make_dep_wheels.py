@@ -26,7 +26,15 @@ def make_wheel(package, os_name, target):
     :param os_name: The OS name to target (e.g., "iOS")
     :param target: The target specifier (e.g., "iphoneos.arm64")
     """
-    support = Path(os.environ["PYTHON_ANDROID_SUPPORT" if os_name == "android" else "PYTHON_APPLE_SUPPORT"])
+    support = Path(
+        os.environ[
+            (
+                "MOBILE_FORGE_ANDROID_SUPPORT_PATH"
+                if os_name == "android"
+                else "MOBILE_FORGE_IOS_SUPPORT_PATH"
+            )
+        ]
+    )
 
     versions_file = (
         support
@@ -43,10 +51,15 @@ def make_wheel(package, os_name, target):
 
     package_version, package_build = package_version_build.split("-")
 
-    target_parts = target.split(".")
-    target_parts.reverse()
-    wheel_target = "_".join(target_parts)
-    wheel_tag = f"py3-none-{os_name}_{min_version}_{wheel_target.replace('-', '_')}".lower().replace(".", "_")
+    target_parts = target.split("-")
+    wheel_target = (
+        f"{target_parts[0]}_iphoneos"
+        if len(target_parts) == 3
+        else f"{target_parts[0]}_iphonesimulator"
+    )
+    wheel_tag = f"py3-none-{os_name}_{min_version}_{wheel_target}".lower().replace(
+        ".", "_"
+    )
 
     wheel_file = (
         Path("dist") / f"{package.lower()}-{package_version_build}-{wheel_tag}.whl"
@@ -125,26 +138,11 @@ def make_wheel(package, os_name, target):
 if __name__ == "__main__":
     os_name = sys.argv[1]
     for target in {
-        "android": [
-            "arm64-v8a",
-            "armeabi-v7a",
-            "x86_64",
-            "x86"
-        ],
+        "android": ["arm64-v8a", "armeabi-v7a", "x86_64", "x86"],
         "iOS": [
-            "iphoneos.arm64",
-            "iphonesimulator.arm64",
-            "iphonesimulator.x86_64",
-        ],
-        "tvOS": [
-            "appletvos.arm64",
-            "appletvsimulator.arm64",
-            "appletvsimulator.x86_64",
-        ],
-        "watchOS": [
-            "watchos.arm64_32",
-            "watchsimulator.arm64",
-            "watchsimulator.x86_64",
+            "arm64-apple-ios",
+            "arm64-apple-ios-simulator",
+            "x86_64-apple-ios-simulator",
         ],
     }[os_name]:
         for dep in ["BZip2", "XZ", "libFFI", "OpenSSL"]:
