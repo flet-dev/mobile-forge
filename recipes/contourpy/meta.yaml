@@ -8,6 +8,6 @@ build:
     - -Csetup-args={MESON_CROSS_FILE}
 
 requirements:
-  host:
-    - meson
+  build:
     - ninja
+    - cmake

@@ -6,11 +6,8 @@ build:
   script_env:
     #OPENSSL_STATIC: 1
     OPENSSL_DIR: '{platlib}/opt'
+    _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
 
 requirements:
-  build:
-    - setuptools_rust @ git+https://github.com/flet-dev/setuptools-rust@ios-support
-
   host:
-    - cffi
     - openssl ^3.0.12

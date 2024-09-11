@@ -650,6 +650,7 @@ class PythonPackageBuilder(Builder):
             **env,
             **self.cross_venv.scheme_paths,
             **self.cross_venv.sysconfig_data,
+            "sysconfigdata_name": self.cross_venv.sysconfigdata_name,
         }
 
         # Set up any additional environment variables needed in the script environment.
@@ -661,9 +662,6 @@ class PythonPackageBuilder(Builder):
 
         # Set the cross host platform in the environment
         env["_PYTHON_HOST_PLATFORM"] = self.cross_venv.platform_identifier
-        env["_PYTHON_SYSCONFIGDATA_NAME"] = (
-            f"_sysconfigdata__{self.cross_venv.host_os.lower()}_{self.cross_venv.arch}-{self.cross_venv.sdk}"
-        )
 
         meson_cross_file = self._create_meson_cross(env)
 

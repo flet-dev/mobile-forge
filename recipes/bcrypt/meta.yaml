@@ -1,8 +1,3 @@
 package:
   name: bcrypt
   version: 4.2.0
-
-requirements:
-  build:
-    - setuptools_rust @ git+https://github.com/flet-dev/setuptools-rust@ios-support
-    - cffi

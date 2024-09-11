@@ -2,6 +2,6 @@ package:
   name: pydantic-core
   version: 2.18.4
 
-requirements:
-  build:
-    - maturin
+build:
+  script_env:
+    _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'

@@ -256,10 +256,14 @@ class CrossVEnv:
         if not host_python.is_file():
             raise RuntimeError(f"Can't find host python {host_python}")
 
+        self.sysconfigdata_name = (
+            f"_sysconfigdata__{self.host_os.lower()}_{self.arch}-{self.sdk}"
+        )
+
         host_sysconfig = (
             self.host_python_home
             / f"lib/python3.{sys.version_info.minor}"
-            / f"_sysconfigdata__{self.host_os.lower()}_{self.arch}-{self.sdk}.py"
+            / f"{self.sysconfigdata_name}.py"
         )
         if not host_sysconfig.is_file():
             raise RuntimeError(f"Can't find host sysconfig {host_sysconfig}")
