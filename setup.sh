@@ -129,11 +129,6 @@ if [ ! -z "$MOBILE_FORGE_IOS_SUPPORT_PATH" ]; then
         return
     fi
 
-    # if [ ! -e $MOBILE_FORGE_IOS_SUPPORT_PATH/install/iOS/x86_64-apple-ios-simulator/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
-    #     echo "MOBILE_FORGE_IOS_SUPPORT_PATH does not appear to contain a Python $PYTHON_VERSION iOS x86-64 simulator binary."
-    #     return
-    # fi
-
     echo "MOBILE_FORGE_IOS_SUPPORT_PATH: $MOBILE_FORGE_IOS_SUPPORT_PATH"
 fi
 
@@ -160,53 +155,6 @@ if [ ! -z "$MOBILE_FORGE_ANDROID_SUPPORT_PATH" ]; then
     fi
 
     echo "MOBILE_FORGE_ANDROID_SUPPORT_PATH: $MOBILE_FORGE_ANDROID_SUPPORT_PATH"
-fi
-
-# Ensure CMake is installed
-if [ $(uname) = "Darwin" ]; then
-    if ! [ -d "tools/CMake.app" ]; then
-        if ! [ -f "downloads/cmake-${CMAKE_VERSION}-macos-universal.tar.gz" ]; then
-            echo "Downloading CMake"
-            mkdir -p downloads
-            curl --location --progress-bar "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-macos-universal.tar.gz" --output downloads/cmake-${CMAKE_VERSION}-macos-universal.tar.gz
-        fi
-
-        echo "Installing CMake"
-        mkdir -p tools
-        tar -xzf downloads/cmake-${CMAKE_VERSION}-macos-universal.tar.gz
-        mv cmake-${CMAKE_VERSION}-macos-universal/CMake.app tools
-        rm -rf cmake-${CMAKE_VERSION}-macos-universal
-    fi
-    export PATH="$PATH:$(pwd)/tools/CMake.app/Contents/bin"
-else
-    if ! [ -d "tools/cmake" ]; then
-        if ! [ -f "downloads/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz" ]; then
-            echo "Downloading CMake"
-            mkdir -p downloads
-            curl --location --progress-bar "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz" --output downloads/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz
-        fi
-
-        echo "Installing CMake"
-        mkdir -p tools
-        tar -xzf downloads/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz
-        mv cmake-${CMAKE_VERSION}-linux-x86_64/bin tools/cmake
-        rm -rf cmake-${CMAKE_VERSION}-linux-x86_64
-    fi
-    export PATH="$PATH:$(pwd)/tools/cmake"
-fi
-
-# Create wheels for ninja that can be installed in the host environment
-if ! [ -f "dist/ninja-1.11.1-py3-none-any.whl" ]; then
-    echo "Downloading Ninja"
-    python -m pip wheel --no-deps -w dist ninja==1.11.1
-    mv dist/ninja-1.11.1-*.whl dist/ninja-1.11.1-py3-none-any.whl
-fi
-
-# Create wheels for cmake that can be installed in the host environment
-if ! [ -f "dist/cmake-3.29.6-py3-none-any.whl" ]; then
-    echo "Downloading CMake"
-    python -m pip wheel --no-deps -w dist cmake==3.29.6
-    mv dist/cmake-3.29.6-*.whl dist/cmake-3.29.6-py3-none-any.whl
 fi
 
 echo

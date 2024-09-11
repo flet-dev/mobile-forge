@@ -7,3 +7,7 @@ source:
 
 build:
   number: 1
+
+requirements:
+  build:
+    - cmake

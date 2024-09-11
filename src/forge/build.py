@@ -245,6 +245,8 @@ class Builder(ABC):
             if (self.cross_venv.sdk_root / "usr" / "include").is_dir():
                 cflags += f" -I{self.cross_venv.sdk_root}/usr/include"
 
+            cppflags += f" -mios-version-min={self.cross_venv.sdk_version}"
+
         ldflags = self.cross_venv.sysconfig_data["LDFLAGS"]
 
         # -lpython3.x
@@ -554,11 +556,11 @@ class PythonPackageBuilder(Builder):
                 pyproject = tomllib.load(f)
 
                 # Install the build requirements in the cross environment
-                self.cross_venv.pip_install(
-                    self.log_file,
-                    ["build", "wheel"] + pyproject["build-system"]["requires"],
-                    paths=[Path.cwd() / "dist"],
-                )
+                # self.cross_venv.pip_install(
+                #     self.log_file,
+                #     ["build", "wheel"] + pyproject["build-system"]["requires"],
+                #     paths=[Path.cwd() / "dist"],
+                # )
 
                 # Install the build requirements in the build environment
                 self.cross_venv.pip_install(
@@ -659,6 +661,9 @@ class PythonPackageBuilder(Builder):
 
         # Set the cross host platform in the environment
         env["_PYTHON_HOST_PLATFORM"] = self.cross_venv.platform_identifier
+        env["_PYTHON_SYSCONFIGDATA_NAME"] = (
+            f"_sysconfigdata__{self.cross_venv.host_os.lower()}_{self.cross_venv.arch}-{self.cross_venv.sdk}"
+        )
 
         meson_cross_file = self._create_meson_cross(env)
 

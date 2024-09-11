@@ -50,6 +50,8 @@ build:
 # {% endif %}
 
 requirements:
+  host:
+    - numpy 2.0.0
   build:
     - cmake
     - scikit-build @ git+https://github.com/flet-dev/scikit-build@ios-android-support

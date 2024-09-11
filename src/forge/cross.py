@@ -362,33 +362,21 @@ class CrossVEnv:
         venv_kwargs = kwargs.copy()
         env = venv_kwargs.get("env", {})
 
-        # Remove the current venv from the path, and add the cross-env and the
-        # build-env, and clean out any other problematic paths.
-        clean_path = [
-            p
-            for p in os.getenv("PATH").split(os.pathsep)[1:]
-            if not (
-                # Exclude rbenv, npm, and other language environments
-                p.startswith(f"{Path.home()}/.")
-                and not p.startswith(f"{Path.home()}/.cargo")
-                # Exclude homebrew
-                or p.startswith("/opt")
-                # Exclude local python installs
-                or p.startswith("/Library/Frameworks")
-                # Exclude cryptexd
-                or p.startswith("/var")
-                or p.startswith("/System")
-            )
-        ]
-
         # Ensure the path is clean, and doesn't include any non-iOS paths.
         env["PATH"] = os.pathsep.join(
             [
                 str(self.host_python_home / "bin"),
+                str(self.venv_path / "cross" / "bin"),
+                str(self.venv_path / "build" / "bin"),
                 str(self.venv_path / "bin"),
                 str(self.venv_path / self.venv_path.name / "bin"),
+                str(Path.home() / ".cargo/bin"),
+                "/usr/bin",
+                "/bin",
+                "/usr/sbin",
+                "/sbin",
+                "/Library/Apple/usr/bin",
             ]
-            + clean_path
         )
 
         # Set VIRTUALENV to the active venv

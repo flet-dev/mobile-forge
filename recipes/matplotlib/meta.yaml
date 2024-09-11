@@ -3,9 +3,10 @@ package:
   version: 3.9.0
 
 requirements:
-  host:
+  build:
     - meson
     - ninja
+  host:
     - numpy 2.0.0
 
 build:

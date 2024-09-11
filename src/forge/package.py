@@ -8,12 +8,7 @@ import jinja2
 import jsonschema
 import yaml
 
-from forge.build import (
-    Builder,
-    CMakePackageBuilder,
-    PythonPackageBuilder,
-    SimplePackageBuilder,
-)
+from forge.build import Builder, PythonPackageBuilder, SimplePackageBuilder
 from forge.cross import CrossVEnv
 
 
@@ -121,8 +116,4 @@ class Package:
         if self.meta["source"] == "pypi":
             return PythonPackageBuilder(cross_venv=cross_venv, package=self)
         else:
-            if "cmake" in self.meta["requirements"]["build"]:
-                self.meta["requirements"]["build"].remove("cmake")
-                return CMakePackageBuilder(cross_venv=cross_venv, package=self)
-            else:
-                return SimplePackageBuilder(cross_venv=cross_venv, package=self)
+            return SimplePackageBuilder(cross_venv=cross_venv, package=self)

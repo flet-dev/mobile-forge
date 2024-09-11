@@ -6,8 +6,8 @@ package:
   version: 1.26.4
 
 requirements:
- host:
-#     - chaquopy-openblas 0.2.20
+ build:
+  - cython
   - ninja
   - meson
 
@@ -23,7 +23,7 @@ build:
 
   meson:
     properties:
-# {% if sdk == 'android' and arch in ['arm64-v8a', 'x86_64'] %}
+# {% if sdk == 'iOS' or (sdk == 'android' and arch in ['arm64-v8a', 'x86_64']) %}
       longdouble_format: IEEE_QUAD_LE
 # {% else %}
       longdouble_format: IEEE_DOUBLE_LE
