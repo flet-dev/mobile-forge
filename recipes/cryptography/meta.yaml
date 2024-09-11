@@ -1,12 +1,11 @@
 package:
   name: cryptography
-  version: 43.0.1
+  version: 42.0.7
 
 build:
   script_env:
-    #OPENSSL_STATIC: 1
+    OPENSSL_STATIC: 1
     OPENSSL_DIR: '{platlib}/opt'
-    #PYO3_USE_ABI3_FORWARD_COMPATIBILITY: 1
 
 requirements:
   build:
@@ -15,4 +14,3 @@ requirements:
   host:
     - cffi
     - openssl ^3.0.12
-    - maturin @ git+https://github.com/PyO3/maturin

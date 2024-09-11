@@ -114,25 +114,25 @@ fi
 # configure iOS paths
 if [ ! -z "$MOBILE_FORGE_IOS_SUPPORT_PATH" ]; then
 
-    if [ ! -d $MOBILE_FORGE_IOS_SUPPORT_PATH/install ]; then
+    if [ ! -d $MOBILE_FORGE_IOS_SUPPORT_PATH/support/$PYTHON_VER/iOS/Python.xcframework ]; then
         echo "MOBILE_FORGE_IOS_SUPPORT_PATH does not point at a valid location."
         return
     fi
 
-    if [ ! -e $MOBILE_FORGE_IOS_SUPPORT_PATH/install/iOS/arm64-apple-ios/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
+    if [ ! -e $MOBILE_FORGE_IOS_SUPPORT_PATH/support/$PYTHON_VER/iOS/Python.xcframework/ios-arm64/bin/python$PYTHON_VER ]; then
         echo "MOBILE_FORGE_IOS_SUPPORT_PATH does not appear to contain a Python $PYTHON_VERSION iOS ARM64 device binary."
         return
     fi
 
-    if [ ! -e $MOBILE_FORGE_IOS_SUPPORT_PATH/install/iOS/arm64-apple-ios-simulator/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
-        echo "MOBILE_FORGE_IOS_SUPPORT_PATH does not appear to contain a Python $PYTHON_VERSION iOS ARM64 simulator binary."
+    if [ ! -e $MOBILE_FORGE_IOS_SUPPORT_PATH/support/$PYTHON_VER/iOS/Python.xcframework/ios-arm64_x86_64-simulator/bin/python$PYTHON_VER ]; then
+        echo "MOBILE_FORGE_IOS_SUPPORT_PATH does not appear to contain a Python $PYTHON_VERSION iOS ARM64/x86_64 simulator binaries."
         return
     fi
 
-    if [ ! -e $MOBILE_FORGE_IOS_SUPPORT_PATH/install/iOS/x86_64-apple-ios-simulator/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
-        echo "MOBILE_FORGE_IOS_SUPPORT_PATH does not appear to contain a Python $PYTHON_VERSION iOS x86-64 simulator binary."
-        return
-    fi
+    # if [ ! -e $MOBILE_FORGE_IOS_SUPPORT_PATH/install/iOS/x86_64-apple-ios-simulator/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
+    #     echo "MOBILE_FORGE_IOS_SUPPORT_PATH does not appear to contain a Python $PYTHON_VERSION iOS x86-64 simulator binary."
+    #     return
+    # fi
 
     echo "MOBILE_FORGE_IOS_SUPPORT_PATH: $MOBILE_FORGE_IOS_SUPPORT_PATH"
 fi

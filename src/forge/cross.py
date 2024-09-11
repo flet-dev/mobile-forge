@@ -54,6 +54,18 @@ class CrossVEnv:
         "watchsimulator": "apple-watchos-simulator",
     }
 
+    XCFRAMEWORK_SLICES = {
+        ("iphonesimulator", "arm64"): "ios-arm64_x86_64-simulator",
+        ("iphonesimulator", "x86_64"): "ios-arm64_x86_64-simulator",
+        ("iphoneos", "arm64"): "ios-arm64",
+        ("appletvsimulator", "arm64"): "tvos-arm64_x86_64-simulator",
+        ("appletvsimulator", "x86_64"): "tvos-arm64_x86_64-simulator",
+        ("appletvos", "arm64"): "tvos-arm64",
+        ("watchsimulator", "arm64"): "watchos-arm64_x86_64-simulator",
+        ("watchsimulator", "x86_64"): "watchos-arm64_x86_64-simulator",
+        ("watchos", "arm64_32"): "watchos-arm64_32",
+    }
+
     ANDROID_PLATFORM_TRIPLET = {
         "arm64-v8a": "aarch64-linux-android",
         "armeabi-v7a": "arm-linux-androideabi",
@@ -101,10 +113,11 @@ class CrossVEnv:
         )
         return (
             support_path
-            / "install"
+            / "support"
+            / f"3.{sys.version_info.minor}"
             / self.host_os
-            / self.platform_triplet
-            / f"python-3.{sys.version_info.minor}.{sys.version_info.micro}"
+            / "Python.xcframework"
+            / self.XCFRAMEWORK_SLICES[(self.sdk, self.arch)]
         )
 
     @property
