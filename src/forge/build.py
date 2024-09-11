@@ -271,6 +271,7 @@ class Builder(ABC):
 
             # Add the framework path
             ldflags += f' -F "{self.cross_venv.host_python_home}"'
+            cargo_ldflags += f" -C link-arg=-F{self.cross_venv.host_python_home} -C link-arg=-framework -C link-arg=Python"
 
         cargo_build_target = (
             {
