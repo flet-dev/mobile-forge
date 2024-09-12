@@ -1,6 +1,6 @@
 package:
   name: pydantic-core
-  version: 2.18.4
+  version: 2.23.3
 
 build:
   script_env:

@@ -80,7 +80,7 @@ environment:
     #     bcrypt:4.2.0
     #     cryptography:43.0.1
     #     brotli:1.1.0
-    #     pydantic-core:2.18.4
+    #     pydantic-core:2.23.3
     #     websockets:13.0.1
 
     - job_name: 'Android: numpy, matplotlib, pandas, blis'
@@ -123,7 +123,7 @@ environment:
       job_group: build_ios
       FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
-        pydantic-core:2.18.4
+        pydantic-core:2.23.3
 
     - job_name: 'iOS: numpy, matplotlib, pandas, blis'
       job_group: build_ios
