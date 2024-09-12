@@ -275,6 +275,8 @@ class Builder(ABC):
             ldflags += f' -F "{self.cross_venv.host_python_home}"'
             cargo_ldflags += f" -C link-arg=-F{self.cross_venv.host_python_home} -C link-arg=-framework -C link-arg=Python"
 
+            cargo_ldflags += f" -C link-arg=-L -C link-arg=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS17.5.sdk"
+
         cargo_build_target = (
             {
                 "arm64-apple-ios": "aarch64-apple-ios",
