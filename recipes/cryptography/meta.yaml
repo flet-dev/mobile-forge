@@ -1,10 +1,9 @@
 package:
   name: cryptography
-  version: 42.0.7
+  version: 43.0.1
 
 build:
   script_env:
-    #OPENSSL_STATIC: 1
     OPENSSL_DIR: '{platlib}/opt'
     _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
 

@@ -258,7 +258,7 @@ class Builder(ABC):
 
         # cargo_ldflags = re.sub(r"-march=[\w-]+", "", ldflags)
         cargo_ldflags = " -L{}/lib".format(self.cross_venv.sysconfig_data["prefix"])
-        # cargo_ldflags += " -C link-arg=-undefined -C link-arg=dynamic_lookup"
+        cargo_ldflags += " -C link-arg=-undefined -C link-arg=dynamic_lookup"
 
         if self.cross_venv.sdk != "android":
 
@@ -274,8 +274,6 @@ class Builder(ABC):
             # Add the framework path
             ldflags += f' -F "{self.cross_venv.host_python_home}"'
             cargo_ldflags += f" -C link-arg=-F{self.cross_venv.host_python_home} -C link-arg=-framework -C link-arg=Python"
-
-            cargo_ldflags += f" -C link-arg=-L -C link-arg=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS17.5.sdk"
 
         cargo_build_target = (
             {
