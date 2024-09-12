@@ -29,37 +29,37 @@ environment:
     - job_name: 'Android arm64-v8a: opencv-python'
       job_group: build_android
       FORGE_ARCH: 'android:arm64-v8a'
-      FORGE_PACKAGES: numpy:2.0.0 opencv-python:4.10.0.84
+      FORGE_PACKAGES: numpy:2.1.1 opencv-python:4.10.0.84
 
     - job_name: 'Android armeabi-v7a: opencv-python'
       job_group: build_android
       FORGE_ARCH: 'android:armeabi-v7a'
-      FORGE_PACKAGES: numpy:2.0.0 opencv-python:4.10.0.84
+      FORGE_PACKAGES: numpy:2.1.1 opencv-python:4.10.0.84
 
     - job_name: 'Android x86_64: opencv-python'
       job_group: build_android
       FORGE_ARCH: 'android:x86_64'
-      FORGE_PACKAGES: numpy:2.0.0 opencv-python:4.10.0.84
+      FORGE_PACKAGES: numpy:2.1.1 opencv-python:4.10.0.84
 
     - job_name: 'Android x86: opencv-python'
       job_group: build_android
       FORGE_ARCH: 'android:x86'
-      FORGE_PACKAGES: numpy:2.0.0 opencv-python:4.10.0.84
+      FORGE_PACKAGES: numpy:2.1.1 opencv-python:4.10.0.84
 
     - job_name: 'iOS iphone arm64: opencv-python'
       job_group: build_ios
       FORGE_ARCH: 'iphoneos:arm64'
-      FORGE_PACKAGES: numpy:2.0.0 opencv-python:4.10.0.84
+      FORGE_PACKAGES: numpy:2.1.1 opencv-python:4.10.0.84
 
     - job_name: 'iOS simulator arm64: opencv-python'
       job_group: build_ios
       FORGE_ARCH: 'iphonesimulator:arm64'
-      FORGE_PACKAGES: numpy:2.0.0 opencv-python:4.10.0.84
+      FORGE_PACKAGES: numpy:2.1.1 opencv-python:4.10.0.84
 
     - job_name: 'iOS simulator x86_64: opencv-python'
       job_group: build_ios
       FORGE_ARCH: 'iphonesimulator:x86_64'
-      FORGE_PACKAGES: numpy:2.0.0 opencv-python:4.10.0.84
+      FORGE_PACKAGES: numpy:2.1.1 opencv-python:4.10.0.84
 
     - job_name: 'Android: pydantic-core, pillow, lru-dict, contourpy, kiwisolver, aiohttp, bitarray, argon2-cffi-binding, bcrypt, cryptography, brotli, websockets'
       job_group: build_android
@@ -88,10 +88,10 @@ environment:
       FORGE_ARCH: android
       FORGE_PACKAGES: >-
         numpy:1.26.4
-        numpy:2.0.0
+        numpy:2.1.1
         matplotlib:3.9.0
         pandas:2.2.2
-        blis:0.9.1
+        blis:1.0.0
 
     - job_name: 'iOS: pillow, lru-dict, yarl, contourpy, kiwisolver, aiohttp, bitarray, websockets'
       job_group: build_ios
@@ -130,10 +130,10 @@ environment:
       FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
         numpy:1.26.4
-        numpy:2.0.0
+        numpy:2.1.1
         matplotlib:3.9.0
         pandas:2.2.2
-        blis:0.9.1
+        blis:1.0.0
 
     - job_name: Re-build Simple index
       job_group: rebuild_index
