@@ -2,9 +2,9 @@ package:
   name: blis
   version: 1.0.0
 
-patches:
-  - mobile.patch
-
 requirements:
   host:
     - numpy ^2.0.0
+
+patches:
+  - mobile.patch

@@ -2,6 +2,10 @@ package:
   name: opencv-python
   version: 4.10.0.84
 
+requirements:
+  host:
+    - numpy ^2.0.0
+
 patches:
   - mobile.patch
 
@@ -49,7 +53,3 @@ build:
       -DPYTHON3_LIBRARIES={prefix}/lib/libpython{py_version_short}.so
       -DPYTHON3_NUMPY_INCLUDE_DIRS={platlib}/numpy/_core/include
 # {% endif %}
-
-requirements:
-  host:
-    - numpy ^2.0.0

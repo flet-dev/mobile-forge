@@ -4,4 +4,4 @@ package:
 
 requirements:
   build:
-    - cython 3.0.7
+    - cython

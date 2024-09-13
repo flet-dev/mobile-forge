@@ -2,12 +2,12 @@ package:
   name: contourpy
   version: 1.3.0
 
-build:
-  backend-args:
-    - -Csetup-args=--cross-file
-    - -Csetup-args={MESON_CROSS_FILE}
-
 requirements:
   build:
     - ninja
     - cmake
+
+build:
+  backend-args:
+    - -Csetup-args=--cross-file
+    - -Csetup-args={MESON_CROSS_FILE}

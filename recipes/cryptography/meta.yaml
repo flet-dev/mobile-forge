@@ -2,11 +2,11 @@ package:
   name: cryptography
   version: 43.0.1
 
+requirements:
+  host:
+    - openssl ^3.0.12
+
 build:
   script_env:
     OPENSSL_DIR: '{platlib}/opt'
     _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
-
-requirements:
-  host:
-    - openssl ^3.0.12
