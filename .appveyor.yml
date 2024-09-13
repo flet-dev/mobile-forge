@@ -14,11 +14,11 @@ environment:
   CF_BUCKET_NAME: flet-simple
 
   matrix:
-    - job_name: 'Android: websockets'
-      job_group: build_android
-      FORGE_ARCH: android
-      FORGE_PACKAGES: >-
-        websockets:13.0.1
+    # - job_name: 'Android: websockets'
+    #   job_group: build_android
+    #   FORGE_ARCH: android
+    #   FORGE_PACKAGES: >-
+    #     websockets:13.0.1
 
     # - job_name: 'iOS: websockets'
     #   job_group: build_ios
