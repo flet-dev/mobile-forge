@@ -29,7 +29,6 @@ PYTHON_URL_PREFIX=https://github.com/indygreg/python-build-standalone/releases/d
 PYTHON_VERSION=$1
 read python_version_major python_version_minor < <(echo $PYTHON_VERSION | sed -E 's/^([0-9]+)\.([0-9]+).*/\1 \2/')
 PYTHON_VER=$python_version_major.$python_version_minor
-CMAKE_VERSION="3.27.4"
 
 echo "Python version: $PYTHON_VERSION"
 echo "Python short version: $PYTHON_VER"

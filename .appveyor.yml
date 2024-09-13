@@ -227,7 +227,7 @@ for:
       - python_ios_dir=$HOME/projects/python-darwin/Python-Apple-support
       - curl -#OL https://github.com/flet-dev/python-ios/releases/download/v${PYTHON_SHORT_VERSION}/python-ios-install-${PYTHON_SHORT_VERSION}.tar.gz
       - mkdir -p $python_ios_dir
-      - tar -xzf python-ios-install-${PYTHON_VERSION}.tar.gz -C $python_ios_dir
+      - tar -xzf python-ios-install-${PYTHON_SHORT_VERSION}.tar.gz -C $python_ios_dir
 
       # install Rust
       - curl https://sh.rustup.rs -sSf | sh -s -- -y
