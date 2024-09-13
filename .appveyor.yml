@@ -224,8 +224,8 @@ for:
 
     install:
       # download Python for iOS
-      - python_ios_dir=$HOME/projects/python-ios
-      - curl -#OL https://github.com/flet-dev/python-ios/releases/download/v${PYTHON_VERSION}/python-ios-install-${PYTHON_VERSION}.tar.gz
+      - python_ios_dir=$HOME/projects/python-darwin/Python-Apple-support
+      - curl -#OL https://github.com/flet-dev/python-ios/releases/download/v${PYTHON_SHORT_VERSION}/python-ios-install-${PYTHON_SHORT_VERSION}.tar.gz
       - mkdir -p $python_ios_dir
       - tar -xzf python-ios-install-${PYTHON_VERSION}.tar.gz -C $python_ios_dir
 
@@ -238,7 +238,7 @@ for:
       - rustup target add x86_64-apple-ios
 
       # configure forge
-      - export PYTHON_APPLE_SUPPORT=$python_ios_dir
+      - export MOBILE_FORGE_IOS_SUPPORT_PATH=$python_ios_dir
       - source ./setup.sh $PYTHON_VERSION
 
       # refresh PATH
@@ -252,8 +252,6 @@ for:
           done
 
       # cleanup
-      - rm dist/ninja-*
-      - rm dist/cmake-*
       - rm dist/bzip2-*
       - rm dist/xz-*
       - rm dist/libffi-*
