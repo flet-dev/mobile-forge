@@ -1,7 +1,3 @@
 package:
   name: kiwisolver
-  version: 1.4.5
-
-requirements:
-  build:
-    - cppy 1.2.1
+  version: 1.4.7
