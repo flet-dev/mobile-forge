@@ -38,10 +38,6 @@ if [[ -z "$MOBILE_FORGE_IOS_SUPPORT_PATH" && -z "$MOBILE_FORGE_ANDROID_SUPPORT_P
     return
 fi
 
-if [ ! -z "$VIRTUAL_ENV" ]; then
-    deactivate
-fi
-
 venv_dir="$(pwd)/venv$PYTHON_VER"
 
 if [ ! -d $venv_dir ]; then
