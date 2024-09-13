@@ -175,19 +175,13 @@ for:
       - curl -#OL https://github.com/flet-dev/python-android/releases/download/v${PYTHON_SHORT_VERSION}/python-android-install-${PYTHON_SHORT_VERSION}.tar.gz
       - mkdir -p $python_android_dir
       - tar -xzf python-android-install-${PYTHON_SHORT_VERSION}.tar.gz -C $python_android_dir
-      
-      # configure forge
-      - which source
-      - cat source
-      - export MOBILE_FORGE_ANDROID_SUPPORT_PATH=$python_android_dir
-      - which python
-      - which python$PYTHON_SHORT_VERSION
-      - echo $PATH
-      - source ./setup.sh $PYTHON_VERSION
-      - echo $PATH
 
       # install Android NDK
       - .ci/install_ndk.sh
+      
+      # configure forge
+      - export MOBILE_FORGE_ANDROID_SUPPORT_PATH=$python_android_dir
+      - source ./setup.sh $PYTHON_VERSION
 
       # install Rust
       - curl https://sh.rustup.rs -sSf | sh -s -- -y
