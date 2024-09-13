@@ -14,11 +14,11 @@ environment:
   CF_BUCKET_NAME: flet-simple
 
   matrix:
-    - job_name: 'Android: websockets'
-      job_group: build_android
-      FORGE_ARCH: android
-      FORGE_PACKAGES: >-
-        websockets:13.0.1
+    # - job_name: 'Android: websockets'
+    #   job_group: build_android
+    #   FORGE_ARCH: android
+    #   FORGE_PACKAGES: >-
+    #     websockets:13.0.1
 
     # - job_name: 'iOS: websockets'
     #   job_group: build_ios
@@ -137,9 +137,9 @@ environment:
     #     pandas:2.2.2
     #     blis:1.0.0
 
-    # - job_name: Re-build Simple index
-    #   job_group: rebuild_index
-    #   job_depends_on: build_android, build_ios
+    - job_name: Re-build Simple index
+      job_group: rebuild_index
+      job_depends_on: build_android, build_ios
 
 stack:
 - python $PYTHON_SHORT_VERSION
@@ -276,6 +276,7 @@ for:
       APPVEYOR_BUILD_WORKER_IMAGE: ubuntu
 
     deploy_script:
+      - python -m ensurepip --upgrade
       - pip3 install --upgrade setuptools
       - pip3 install boto3
       - python .ci/rebuild-simple-index.py
