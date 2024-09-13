@@ -14,11 +14,11 @@ environment:
   CF_BUCKET_NAME: flet-simple
 
   matrix:
-    # - job_name: 'Android: websockets'
-    #   job_group: build_android
-    #   FORGE_ARCH: android
-    #   FORGE_PACKAGES: >-
-    #     websockets:13.0.1
+    - job_name: 'Android: websockets'
+      job_group: build_android
+      FORGE_ARCH: android
+      FORGE_PACKAGES: >-
+        websockets:13.0.1
 
     # - job_name: 'iOS: websockets'
     #   job_group: build_ios
@@ -170,7 +170,10 @@ for:
       NDK_VERSION: r27
 
     install:
-      - which python
+      # fix Python
+      - python_dir=$(dirname $(which python))
+      - ln -s $python_dir/python $python_dir/python$PYTHON_SHORT_VERSION
+
       # download Python for Android
       - python_android_dir=$HOME/projects/python-android
       - curl -#OL https://github.com/flet-dev/python-android/releases/download/v${PYTHON_SHORT_VERSION}/python-android-install-${PYTHON_SHORT_VERSION}.tar.gz
