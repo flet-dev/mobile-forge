@@ -171,8 +171,10 @@ for:
 
     install:
       # fix Python
-      - python_dir=$(dirname $(which python))
-      - ln -s $python_dir/python $python_dir/python$PYTHON_SHORT_VERSION
+      - which python
+      - which python$PYTHON_SHORT_VERSION
+      #- python_dir=$(dirname $(which python))
+      #- ln -s $python_dir/python $python_dir/python$PYTHON_SHORT_VERSION
 
       # download Python for Android
       - python_android_dir=$HOME/projects/python-android
