@@ -176,6 +176,13 @@ for:
       - mkdir -p $python_android_dir
       - tar -xzf python-android-install-${PYTHON_SHORT_VERSION}.tar.gz -C $python_android_dir
       
+      # configure forge
+      - export MOBILE_FORGE_ANDROID_SUPPORT_PATH=$python_android_dir
+      - which python
+      - which python$PYTHON_SHORT_VERSION
+      - echo $PATH
+      - source ./setup.sh $PYTHON_VERSION
+
       # install Android NDK
       - .ci/install_ndk.sh
 
@@ -187,13 +194,6 @@ for:
       - rustup target add arm-linux-androideabi
       - rustup target add x86_64-linux-android
       - rustup target add i686-linux-android
-
-      # configure forge
-      - export MOBILE_FORGE_ANDROID_SUPPORT_PATH=$python_android_dir
-      - which python
-      - which python$PYTHON_SHORT_VERSION
-      - echo $PATH
-      - . ./setup.sh $PYTHON_VERSION
 
     build_script:
       - sh: |
