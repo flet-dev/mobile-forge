@@ -74,11 +74,13 @@ if [ ! -d $venv_dir ]; then
     #     tar -xzf "downloads/python-${PYTHON_VERSION}-${PYTHON_SUFFIX}" -C tools
     # fi
 
+    echo $PATH
+
     BUILD_PYTHON=$(which python$PYTHON_VER)
-    # if [ $? -ne 0 ]; then
-    #     echo "Can't find a Python $PYTHON_VER binary on the path."
-    #     return
-    # fi
+    if [ $? -ne 0 ]; then
+        echo "Can't find a Python $PYTHON_VER binary on the path."
+        return
+    fi
 
     # tools/python/bin/python -m venv $venv_dir
     echo "Using $BUILD_PYTHON as the build python"
@@ -90,14 +92,14 @@ if [ ! -d $venv_dir ]; then
 
     echo "Building platform dependency wheels..."
     if [ ! -z "$MOBILE_FORGE_IOS_SUPPORT_PATH" ]; then
-        python -m make_dep_wheels iOS
+        $BUILD_PYTHON -m make_dep_wheels iOS
         if [ $? -ne 0 ]; then
             return
         fi
     fi
 
     if [ ! -z "$MOBILE_FORGE_ANDROID_SUPPORT_PATH" ]; then
-        python -m make_dep_wheels android
+        $BUILD_PYTHON -m make_dep_wheels android
         if [ $? -ne 0 ]; then
             return
         fi
