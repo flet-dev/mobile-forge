@@ -177,13 +177,15 @@ for:
       - tar -xzf python-android-install-${PYTHON_SHORT_VERSION}.tar.gz -C $python_android_dir
       
       # configure forge
+      - which source
+      - cat source
       - export MOBILE_FORGE_ANDROID_SUPPORT_PATH=$python_android_dir
       - which python
       - which python$PYTHON_SHORT_VERSION
       - echo $PATH
       - source ./setup.sh $PYTHON_VERSION
       - echo $PATH
-      
+
       # install Android NDK
       - .ci/install_ndk.sh
 
