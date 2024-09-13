@@ -171,8 +171,6 @@ for:
 
     install:
       # fix Python
-      - which python
-      - which python$PYTHON_SHORT_VERSION
       #- python_dir=$(dirname $(which python))
       #- ln -s $python_dir/python $python_dir/python$PYTHON_SHORT_VERSION
 
@@ -187,6 +185,8 @@ for:
 
       # configure forge
       - export MOBILE_FORGE_ANDROID_SUPPORT_PATH=$python_android_dir
+      - which python
+      - which python$PYTHON_SHORT_VERSION
       - source ./setup.sh $PYTHON_VERSION
 
       # install Rust
