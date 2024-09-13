@@ -23,7 +23,7 @@ index 4aaae46..526f2d4 100755
  		# None (no kernel, i.e. freestanding / bare metal),
  		# can be paired with an machine code file format
  		;;
-+	ios-simulator)
++	ios-simulator-)
 +		;;
  	-*-)
  		# Blank kernel with real OS is always fine.
