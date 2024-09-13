@@ -75,10 +75,10 @@ if [ ! -d $venv_dir ]; then
     # fi
 
     BUILD_PYTHON=$(which python$PYTHON_VER)
-    if [ $? -ne 0 ]; then
-        echo "Can't find a Python $PYTHON_VER binary on the path."
-        return
-    fi
+    # if [ $? -ne 0 ]; then
+    #     echo "Can't find a Python $PYTHON_VER binary on the path."
+    #     return
+    # fi
 
     # tools/python/bin/python -m venv $venv_dir
     echo "Using $BUILD_PYTHON as the build python"
