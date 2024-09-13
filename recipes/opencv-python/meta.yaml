@@ -35,6 +35,7 @@ build:
       -DCMAKE_SYSTEM_NAME=iOS
       -DCMAKE_SYSTEM_PROCESSOR=aarch64
       -DCMAKE_OSX_SYSROOT={{ sdk }}
+      -DCMAKE_OSX_DEPLOYMENT_TARGET={{ sdk_version }}
       -DCMAKE_OSX_ARCHITECTURES={{ arch }}
       -DWITH_IPP=OFF
       -DWITH_ITT=OFF
@@ -51,8 +52,4 @@ build:
 
 requirements:
   host:
-    - numpy 2.0.0
-  build:
-    - cmake
-    - scikit-build @ git+https://github.com/flet-dev/scikit-build@ios-android-support
-    - numpy 2.0.0
+    - numpy ^2.0.0
