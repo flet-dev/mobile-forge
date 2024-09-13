@@ -182,7 +182,8 @@ for:
       - which python$PYTHON_SHORT_VERSION
       - echo $PATH
       - source ./setup.sh $PYTHON_VERSION
-
+      - echo $PATH
+      
       # install Android NDK
       - .ci/install_ndk.sh
 
