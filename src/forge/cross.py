@@ -112,12 +112,20 @@ class CrossVEnv:
             os.getenv(f"MOBILE_FORGE_{self.host_os.upper()}_SUPPORT_PATH")
         )
         return (
-            support_path
-            / "support"
-            / f"3.{sys.version_info.minor}"
-            / self.host_os
-            / "Python.xcframework"
-            / self.XCFRAMEWORK_SLICES[(self.sdk, self.arch)]
+            (
+                support_path
+                / "support"
+                / f"3.{sys.version_info.minor}"
+                / self.host_os
+                / "Python.xcframework"
+                / self.XCFRAMEWORK_SLICES[(self.sdk, self.arch)]
+            )
+            if self.host_os == "iOS"
+            else next(
+                (support_path / "install" / self.host_os / self.arch).glob(
+                    f"python-3.{sys.version_info.minor}.*"
+                )
+            )
         )
 
     @property
@@ -256,15 +264,24 @@ class CrossVEnv:
         if not host_python.is_file():
             raise RuntimeError(f"Can't find host python {host_python}")
 
-        self.sysconfigdata_name = (
-            f"_sysconfigdata__{self.host_os.lower()}_{self.arch}-{self.sdk}"
-        )
+        if self.host_os == "iOS":
+            self.sysconfigdata_name = (
+                f"_sysconfigdata__{self.host_os.lower()}_{self.arch}-{self.sdk}"
+            )
 
-        host_sysconfig = (
-            self.host_python_home
-            / f"lib/python3.{sys.version_info.minor}"
-            / f"{self.sysconfigdata_name}.py"
-        )
+            host_sysconfig = (
+                self.host_python_home
+                / f"lib/python3.{sys.version_info.minor}"
+                / f"{self.sysconfigdata_name}.py"
+            )
+        else:
+            host_sysconfig = next(
+                (self.host_python_home / f"lib/python3.{sys.version_info.minor}").glob(
+                    "_sysconfigdata__*.py"
+                )
+            )
+            self.sysconfigdata_name = host_sysconfig.stem
+
         if not host_sysconfig.is_file():
             raise RuntimeError(f"Can't find host sysconfig {host_sysconfig}")
 
@@ -380,7 +397,7 @@ class CrossVEnv:
                 "/usr/sbin",
                 "/sbin",
                 "/Library/Apple/usr/bin",
-            ]
+            ][1 if self.host_os == "android" else 0 :]
         )
 
         # Set VIRTUALENV to the active venv

@@ -36,13 +36,15 @@ class Builder(ABC):
         self.cross_venv = cross_venv
         self.package = package
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def build_path(self) -> Path:
         """The path in which all environment and sources for the build will be
         created."""
         ...
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def log_file_path(self) -> Path:
         """The path where build logs should be written."""
         ...
@@ -52,7 +54,8 @@ class Builder(ABC):
         """The path for the log file if a build error occurs."""
         return self.log_file_path.parent.parent / "errors" / self.log_file_path.name
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def source_archive_path(self) -> Path:
         """The source archive file for the package."""
         ...
@@ -606,6 +609,12 @@ class PythonPackageBuilder(Builder):
                 "cpp": env["CXX"],
                 "ar": env["AR"],
                 "strip": env["STRIP"],
+                "python": str(
+                    self.cross_venv.venv_path
+                    / "cross"
+                    / "bin"
+                    / f"python3.{sys.version_info.minor}"
+                ),
             },
             "built-in options": {
                 "c_args": env["CFLAGS"],
