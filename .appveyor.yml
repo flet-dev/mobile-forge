@@ -137,9 +137,9 @@ environment:
     #     pandas:2.2.2
     #     blis:1.0.0
 
-    # - job_name: Re-build Simple index
-    #   job_group: rebuild_index
-    #   job_depends_on: build_android, build_ios
+    - job_name: Re-build Simple index
+      job_group: rebuild_index
+      job_depends_on: build_android, build_ios
 
 stack:
 - python $PYTHON_SHORT_VERSION
@@ -170,6 +170,7 @@ for:
       NDK_VERSION: r27
 
     install:
+      - which python
       # download Python for Android
       - python_android_dir=$HOME/projects/python-android
       - curl -#OL https://github.com/flet-dev/python-android/releases/download/v${PYTHON_SHORT_VERSION}/python-android-install-${PYTHON_SHORT_VERSION}.tar.gz
@@ -275,6 +276,7 @@ for:
       APPVEYOR_BUILD_WORKER_IMAGE: ubuntu
 
     deploy_script:
+      - pip3 install --upgrade setuptools
       - pip3 install boto3
       - python .ci/rebuild-simple-index.py
 
