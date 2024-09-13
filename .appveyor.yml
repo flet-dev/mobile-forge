@@ -20,11 +20,11 @@ environment:
     #   FORGE_PACKAGES: >-
     #     websockets:13.0.1
 
-    - job_name: 'iOS: websockets'
-      job_group: build_ios
-      FORGE_ARCH: iOS
-      FORGE_PACKAGES: >-
-        websockets:13.0.1
+    # - job_name: 'iOS: websockets'
+    #   job_group: build_ios
+    #   FORGE_ARCH: iOS
+    #   FORGE_PACKAGES: >-
+    #     websockets:13.0.1
 
     # - job_name: 'Android arm64-v8a: opencv-python'
     #   job_group: build_android
@@ -46,10 +46,10 @@ environment:
     #   FORGE_ARCH: 'android:x86'
     #   FORGE_PACKAGES: numpy:2.1.1 opencv-python:4.10.0.84
 
-    # - job_name: 'iOS iphone arm64: opencv-python'
-    #   job_group: build_ios
-    #   FORGE_ARCH: 'iphoneos:arm64'
-    #   FORGE_PACKAGES: numpy:2.1.1 opencv-python:4.10.0.84
+    - job_name: 'iOS iphone arm64: opencv-python'
+      job_group: build_ios
+      FORGE_ARCH: 'iphoneos:arm64'
+      FORGE_PACKAGES: numpy:2.1.1 opencv-python:4.10.0.84
 
     # - job_name: 'iOS simulator arm64: opencv-python'
     #   job_group: build_ios
@@ -109,35 +109,35 @@ environment:
     #     bitarray:2.9.2
     #     websockets:13.0.1
 
-    # - job_name: 'iOS: cffi, argon2-cffi-bindings, bcrypt, cryptography, brotli'
-    #   job_group: build_ios
-    #   FORGE_ARCH: iOS
-    #   FORGE_PACKAGES:  >-
-    #     cffi:1.17.1
-    #     argon2-cffi-bindings:21.2.0
-    #     bcrypt:4.2.0
-    #     cryptography:43.0.1
-    #     brotli:1.1.0
+    - job_name: 'iOS: cffi, argon2-cffi-bindings, bcrypt, cryptography, brotli'
+      job_group: build_ios
+      FORGE_ARCH: iOS
+      FORGE_PACKAGES:  >-
+        cffi:1.17.1
+        argon2-cffi-bindings:21.2.0
+        bcrypt:4.2.0
+        cryptography:43.0.1
+        brotli:1.1.0
 
-    # - job_name: 'iOS: pydantic-core'
-    #   job_group: build_ios
-    #   FORGE_ARCH: iOS
-    #   FORGE_PACKAGES: >-
-    #     pydantic-core:2.23.3
+    - job_name: 'iOS: pydantic-core'
+      job_group: build_ios
+      FORGE_ARCH: iOS
+      FORGE_PACKAGES: >-
+        pydantic-core:2.23.3
 
-    # - job_name: 'iOS: numpy, matplotlib, pandas, blis'
-    #   job_group: build_ios
-    #   FORGE_ARCH: iOS
-    #   FORGE_PACKAGES: >-
-    #     numpy:1.26.4
-    #     numpy:2.1.1
-    #     matplotlib:3.9.2
-    #     pandas:2.2.2
-    #     blis:1.0.0
+    - job_name: 'iOS: numpy, matplotlib, pandas, blis'
+      job_group: build_ios
+      FORGE_ARCH: iOS
+      FORGE_PACKAGES: >-
+        numpy:1.26.4
+        numpy:2.1.1
+        matplotlib:3.9.2
+        pandas:2.2.2
+        blis:1.0.0
 
-    # - job_name: Re-build Simple index
-    #   job_group: rebuild_index
-    #   job_depends_on: build_android, build_ios
+    - job_name: Re-build Simple index
+      job_group: rebuild_index
+      job_depends_on: build_android, build_ios
 
 stack:
 - python $PYTHON_SHORT_VERSION
