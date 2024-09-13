@@ -170,10 +170,6 @@ for:
       NDK_VERSION: r27
 
     install:
-      # fix Python
-      #- python_dir=$(dirname $(which python))
-      #- ln -s $python_dir/python $python_dir/python$PYTHON_SHORT_VERSION
-
       # download Python for Android
       - python_android_dir=$HOME/projects/python-android
       - curl -#OL https://github.com/flet-dev/python-android/releases/download/v${PYTHON_SHORT_VERSION}/python-android-install-${PYTHON_SHORT_VERSION}.tar.gz
@@ -183,12 +179,6 @@ for:
       # install Android NDK
       - .ci/install_ndk.sh
 
-      # configure forge
-      - export MOBILE_FORGE_ANDROID_SUPPORT_PATH=$python_android_dir
-      - which python
-      - which python$PYTHON_SHORT_VERSION
-      - source ./setup.sh $PYTHON_VERSION
-
       # install Rust
       - curl https://sh.rustup.rs -sSf | sh -s -- -y
       - . "$HOME/.cargo/env"
@@ -197,6 +187,12 @@ for:
       - rustup target add arm-linux-androideabi
       - rustup target add x86_64-linux-android
       - rustup target add i686-linux-android
+
+      # configure forge
+      - export MOBILE_FORGE_ANDROID_SUPPORT_PATH=$python_android_dir
+      - which python
+      - which python$PYTHON_SHORT_VERSION
+      - source ./setup.sh $PYTHON_VERSION
 
     build_script:
       - sh: |
