@@ -88,14 +88,14 @@ if [ ! -d $venv_dir ]; then
 
     echo "Building platform dependency wheels..."
     if [ ! -z "$MOBILE_FORGE_IOS_SUPPORT_PATH" ]; then
-        $BUILD_PYTHON -m make_dep_wheels iOS
+        python -m make_dep_wheels iOS
         if [ $? -ne 0 ]; then
             return
         fi
     fi
 
     if [ ! -z "$MOBILE_FORGE_ANDROID_SUPPORT_PATH" ]; then
-        $BUILD_PYTHON -m make_dep_wheels android
+        python -m make_dep_wheels android
         if [ $? -ne 0 ]; then
             return
         fi
