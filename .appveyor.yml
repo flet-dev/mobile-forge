@@ -20,6 +20,12 @@ environment:
       FORGE_PACKAGES: >-
         websockets:13.0.1
 
+    - job_name: 'Android: pydantic-core'
+      job_group: build_android
+      FORGE_ARCH: android
+      FORGE_PACKAGES: >-
+        pydantic-core
+
     # - job_name: 'iOS: websockets'
     #   job_group: build_ios
     #   FORGE_ARCH: iOS
@@ -178,10 +184,6 @@ for:
 
       # install Android NDK
       - .ci/install_ndk.sh
-      
-      # configure forge
-      - export MOBILE_FORGE_ANDROID_SUPPORT_PATH=$python_android_dir
-      - source ./setup.sh $PYTHON_VERSION
 
       # install Rust
       - curl https://sh.rustup.rs -sSf | sh -s -- -y
@@ -191,6 +193,10 @@ for:
       - rustup target add arm-linux-androideabi
       - rustup target add x86_64-linux-android
       - rustup target add i686-linux-android
+      
+      # configure forge
+      - export MOBILE_FORGE_ANDROID_SUPPORT_PATH=$python_android_dir
+      - source ./setup.sh $PYTHON_VERSION
 
     build_script:
       - sh: |
