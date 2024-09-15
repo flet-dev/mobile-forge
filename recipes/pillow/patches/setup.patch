@@ -1,10 +1,22 @@
-diff -ur pillow-10.4.0-orig/setup.py pillow-10.4.0/setup.py
---- pillow-10.4.0-orig/setup.py	2024-07-01 14:02:01
-+++ pillow-10.4.0/setup.py	2024-09-05 14:20:16
-@@ -422,10 +422,22 @@
+diff --git a/setup.py b/setup.py
+index 0abfaad..7b077d4 100644
+--- a/setup.py
++++ b/setup.py
+@@ -342,9 +342,7 @@ class pil_build_ext(build_ext):
+         return True if value in configuration.get(option, []) else None
+ 
+     def initialize_options(self):
+-        self.disable_platform_guessing = self.check_configuration(
+-            "platform-guessing", "disable"
+-        )
++        self.disable_platform_guessing = True
+         self.add_imaging_libs = ""
+         build_ext.initialize_options(self)
+         for x in self.feature:
+@@ -422,10 +420,22 @@ class pil_build_ext(build_ext):
                  self.extensions.remove(extension)
                  break
-
+ 
 -    def get_macos_sdk_path(self):
 +    def get_apple_sdk_path(self):
          try:
@@ -26,16 +38,16 @@ diff -ur pillow-10.4.0-orig/setup.py pillow-10.4.0/setup.py
                  .strip()
                  .decode("latin1")
              )
-@@ -580,13 +592,18 @@
+@@ -580,13 +590,18 @@ class pil_build_ext(build_ext):
                  _add_directory(library_dirs, "/usr/X11/lib")
                  _add_directory(include_dirs, "/usr/X11/include")
-
+ 
 -            sdk_path = self.get_macos_sdk_path()
 +            sdk_path = self.get_apple_sdk_path()
              if sdk_path:
                  _add_directory(library_dirs, os.path.join(sdk_path, "usr", "lib"))
                  _add_directory(include_dirs, os.path.join(sdk_path, "usr", "include"))
-
+ 
                  for extension in self.extensions:
                      extension.extra_compile_args = ["-Wno-nullability-completeness"]
 +        elif sys.platform in {"ios", "tvos", "watchos"}:
