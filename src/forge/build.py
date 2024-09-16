@@ -86,22 +86,26 @@ class Builder(ABC):
             log(self.log_file, f"No {target} requirements.")
 
     def fix_host_tool_shims(self):
-        template = """#!/bin/sh
-read -r -d '' SCRIPT << END_OF_SCRIPT
-import sys
-sys.argv = sys.argv[1:]
-{original_script}
-END_OF_SCRIPT
-exec "{python_path}" -c "$SCRIPT" "$0" "$@"
-"""
-        python_path = self.cross_venv.venv_path / "cross" / "bin" / f"python3.{sys.version_info.minor}"
+        python_path = (
+            self.cross_venv.venv_path
+            / "cross"
+            / "bin"
+            / f"python3.{sys.version_info.minor}"
+        )
         for shim in (self.cross_venv.venv_path / "cross" / "bin").iterdir():
             with open(shim, "r") as f:
                 lines = f.readlines()
             if len(lines) > 0 and lines[0].strip() == f"#!{python_path}":
                 log(self.log_file, f"Fixing host shim: {shim}")
                 with open(shim, "w") as f:
-                    f.write(template.format(original_script="".join(lines[1:]), python_path=python_path))
+                    f.writelines(
+                        [
+                            "#!/bin/sh\n",
+                            "'''exec' {} \"$0\" \"$@\"\n".format(python_path),
+                            "' '''\n",
+                        ]
+                        + lines[1:]
+                    )
 
     @abstractmethod
     def download_source_url(self): ...
