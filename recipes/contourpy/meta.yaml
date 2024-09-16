@@ -6,6 +6,8 @@ requirements:
   build:
     - ninja
     - cmake
+  host:
+    - pybind11
 
 build:
   backend-args:

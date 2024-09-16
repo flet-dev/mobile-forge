@@ -85,6 +85,24 @@ class Builder(ABC):
         else:
             log(self.log_file, f"No {target} requirements.")
 
+    def fix_host_tool_shims(self):
+        template = """#!/bin/sh
+read -r -d '' SCRIPT << END_OF_SCRIPT
+import sys
+sys.argv = sys.argv[1:]
+{original_script}
+END_OF_SCRIPT
+exec "{python_path}" -c "$SCRIPT" "$0" "$@"
+"""
+        python_path = self.cross_venv.venv_path / "cross" / "bin" / f"python3.{sys.version_info.minor}"
+        for shim in (self.cross_venv.venv_path / "cross" / "bin").iterdir():
+            with open(shim, "r") as f:
+                lines = f.readlines()
+            if len(lines) > 0 and lines[0].strip() == f"#!{python_path}":
+                log(self.log_file, f"Fixing host shim: {shim}")
+                with open(shim, "w") as f:
+                    f.write(template.format(original_script="".join(lines[1:]), python_path=python_path))
+
     @abstractmethod
     def download_source_url(self): ...
 
@@ -209,6 +227,7 @@ class Builder(ABC):
 
         log(self.log_file, f"\n[{self.cross_venv}] Install forge host requirements")
         self.install_requirements("host")
+        self.fix_host_tool_shims()
 
         log(self.log_file, f"\n[{self.cross_venv}] Install forge build requirements")
         self.install_requirements("build")
@@ -617,12 +636,12 @@ class PythonPackageBuilder(Builder):
                 ),
             },
             "built-in options": {
-                "c_args": env["CFLAGS"] + " -U_FILE_OFFSET_BITS",
-                "cpp_args": env["CPPFLAGS"] + " -U_FILE_OFFSET_BITS",
+                "c_args": env["CFLAGS"],
+                "cpp_args": env["CPPFLAGS"],
                 "c_links_args": env["LDFLAGS"],
                 "cpp_links_args": env["LDFLAGS"],
             },
-            "properties": {"needs_exe_wrapper": True},
+            "properties": {"needs_exe_wrapper": False},
             "host_machine": {
                 "cpu_family": cpu_family,
                 "cpu": cpu,
@@ -664,7 +683,7 @@ class PythonPackageBuilder(Builder):
 
         # Set up any additional environment variables needed in the script environment.
         for key, value in self.package.meta["build"]["script_env"].items():
-            if key == "LDFLAGS":
+            if key in ["LDFLAGS", "CFLAGS", "CPPFLAGS"]:
                 env[key] += " " + value
             else:
                 env[key] = str(value).format(**script_vars)
