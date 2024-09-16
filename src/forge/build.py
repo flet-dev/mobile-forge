@@ -617,8 +617,8 @@ class PythonPackageBuilder(Builder):
                 ),
             },
             "built-in options": {
-                "c_args": env["CFLAGS"],
-                "cpp_args": env["CPPFLAGS"],
+                "c_args": env["CFLAGS"] + " -U_FILE_OFFSET_BITS",
+                "cpp_args": env["CPPFLAGS"] + " -U_FILE_OFFSET_BITS",
                 "c_links_args": env["LDFLAGS"],
                 "cpp_links_args": env["LDFLAGS"],
             },
