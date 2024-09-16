@@ -24,11 +24,11 @@ if [ -z "$1" ]; then
     return
 fi
 
-PYTHON_URL_PREFIX=https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.12.3+20240415
-
 PYTHON_VERSION=$1
 read python_version_major python_version_minor < <(echo $PYTHON_VERSION | sed -E 's/^([0-9]+)\.([0-9]+).*/\1 \2/')
 PYTHON_VER=$python_version_major.$python_version_minor
+
+PYTHON_URL_PREFIX=https://github.com/indygreg/python-build-standalone/releases/download/20240909/cpython-$PYTHON_VERSION+20240909
 
 echo "Python version: $PYTHON_VERSION"
 echo "Python short version: $PYTHON_VER"
@@ -43,42 +43,52 @@ venv_dir="$(pwd)/venv$PYTHON_VER"
 if [ ! -d $venv_dir ]; then
     echo "Creating Python $PYTHON_VER virtual environment for build in $venv_dir..."
 
-    # if ! [ -d "tools/python" ]; then
-    #     if [ $(uname) = "Darwin" ]; then
-    #         # macOS
-    #         if [ $(uname -m) = "arm64" ]; then
-    #             PYTHON_SUFFIX="aarch64-apple-darwin-install_only.tar.gz"
-    #         else
-    #             PYTHON_SUFFIX="x86_64-apple-darwin-install_only.tar.gz"
-    #         fi
-    #     else
-    #         # Linux
-    #         if [ $(uname -m) = "arm64" ]; then
-    #             PYTHON_SUFFIX="aarch64-unknown-linux-gnu-install_only.tar.gz"
-    #         else
-    #             PYTHON_SUFFIX="x86_64_v3-unknown-linux-gnu-install_only.tar.gz"
-    #         fi
-    #     fi
+    if ! [ -d "tools/python" ]; then
+        if [ $(uname) = "Darwin" ]; then
+            # macOS
+            if [ $(uname -m) = "arm64" ]; then
+                PYTHON_SUFFIX="aarch64-apple-darwin-install_only.tar.gz"
+            else
+                PYTHON_SUFFIX="x86_64-apple-darwin-install_only.tar.gz"
+            fi
+        else
+            # Linux
+            if [ $(uname -m) = "arm64" ]; then
+                PYTHON_SUFFIX="aarch64-unknown-linux-gnu-install_only.tar.gz"
+            else
+                PYTHON_SUFFIX="x86_64_v3-unknown-linux-gnu-install_only.tar.gz"
+            fi
+        fi
 
-    #     if ! [ -f "downloads/python-${PYTHON_VERSION}-${PYTHON_SUFFIX}" ]; then
-    #         echo "Downloading Python ${PYTHON_VERSION}"
-    #         mkdir -p downloads
-    #         curl --location --progress-bar "${PYTHON_URL_PREFIX}-${PYTHON_SUFFIX}" --output "downloads/python-${PYTHON_VERSION}-${PYTHON_SUFFIX}"
-    #     fi
+        if ! [ -f "downloads/python-${PYTHON_VERSION}-${PYTHON_SUFFIX}" ]; then
+            echo "Downloading Python ${PYTHON_VERSION}"
+            python_dist_filename="downloads/python-${PYTHON_VERSION}-${PYTHON_SUFFIX}"
+            mkdir -p downloads
+            rm -rf $python_dist_filename
+            curl --location --progress-bar --fail "${PYTHON_URL_PREFIX}-${PYTHON_SUFFIX}" --output $python_dist_filename
+            if [ $? -ne 0 ]; then
+                echo "Can't download a Python from ${PYTHON_URL_PREFIX}-${PYTHON_SUFFIX}"
+                return
+            fi
+        fi
 
-    #     mkdir -p tools
-    #     tar -xzf "downloads/python-${PYTHON_VERSION}-${PYTHON_SUFFIX}" -C tools
+        mkdir -p tools
+        tar -xzf "downloads/python-${PYTHON_VERSION}-${PYTHON_SUFFIX}" -C tools
+    fi
+
+    # BUILD_PYTHON=$(which python$PYTHON_VER)
+    # if [ $? -ne 0 ]; then
+    #     echo "Can't find a Python $PYTHON_VER binary on the path."
+    #     return
     # fi
 
-    echo $PATH
+    BUILD_PYTHON=tools/python/bin/python
 
-    BUILD_PYTHON=$(which python$PYTHON_VER)
-    if [ $? -ne 0 ]; then
-        echo "Can't find a Python $PYTHON_VER binary on the path."
+    if ! [ -f $BUILD_PYTHON ]; then
+        echo "Can't find a Python $BUILD_PYTHON binary on the path."
         return
     fi
 
-    # tools/python/bin/python -m venv $venv_dir
     echo "Using $BUILD_PYTHON as the build python"
     $BUILD_PYTHON -m venv $venv_dir
     source $venv_dir/bin/activate
