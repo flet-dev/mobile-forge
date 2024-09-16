@@ -36,13 +36,15 @@ class Builder(ABC):
         self.cross_venv = cross_venv
         self.package = package
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def build_path(self) -> Path:
         """The path in which all environment and sources for the build will be
         created."""
         ...
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def log_file_path(self) -> Path:
         """The path where build logs should be written."""
         ...
@@ -52,7 +54,8 @@ class Builder(ABC):
         """The path for the log file if a build error occurs."""
         return self.log_file_path.parent.parent / "errors" / self.log_file_path.name
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def source_archive_path(self) -> Path:
         """The source archive file for the package."""
         ...
@@ -81,6 +84,28 @@ class Builder(ABC):
             )
         else:
             log(self.log_file, f"No {target} requirements.")
+
+    def fix_host_tool_shims(self):
+        python_path = (
+            self.cross_venv.venv_path
+            / "cross"
+            / "bin"
+            / f"python3.{sys.version_info.minor}"
+        )
+        for shim in (self.cross_venv.venv_path / "cross" / "bin").iterdir():
+            with open(shim, "r") as f:
+                lines = f.readlines()
+            if len(lines) > 0 and lines[0].strip() == f"#!{python_path}":
+                log(self.log_file, f"Fixing host shim: {shim}")
+                with open(shim, "w") as f:
+                    f.writelines(
+                        [
+                            "#!/bin/sh\n",
+                            "'''exec' {} \"$0\" \"$@\"\n".format(python_path),
+                            "' '''\n",
+                        ]
+                        + lines[1:]
+                    )
 
     @abstractmethod
     def download_source_url(self): ...
@@ -206,6 +231,7 @@ class Builder(ABC):
 
         log(self.log_file, f"\n[{self.cross_venv}] Install forge host requirements")
         self.install_requirements("host")
+        self.fix_host_tool_shims()
 
         log(self.log_file, f"\n[{self.cross_venv}] Install forge build requirements")
         self.install_requirements("build")
@@ -606,6 +632,12 @@ class PythonPackageBuilder(Builder):
                 "cpp": env["CXX"],
                 "ar": env["AR"],
                 "strip": env["STRIP"],
+                "python": str(
+                    self.cross_venv.venv_path
+                    / "cross"
+                    / "bin"
+                    / f"python3.{sys.version_info.minor}"
+                ),
             },
             "built-in options": {
                 "c_args": env["CFLAGS"],
@@ -613,7 +645,7 @@ class PythonPackageBuilder(Builder):
                 "c_links_args": env["LDFLAGS"],
                 "cpp_links_args": env["LDFLAGS"],
             },
-            "properties": {"needs_exe_wrapper": True},
+            "properties": {"needs_exe_wrapper": False},
             "host_machine": {
                 "cpu_family": cpu_family,
                 "cpu": cpu,
@@ -655,7 +687,7 @@ class PythonPackageBuilder(Builder):
 
         # Set up any additional environment variables needed in the script environment.
         for key, value in self.package.meta["build"]["script_env"].items():
-            if key == "LDFLAGS":
+            if key in ["LDFLAGS", "CFLAGS", "CPPFLAGS"]:
                 env[key] += " " + value
             else:
                 env[key] = str(value).format(**script_vars)

@@ -38,10 +38,6 @@ if [[ -z "$MOBILE_FORGE_IOS_SUPPORT_PATH" && -z "$MOBILE_FORGE_ANDROID_SUPPORT_P
     return
 fi
 
-if [ ! -z "$VIRTUAL_ENV" ]; then
-    deactivate
-fi
-
 venv_dir="$(pwd)/venv$PYTHON_VER"
 
 if [ ! -d $venv_dir ]; then
@@ -73,6 +69,8 @@ if [ ! -d $venv_dir ]; then
     #     mkdir -p tools
     #     tar -xzf "downloads/python-${PYTHON_VERSION}-${PYTHON_SUFFIX}" -C tools
     # fi
+
+    echo $PATH
 
     BUILD_PYTHON=$(which python$PYTHON_VER)
     if [ $? -ne 0 ]; then

@@ -7,6 +7,7 @@ requirements:
     - ninja
   host:
     - numpy ^2.0.0
+    - pybind11
 
 build:
   backend-args:

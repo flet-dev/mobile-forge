@@ -11,8 +11,10 @@ requirements:
 patches:
   - setup.patch
 
+# {% if sdk != 'android' %}
 build:
   script_env:
     # libfreetype references both libz and libbz2
     # but doesn't link them into the static library
     LDFLAGS: -lz -lbz2
+# {% endif %}
