@@ -31,11 +31,11 @@ environment:
     #     matplotlib:3.9.2
     #     pandas:2.2.2
 
-    # - job_name: 'iOS: websockets'
-    #   job_group: build_ios
-    #   FORGE_ARCH: iOS
-    #   FORGE_PACKAGES: >-
-    #     websockets:13.0.1
+    - job_name: 'iOS: websockets'
+      job_group: build_ios
+      FORGE_ARCH: iOS
+      FORGE_PACKAGES: >-
+        websockets:13.0.1
 
     # ==================================================
 
@@ -187,7 +187,7 @@ for:
       - python_android_dir=$HOME/projects/python-android
       - curl -#OL https://github.com/flet-dev/python-android/releases/download/v${PYTHON_SHORT_VERSION}/python-android-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz
       - mkdir -p $python_android_dir
-      - tar -xzf python-android-install-${PYTHON_SHORT_VERSION}.tar.gz -C $python_android_dir
+      - tar -xzf python-android-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz -C $python_android_dir
 
       # install Android NDK
       - .ci/install_ndk.sh
@@ -241,9 +241,9 @@ for:
 
       # download Python for iOS
       - python_ios_dir=$HOME/projects/python-darwin/Python-Apple-support
-      - curl -#OL https://github.com/flet-dev/python-ios/releases/download/v${PYTHON_SHORT_VERSION}/python-ios-install-${PYTHON_SHORT_VERSION}.tar.gz
+      - curl -#OL https://github.com/flet-dev/python-darwin/releases/download/v${PYTHON_SHORT_VERSION}/python-ios-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz
       - mkdir -p $python_ios_dir
-      - tar -xzf python-ios-install-${PYTHON_SHORT_VERSION}.tar.gz -C $python_ios_dir
+      - tar -xzf python-ios-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz -C $python_ios_dir
 
       # install Rust
       - curl https://sh.rustup.rs -sSf | sh -s -- -y
