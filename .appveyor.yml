@@ -16,26 +16,26 @@ environment:
     secure: trYGM65OQ1+HYnOYOe/NOHrofLpP3bz64nHwVWPJhiUIYll3MrrQd7ilFNp+zSkI
 
   matrix:
-    - job_name: 'Android: websockets'
-      job_group: build_android
-      FORGE_ARCH: android
-      FORGE_PACKAGES: >-
-        websockets:13.0.1
-
-    # - job_name: 'Android: contourpy'
+    # - job_name: 'Android: websockets'
     #   job_group: build_android
-    #   FORGE_ARCH: 'android'
+    #   FORGE_ARCH: android
     #   FORGE_PACKAGES: >-
-    #     contourpy:1.3.0
-    #     numpy:2.1.1
-    #     matplotlib:3.9.2
-    #     pandas:2.2.2
+    #     websockets:13.0.1
 
-    - job_name: 'iOS: websockets'
-      job_group: build_ios
-      FORGE_ARCH: iOS
+    - job_name: 'Android: contourpy'
+      job_group: build_android
+      FORGE_ARCH: 'android'
       FORGE_PACKAGES: >-
-        websockets:13.0.1
+        contourpy:1.3.0
+        numpy:2.1.1
+        matplotlib:3.9.2
+        pandas:2.2.2
+
+    # - job_name: 'iOS: websockets'
+    #   job_group: build_ios
+    #   FORGE_ARCH: iOS
+    #   FORGE_PACKAGES: >-
+    #     websockets:13.0.1
 
     # ==================================================
 
