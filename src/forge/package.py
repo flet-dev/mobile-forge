@@ -113,7 +113,7 @@ class Package:
         :param cross_venv: The cross-platform environment to use for the build
         :returns: A builder for the package.
         """
-        if self.meta["source"] == "pypi":
-            return PythonPackageBuilder(cross_venv=cross_venv, package=self)
-        else:
+        if (self.recipe_path / "build.sh").exists():
             return SimplePackageBuilder(cross_venv=cross_venv, package=self)
+        else:
+            return PythonPackageBuilder(cross_venv=cross_venv, package=self)
