@@ -8,7 +8,7 @@ import sys
 import tarfile
 import zipfile
 from abc import ABC, abstractmethod, abstractproperty
-from email import generator, message
+from email import generator, message, parser
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -257,7 +257,6 @@ class Builder(ABC):
             cflags += f" -I{install_root}/include"
 
         if self.cross_venv.sdk != "android":
-
             # Pre Python 3.11 versions included BZip2 and XZ includes in CFLAGS. Remove them.
             cflags = re.sub(r"-I.*/merge/iOS/.*/bzip2-.*/include", "", cflags)
             cflags = re.sub(r"-I.*/merge/iOS/.*/xs-.*/include", "", cflags)
@@ -287,7 +286,6 @@ class Builder(ABC):
         cargo_ldflags += " -C link-arg=-undefined -C link-arg=dynamic_lookup"
 
         if self.cross_venv.sdk != "android":
-
             # Replace any hard-coded reference to -isysroot <sysroot> with the actual reference
             ldflags = re.sub(
                 r"-isysroot \w+", f"-isysroot={self.cross_venv.sdk_root}", ldflags
@@ -342,6 +340,7 @@ class Builder(ABC):
             cc_parts = cc.split("/")
             env["NDK_ROOT"] = "/".join(cc_parts[: cc_parts.index("toolchains")])
             env["ANDROID_ABI"] = self.cross_venv.arch
+            env["HOST_TRIPLET"] = self.cross_venv.platform_triplet
 
         # Add in some user environment keys that are useful
         for key in [
@@ -398,6 +397,36 @@ class Builder(ABC):
         """Build the package."""
         ...
 
+    def read_message_file(self, filename):
+        return parser.Parser().parse(open(filename))
+
+    def write_message_file(self, filename, data):
+        msg = message.Message()
+        for key, value in data.items():
+            msg[key] = value
+
+        # I don't know whether maxheaderlen is required, but it's used by bdist_wheel.
+        with filename.open("w", encoding="utf-8") as f:
+            generator.Generator(f, maxheaderlen=0).flatten(msg)
+
+    def fix_wheel(self, wheel_dir: Path):
+        if self.cross_venv.sdk != "android":
+            return
+
+        log(self.log_file, f"[{self.cross_venv}] Fixing wheel contents")
+        env = self.compile_env()
+
+        for so in wheel_dir.glob("**/*.so"):
+            log(self.log_file, f"[{self.cross_venv}] Stripping {so}")
+            self.cross_venv.run(
+                self.log_file,
+                [env["STRIP"], "--strip-unneeded", str(so)],
+            )
+
+        # add missing requirements from "host"
+        # TODO
+        pass
+
 
 class SimplePackageBuilder(Builder):
     """A builder for projects that have a build.sh entry point."""
@@ -446,15 +475,6 @@ class SimplePackageBuilder(Builder):
         log(self.log_file, f"\n[{self.cross_venv}] Installing wheel-building tools")
         self.cross_venv.pip_install(self.log_file, ["wheel"], build=True)
 
-    def write_message_file(self, filename, data):
-        msg = message.Message()
-        for key, value in data.items():
-            msg[key] = value
-
-        # I don't know whether maxheaderlen is required, but it's used by bdist_wheel.
-        with filename.open("w", encoding="utf-8") as f:
-            generator.Generator(f, maxheaderlen=0).flatten(msg)
-
     def make_wheel(self):
         build_num = str(self.package.meta["build"]["number"])
         name = canonicalize_name(self.package.name)
@@ -485,6 +505,9 @@ class SimplePackageBuilder(Builder):
                 "Download-URL": "",
             },
         )
+
+        # fix wheel before packaging
+        self.fix_wheel(self.build_path / "wheel")
 
         # Re-pack the wheel file
         log(self.log_file, f"\n[{self.cross_venv}] Packing wheel")
@@ -675,7 +698,6 @@ class PythonPackageBuilder(Builder):
         return meson_cross
 
     def _build(self):
-
         env = self.compile_env()
 
         script_vars = {
@@ -730,3 +752,12 @@ class PythonPackageBuilder(Builder):
             cwd=self.build_path,
             env=env,
         )
+
+        # unpack wheel to a "fix_wheel" directory
+        # TODO
+
+        # fix wheel
+        self.fix_wheel(self.build_path / "fix_wheel")
+
+        # re-build the wheel to "dist"
+        # TODO
