@@ -1,0 +1,6 @@
+package:
+  name: flet-libcpp-shared
+  version: 1.0.0
+
+source:
+  url: https://github.com/flet-dev/awesome-flet/archive/refs/heads/main.zip
