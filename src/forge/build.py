@@ -737,6 +737,10 @@ class PythonPackageBuilder(Builder):
             else []
         )
 
+        # build wheel to a temp dir
+        tmp_dist = self.build_path / "tmp_dist"
+        tmp_dist.mkdir(parents=True, exist_ok=True)
+
         self.cross_venv.run(
             self.log_file,
             [
@@ -746,18 +750,48 @@ class PythonPackageBuilder(Builder):
                 "--no-isolation",
                 "--wheel",
                 "--outdir",
-                str(Path.cwd() / "dist"),
+                str(tmp_dist),
             ]
             + backend_args,
             cwd=self.build_path,
             env=env,
         )
+        tmp_wheel = next(tmp_dist.glob("*.whl"))
 
-        # unpack wheel to a "fix_wheel" directory
-        # TODO
+        # unpack wheel to a temp directory
+        tmp_wheel_dir = self.build_path / "tmp_wheel"
+        tmp_wheel_dir.mkdir(parents=True, exist_ok=True)
+
+        log(self.log_file, f"\n[{self.cross_venv}] Unpacking wheel to temp directory")
+        self.cross_venv.run(
+            self.log_file,
+            [
+                "build-python",
+                "-m",
+                "wheel",
+                "unpack",
+                "--dest",
+                str(tmp_wheel_dir),
+                str(tmp_wheel),
+            ],
+        )
+
+        tmp_wheel_dir = next(tmp_wheel_dir.iterdir())
 
         # fix wheel
-        self.fix_wheel(self.build_path / "fix_wheel")
+        self.fix_wheel(tmp_wheel_dir)
 
-        # re-build the wheel to "dist"
-        # TODO
+        # re-pack the wheel to "dist"
+        log(self.log_file, f"\n[{self.cross_venv}] Packing wheel to dist")
+        self.cross_venv.run(
+            self.log_file,
+            [
+                "build-python",
+                "-m",
+                "wheel",
+                "pack",
+                str(tmp_wheel_dir),
+                "--dest-dir",
+                str(Path.cwd() / "dist"),
+            ],
+        )
