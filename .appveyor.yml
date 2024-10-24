@@ -28,14 +28,14 @@ environment:
     #   FORGE_PACKAGES: >-
     #     flet-libjpeg
 
-    - job_name: 'Android: contourpy'
-      job_group: build_android
-      FORGE_ARCH: 'android'
-      FORGE_PACKAGES: >-
-        contourpy:1.3.0
-        numpy:2.1.1
-        matplotlib:3.9.2
-        pandas:2.2.2
+    # - job_name: 'Android: contourpy'
+    #   job_group: build_android
+    #   FORGE_ARCH: 'android'
+    #   FORGE_PACKAGES: >-
+    #     contourpy:1.3.0
+    #     numpy:2.1.1
+    #     matplotlib:3.9.2
+    #     pandas:2.2.2
 
     # ==================================================
 
@@ -59,20 +59,20 @@ environment:
       FORGE_ARCH: 'android:x86'
       FORGE_PACKAGES: numpy:2.1.1 opencv-python:4.10.0.84
 
-    - job_name: 'iOS iphone arm64: opencv-python'
-      job_group: build_ios
-      FORGE_ARCH: 'iphoneos:arm64'
-      FORGE_PACKAGES: numpy:2.1.1 opencv-python:4.10.0.84
+    # - job_name: 'iOS iphone arm64: opencv-python'
+    #   job_group: build_ios
+    #   FORGE_ARCH: 'iphoneos:arm64'
+    #   FORGE_PACKAGES: numpy:2.1.1 opencv-python:4.10.0.84
 
-    - job_name: 'iOS simulator arm64: opencv-python'
-      job_group: build_ios
-      FORGE_ARCH: 'iphonesimulator:arm64'
-      FORGE_PACKAGES: numpy:2.1.1 opencv-python:4.10.0.84
+    # - job_name: 'iOS simulator arm64: opencv-python'
+    #   job_group: build_ios
+    #   FORGE_ARCH: 'iphonesimulator:arm64'
+    #   FORGE_PACKAGES: numpy:2.1.1 opencv-python:4.10.0.84
 
-    - job_name: 'iOS simulator x86_64: opencv-python'
-      job_group: build_ios
-      FORGE_ARCH: 'iphonesimulator:x86_64'
-      FORGE_PACKAGES: numpy:2.1.1 opencv-python:4.10.0.84
+    # - job_name: 'iOS simulator x86_64: opencv-python'
+    #   job_group: build_ios
+    #   FORGE_ARCH: 'iphonesimulator:x86_64'
+    #   FORGE_PACKAGES: numpy:2.1.1 opencv-python:4.10.0.84
 
     - job_name: 'Android: pydantic-core, pillow, lru-dict, contourpy, kiwisolver, aiohttp, bitarray, argon2-cffi-binding, bcrypt, cryptography, brotli, websockets'
       job_group: build_android
@@ -105,6 +105,7 @@ environment:
       FORGE_PACKAGES: >-
         numpy:1.26.4
         numpy:2.1.1
+        flet-libjpeg:3.0.90
         matplotlib:3.9.2
         pandas:2.2.2
         blis:1.0.0
@@ -149,6 +150,7 @@ environment:
     #   FORGE_PACKAGES: >-
     #     numpy:1.26.4
     #     numpy:2.1.1
+    #     flet-libjpeg:3.0.90
     #     matplotlib:3.9.2
     #     pandas:2.2.2
     #     blis:1.0.0
