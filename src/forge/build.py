@@ -397,10 +397,10 @@ class Builder(ABC):
         """Build the package."""
         ...
 
-    def read_message_file(self, filename):
-        return parser.Parser().parse(open(filename))
+    def read_message_file(self, filename: Path):
+        return parser.Parser().parse(filename.open("r"))
 
-    def write_message_file(self, filename, data):
+    def write_message_file(self, filename: Path, data):
         msg = message.Message()
         for key, value in data.items():
             msg[key] = value
@@ -424,8 +424,18 @@ class Builder(ABC):
             )
 
         # add missing requirements from "host"
-        # TODO
-        pass
+        if len(self.package.meta["requirements"]["host"]):
+            metadata_path = next(wheel_dir.glob("*.dist-info")) / "METADATA"
+            metadata = self.read_message_file(metadata_path)
+            for req in self.package.meta["requirements"]["host"]:
+                if req.startswith("flet-"):
+                    log(
+                        self.log_file,
+                        f"[{self.cross_venv}] Adding {req} requirement to METADATA",
+                    )
+                    req_name, req_ver = req.split(" ")
+                    metadata["Requires-Dist"] = f"{req_name} (>={req_ver})"
+            self.write_message_file(metadata_path, metadata)
 
 
 class SimplePackageBuilder(Builder):
@@ -479,7 +489,9 @@ class SimplePackageBuilder(Builder):
         build_num = str(self.package.meta["build"]["number"])
         name = canonicalize_name(self.package.name)
         version = canonicalize_version(self.package.version)
-        info_path = self.build_path / "wheel" / f"{name}-{version}.dist-info"
+        info_path = (
+            self.build_path / "wheel" / f"{name.replace('-', '_')}-{version}.dist-info"
+        )
 
         log(self.log_file, f"\n[{self.cross_venv}] Writing wheel metadata")
         info_path.mkdir(exist_ok=True)

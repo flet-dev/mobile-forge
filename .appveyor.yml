@@ -16,17 +16,17 @@ environment:
     secure: trYGM65OQ1+HYnOYOe/NOHrofLpP3bz64nHwVWPJhiUIYll3MrrQd7ilFNp+zSkI
 
   matrix:
-    - job_name: 'Android: markupsafe'
-      job_group: build_android
-      FORGE_ARCH: android
-      FORGE_PACKAGES: >-
-        markupsafe
+    # - job_name: 'Android: markupsafe'
+    #   job_group: build_android
+    #   FORGE_ARCH: android
+    #   FORGE_PACKAGES: >-
+    #     markupsafe
 
-    - job_name: 'iOS: markupsafe'
+    - job_name: 'iOS: flet-libjpeg'
       job_group: build_ios
       FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
-        markupsafe
+        flet-libjpeg
 
     # - job_name: 'Android: contourpy'
     #   job_group: build_android
@@ -79,9 +79,10 @@ environment:
     #   FORGE_ARCH: android
     #   FORGE_PACKAGES: >-
     #     cffi:1.17.1
-    #     libjpeg:3.0.3
-    #     libpng:1.6.43
-    #     freetype:2.13.3
+    #     flet-libcpp-shared
+    #     flet-libjpeg:3.0.3
+    #     flet-libpng:1.6.43
+    #     flet-freetype:2.13.3
     #     pillow:10.4.0
     #     lru-dict:1.3.0
     #     yarl:1.11.1
@@ -110,9 +111,9 @@ environment:
     #   job_group: build_ios
     #   FORGE_ARCH: iOS
     #   FORGE_PACKAGES: >-
-    #     libjpeg:3.0.3
-    #     libpng:1.6.43
-    #     freetype:2.13.3
+    #     flet-libjpeg:3.0.3
+    #     flet-libpng:1.6.43
+    #     flet-freetype:2.13.3
     #     pillow:10.4.0
     #     lru-dict:1.3.0
     #     yarl:1.11.1
