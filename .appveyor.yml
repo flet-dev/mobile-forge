@@ -3,7 +3,7 @@ image: macos-monterey
 skip_branch_with_pr: true
 
 environment:
-  PYTHON_VERSION: 3.12.6
+  PYTHON_VERSION: 3.12.7
   PYTHON_SHORT_VERSION: 3.12
   CF_ACCESS_KEY_ID:
     secure: +m1fzbrEPRecXKCCMn4uA781PAASzJSWAxuJj1c7ctLfWbi5oW4PMnowPK96XtQ5
