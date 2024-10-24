@@ -223,7 +223,7 @@ for:
       - rm dist/bzip2-*
       - rm dist/xz-*
       - rm dist/openssl-*
-      - ls dist
+      - ls -al dist
 
     deploy_script:
       # - pip install boto3
