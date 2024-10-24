@@ -105,10 +105,10 @@ environment:
       FORGE_PACKAGES: >-
         numpy:1.26.4
         numpy:2.1.1
-      # flet-libjpeg:3.0.90
-      # matplotlib:3.9.2
-      # pandas:2.2.2
-      # blis:1.0.0
+        flet-libjpeg:3.0.90
+        matplotlib:3.9.2
+        pandas:2.2.2
+        blis:1.0.0
 
     # - job_name: 'iOS: pillow, lru-dict, yarl, contourpy, kiwisolver, aiohttp, bitarray, websockets'
     #   job_group: build_ios
