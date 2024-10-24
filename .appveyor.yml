@@ -37,7 +37,7 @@ environment:
         matplotlib:3.9.2
         pandas:2.2.2
 
-    ==================================================
+    # ==================================================
 
     - job_name: 'Android arm64-v8a: opencv-python'
       job_group: build_android
