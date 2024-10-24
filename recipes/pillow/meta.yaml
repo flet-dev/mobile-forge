@@ -5,7 +5,7 @@ package:
 requirements:
   host:
     # PNG support is internal: libpng is not used.
-    - flet-libjpeg 3.0.3
+    - flet-libjpeg 3.0.90
     - flet-freetype 2.13.3
 
 patches:

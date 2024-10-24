@@ -8,10 +8,11 @@ if [ $CROSS_VENV_SDK == "android" ]; then
         -DANDROID_PLATFORM=24 \
         -DANDROID_ABI=$ANDROID_ABI \
         -DCMAKE_TOOLCHAIN_FILE=$NDK_ROOT/build/cmake/android.toolchain.cmake \
-        -DWITH_SIMD=OFF \
         -DCMAKE_INSTALL_PREFIX=$PREFIX .
 else
     cmake -G"Unix Makefiles" \
+        -DCMAKE_SYSTEM_NAME=iOS \
+        -DCMAKE_SYSTEM_PROCESSOR=$HOST_ARCH \
         -DCMAKE_INSTALL_PREFIX=$PREFIX .
 fi
 

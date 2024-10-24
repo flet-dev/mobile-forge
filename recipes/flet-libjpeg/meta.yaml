@@ -1,9 +1,9 @@
 package:
   name: flet-libjpeg
-  version: 3.0.3
+  version: 3.0.90
 
 source:
-  url: https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.0.3/libjpeg-turbo-3.0.3.tar.gz
+  url: https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.0.90/libjpeg-turbo-3.0.90.tar.gz
 
 build:
   number: 1

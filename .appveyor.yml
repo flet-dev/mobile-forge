@@ -16,11 +16,11 @@ environment:
     secure: trYGM65OQ1+HYnOYOe/NOHrofLpP3bz64nHwVWPJhiUIYll3MrrQd7ilFNp+zSkI
 
   matrix:
-    # - job_name: 'Android: markupsafe'
-    #   job_group: build_android
-    #   FORGE_ARCH: android
-    #   FORGE_PACKAGES: >-
-    #     markupsafe
+    - job_name: 'Android: flet-libjpeg'
+      job_group: build_android
+      FORGE_ARCH: android
+      FORGE_PACKAGES: >-
+        flet-libjpeg
 
     - job_name: 'iOS: flet-libjpeg'
       job_group: build_ios
@@ -80,7 +80,7 @@ environment:
     #   FORGE_PACKAGES: >-
     #     cffi:1.17.1
     #     flet-libcpp-shared
-    #     flet-libjpeg:3.0.3
+    #     flet-libjpeg:3.0.90
     #     flet-libpng:1.6.43
     #     flet-freetype:2.13.3
     #     pillow:10.4.0
@@ -111,7 +111,7 @@ environment:
     #   job_group: build_ios
     #   FORGE_ARCH: iOS
     #   FORGE_PACKAGES: >-
-    #     flet-libjpeg:3.0.3
+    #     flet-libjpeg:3.0.90
     #     flet-libpng:1.6.43
     #     flet-freetype:2.13.3
     #     pillow:10.4.0
