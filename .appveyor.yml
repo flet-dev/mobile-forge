@@ -103,6 +103,7 @@ environment:
       job_group: build_android
       FORGE_ARCH: android
       FORGE_PACKAGES: >-
+        flet-libcpp-shared
         numpy:1.26.4
         numpy:2.1.1
         flet-libjpeg:3.0.90
