@@ -8,6 +8,7 @@ requirements:
   host:
     - numpy ^2.0.0
     - pybind11
+    - flet-libjpeg 3.0.90
 
 build:
   backend-args:

@@ -179,7 +179,7 @@ for:
 
     environment:
       APPVEYOR_BUILD_WORKER_IMAGE: ubuntu-gce-c
-      NDK_VERSION: r27
+      NDK_VERSION: r27c
 
     install:
       - . .ci/common.sh
