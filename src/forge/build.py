@@ -805,6 +805,9 @@ class PythonPackageBuilder(Builder):
                 "pack",
                 str(tmp_wheel_dir),
                 "--dest-dir",
-                str(Path.cwd() / "dist"),
+                str(tmp_dist),
             ],
         )
+
+        # move resulting wheel to dist
+        shutil.move(str(tmp_wheel), str(Path.cwd() / "dist"))
