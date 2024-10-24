@@ -96,8 +96,8 @@ environment:
         brotli:1.1.0
         pydantic-core:2.23.3
         websockets:13.0.1
-        time-machine: 2.16.0
-        markupsafe: 2.1.5
+        time-machine:2.16.0
+        markupsafe:2.1.5
 
     - job_name: 'Android: numpy, matplotlib, pandas, blis'
       job_group: build_android
@@ -125,8 +125,8 @@ environment:
     #     aiohttp:3.9.5
     #     bitarray:2.9.2
     #     websockets:13.0.1
-    #     time-machine: 2.16.0
-    #     markupsafe: 2.1.5
+    #     time-machine:2.16.0
+    #     markupsafe:2.1.5
 
     # - job_name: 'iOS: cffi, argon2-cffi-bindings, bcrypt, cryptography, brotli'
     #   job_group: build_ios
