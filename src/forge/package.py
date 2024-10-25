@@ -17,7 +17,7 @@ class Package:
         self,
         package_name_or_recipe: str,
         version: str | None,
-        build_number: str | None,
+        build_number: int | None,
         sdk: str,
         sdk_version: str,
         arch: str,

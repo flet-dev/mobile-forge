@@ -752,6 +752,8 @@ class PythonPackageBuilder(Builder):
 
         # build wheel to a temp dir
         tmp_dist = self.build_path / "tmp_dist"
+        if tmp_dist.exists():
+            shutil.rmtree(tmp_dist)
         tmp_dist.mkdir(parents=True, exist_ok=True)
 
         self.cross_venv.run(
@@ -773,6 +775,8 @@ class PythonPackageBuilder(Builder):
 
         # unpack wheel to a temp directory
         tmp_wheel_dir = self.build_path / "tmp_wheel"
+        if tmp_wheel_dir.exists():
+            shutil.rmtree(tmp_wheel_dir)
         tmp_wheel_dir.mkdir(parents=True, exist_ok=True)
 
         log(self.log_file, f"\n[{self.cross_venv}] Unpacking wheel to temp directory")
@@ -796,18 +800,20 @@ class PythonPackageBuilder(Builder):
 
         # re-pack the wheel to "dist"
         log(self.log_file, f"\n[{self.cross_venv}] Packing wheel to dist")
+        pack_args = [
+            "build-python",
+            "-m",
+            "wheel",
+            "pack",
+            str(tmp_wheel_dir),
+            "--dest-dir",
+            str(Path.cwd() / "dist"),
+        ]
+        if self.package.meta["build"]["number"]:
+            pack_args.extend(
+                ["--build-number", str(self.package.meta["build"]["number"])]
+            )
         self.cross_venv.run(
             self.log_file,
-            [
-                "build-python",
-                "-m",
-                "wheel",
-                "pack",
-                str(tmp_wheel_dir),
-                "--dest-dir",
-                str(tmp_dist),
-            ],
+            pack_args,
         )
-
-        # move resulting wheel to dist
-        shutil.move(str(tmp_wheel), str(Path.cwd() / "dist"))
