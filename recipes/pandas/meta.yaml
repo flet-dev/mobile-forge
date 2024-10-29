@@ -7,6 +7,7 @@ requirements:
     - ninja
   host:
     - numpy ^2.0.0
+    - flet-libcpp-shared 27.2.12479018
 
 patches:
   - mobile.patch

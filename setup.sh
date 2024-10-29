@@ -28,7 +28,7 @@ PYTHON_VERSION=$1
 read python_version_major python_version_minor < <(echo $PYTHON_VERSION | sed -E 's/^([0-9]+)\.([0-9]+).*/\1 \2/')
 PYTHON_VER=$python_version_major.$python_version_minor
 
-PYTHON_URL_PREFIX=https://github.com/indygreg/python-build-standalone/releases/download/20240909/cpython-$PYTHON_VERSION+20240909
+PYTHON_URL_PREFIX=https://github.com/indygreg/python-build-standalone/releases/download/20241016/cpython-$PYTHON_VERSION+20241016
 
 echo "Python version: $PYTHON_VERSION"
 echo "Python short version: $PYTHON_VER"

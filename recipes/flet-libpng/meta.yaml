@@ -1,5 +1,5 @@
 package:
-  name: libpng
+  name: flet-libpng
   version: 1.6.43
 
 build:
