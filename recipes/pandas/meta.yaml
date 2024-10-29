@@ -7,7 +7,9 @@ requirements:
     - ninja
   host:
     - numpy ^2.0.0
+# {% if sdk == 'android' %}
     - flet-libcpp-shared 27.2.12479018
+# {% endif %}
 
 patches:
   - mobile.patch

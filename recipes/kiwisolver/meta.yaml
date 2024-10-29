@@ -2,6 +2,8 @@ package:
   name: kiwisolver
   version: 1.4.7
 
+# {% if sdk == 'android' %}
 requirements:
   host:
     - flet-libcpp-shared 27.2.12479018
+# {% endif %}
