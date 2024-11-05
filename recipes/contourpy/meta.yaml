@@ -8,7 +8,9 @@ requirements:
     - cmake
   host:
     - pybind11
+# {% if sdk == 'android' %}
     - flet-libcpp-shared 27.2.12479018
+# {% endif %}
 
 build:
   backend-args:
