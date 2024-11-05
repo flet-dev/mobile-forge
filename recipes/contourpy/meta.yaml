@@ -8,6 +8,7 @@ requirements:
     - cmake
   host:
     - pybind11
+    - flet-libcpp-shared 27.2.12479018
 
 build:
   backend-args:
