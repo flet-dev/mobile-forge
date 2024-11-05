@@ -28,7 +28,6 @@ environment:
       job_group: build_ios
       FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
-        flet-libcpp-shared:27.2.12479018
         contourpy:1.3.0
       BUILD_NUMBER: 1
 
