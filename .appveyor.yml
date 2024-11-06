@@ -31,6 +31,7 @@ environment:
         flet-libjpeg:3.0.90
         flet-freetype:2.13.3
         pillow:10.4.0
+        numpy:2.1.1
         matplotlib:3.9.2
       BUILD_NUMBER: 1
 
