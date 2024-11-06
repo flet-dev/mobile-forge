@@ -21,3 +21,4 @@ make install
 
 rm -r $PREFIX/{bin,share}
 rm -r $PREFIX/lib/{pkgconfig,cmake}
+find "$PREFIX/lib/" -name "*.dylib" -exec rm -rf {} \;
