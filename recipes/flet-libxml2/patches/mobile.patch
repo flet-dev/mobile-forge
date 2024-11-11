@@ -1,3 +1,18 @@
+diff --git a/config.sub b/config.sub
+index 7b334f9..cdb35e9 100755
+--- a/config.sub
++++ b/config.sub
+@@ -355,6 +355,10 @@ case $basic_machine in
+ 	xscaleel)
+ 		basic_machine=armel-unknown
+ 		;;
++	arm64-apple | *-ios)
++		basic_machine=$basic_machine-unknown
++		os=-none
++		;;
+ 
+ 	# We use `pc' rather than `unknown'
+ 	# because (1) that's what they normally are, and
 diff --git a/libxml2.syms b/libxml2.syms
 index 370dcf1..3c4a3dc 100644
 --- a/libxml2.syms

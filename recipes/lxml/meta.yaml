@@ -10,9 +10,7 @@ build:
 patches:
   - mobile.patch
 
-# {% if sdk == 'android' %}
 requirements:
   host:
-    - flet-libxml2 2.9.8
     - flet-libxslt 1.1.32
-# {% endif %}
+    - flet-libxml2 2.9.8
