@@ -1,0 +1,23 @@
+diff --git a/config.sub b/config.sub
+index 7b334f9..a32642c 100755
+--- a/config.sub
++++ b/config.sub
+@@ -316,7 +316,8 @@ case $basic_machine in
+ 	| visium \
+ 	| we32k \
+ 	| x86 | xc16x | xstormy16 | xtensa \
+-	| z8k | z80)
++	| z8k | z80 \
++	| arm64-apple | *-ios)
+ 		basic_machine=$basic_machine-unknown
+ 		;;
+ 	c54x)
+@@ -1539,7 +1540,7 @@ case $os in
+ 		;;
+ 	-nacl*)
+ 		;;
+-	-ios)
++	-ios | -simulator)
+ 		;;
+ 	-none)
+ 		;;

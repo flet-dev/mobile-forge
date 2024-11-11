@@ -1,0 +1,13 @@
+package:
+  name: flet-libxslt
+  version: 1.1.32
+
+source:
+  url: http://xmlsoft.org/download/libxslt-1.1.32.tar.gz
+
+requirements:
+  host:
+    - flet-libxml2 2.9.8
+
+patches:
+  - mobile.patch

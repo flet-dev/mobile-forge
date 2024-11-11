@@ -1,0 +1,9 @@
+package:
+  name: flet-libxml2
+  version: 2.9.8
+
+source:
+  url: http://xmlsoft.org/download/libxml2-2.9.8.tar.gz
+
+patches:
+  - mobile.patch
