@@ -1,0 +1,34 @@
+diff --git a/setup.py b/setup.py
+index 48bfefe..2cd66c6 100644
+--- a/setup.py
++++ b/setup.py
+@@ -58,12 +58,14 @@ CARES_INCLUDE = (
+     os.path.join("third_party", "cares"),
+     os.path.join("third_party", "cares", "cares"),
+ )
+-if "darwin" in sys.platform:
++if "darwin" in sys.platform or "ios" in sys.platform:
+     CARES_INCLUDE += (os.path.join("third_party", "cares", "config_darwin"),)
+ if "freebsd" in sys.platform:
+     CARES_INCLUDE += (os.path.join("third_party", "cares", "config_freebsd"),)
+ if "linux" in sys.platform:
+     CARES_INCLUDE += (os.path.join("third_party", "cares", "config_linux"),)
++if "android" in sys.platform:
++    CARES_INCLUDE += (os.path.join("third_party", "cares", "config_android"),)
+ if "openbsd" in sys.platform:
+     CARES_INCLUDE += (os.path.join("third_party", "cares", "config_openbsd"),)
+ RE2_INCLUDE = (os.path.join("third_party", "re2"),)
+@@ -329,13 +331,11 @@ EXTENSION_INCLUDE_DIRECTORIES = (
+     + ADDRESS_SORTING_INCLUDE
+     + CARES_INCLUDE
+     + RE2_INCLUDE
+-    + SSL_INCLUDE
+     + UPB_INCLUDE
+     + UPB_GRPC_GENERATED_INCLUDE
+     + UPBDEFS_GRPC_GENERATED_INCLUDE
+     + UTF8_RANGE_INCLUDE
+     + XXHASH_INCLUDE
+-    + ZLIB_INCLUDE
+ )
+ 
+ EXTENSION_LIBRARIES = ()
