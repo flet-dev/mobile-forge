@@ -1,5 +1,5 @@
 diff --git a/setup.py b/setup.py
-index 48bfefe..2cd66c6 100644
+index 48bfefe..ff21bc5 100644
 --- a/setup.py
 +++ b/setup.py
 @@ -58,12 +58,14 @@ CARES_INCLUDE = (
@@ -18,7 +18,7 @@ index 48bfefe..2cd66c6 100644
  if "openbsd" in sys.platform:
      CARES_INCLUDE += (os.path.join("third_party", "cares", "config_openbsd"),)
  RE2_INCLUDE = (os.path.join("third_party", "re2"),)
-@@ -329,13 +331,11 @@ EXTENSION_INCLUDE_DIRECTORIES = (
+@@ -329,15 +331,16 @@ EXTENSION_INCLUDE_DIRECTORIES = (
      + ADDRESS_SORTING_INCLUDE
      + CARES_INCLUDE
      + RE2_INCLUDE
@@ -31,4 +31,9 @@ index 48bfefe..2cd66c6 100644
 -    + ZLIB_INCLUDE
  )
  
++if "android" not in sys.platform:
++    EXTENSION_INCLUDE_DIRECTORIES += SSL_INCLUDE + ZLIB_INCLUDE
++
  EXTENSION_LIBRARIES = ()
+ if "linux" in sys.platform:
+     EXTENSION_LIBRARIES += ("rt",)
