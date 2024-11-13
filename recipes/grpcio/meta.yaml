@@ -1,0 +1,26 @@
+package:
+  name: grpcio
+  version: 1.67.1
+
+build:
+  script_env:
+# {% if sdk == 'android' %}
+    GRPC_PYTHON_BUILD_SYSTEM_OPENSSL: '1'
+    GRPC_PYTHON_BUILD_SYSTEM_ZLIB: '1'
+    PLATFORM: android
+    CFLAGS: '-U__ANDROID_API__ -D__ANDROID_API__={{ sdk_version }} -Wno-reserved-user-defined-literal'
+    LDFLAGS: '-llog'
+# {% else %}
+    CXXFLAGS: -std=c++14 -Wno-c++11-narrowing
+    LDFLAGS: '-framework CoreFoundation'
+# {% endif %}
+
+patches:
+  - mobile.patch
+
+# {% if sdk == 'android' %}
+requirements:
+  host:
+    - openssl 3.0.15
+    - flet-libcpp-shared 27.2.12479018
+# {% endif %}
