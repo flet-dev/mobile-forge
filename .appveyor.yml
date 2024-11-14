@@ -16,19 +16,20 @@ environment:
     secure: trYGM65OQ1+HYnOYOe/NOHrofLpP3bz64nHwVWPJhiUIYll3MrrQd7ilFNp+zSkI
 
   matrix:
-    # - job_name: 'Android: grpcio'
-    #   job_group: build_android
-    #   FORGE_ARCH: android
-    #   FORGE_PACKAGES: >-
-    #     flet-libcpp-shared:27.2.12479018
-    #     grpcio:1.67.1
-    #   BUILD_NUMBER: 1
+    - job_name: 'Android: google-crc32c'
+      job_group: build_android
+      FORGE_ARCH: android
+      FORGE_PACKAGES: >-
+        flet-crc32c:1.1.2
+        google-crc32c:1.6.0
+      BUILD_NUMBER: 1
 
-    - job_name: 'iOS: grpcio'
+    - job_name: 'iOS: google-crc32c'
       job_group: build_ios
       FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
-        grpcio:1.67.1
+        flet-crc32c:1.1.2
+        google-crc32c:1.6.0
       BUILD_NUMBER: 1
 
     # ==================================================
