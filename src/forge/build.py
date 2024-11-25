@@ -549,6 +549,8 @@ class SimplePackageBuilder(Builder):
                 **{
                     "HOST_TRIPLET": self.cross_venv.platform_triplet,
                     "HOST_ARCH": self.cross_venv.arch,
+                    "SDK": self.cross_venv.sdk,
+                    "SDK_VERSION": self.cross_venv.sdk_version,
                     "BUILD_TRIPLET": f"{os.uname().machine}-apple-darwin",
                     "CPU_COUNT": str(multiprocessing.cpu_count()),
                     "PREFIX": str(self.build_path / "wheel" / "opt"),
