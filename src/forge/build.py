@@ -554,6 +554,7 @@ class SimplePackageBuilder(Builder):
                     "BUILD_TRIPLET": f"{os.uname().machine}-apple-darwin",
                     "CPU_COUNT": str(multiprocessing.cpu_count()),
                     "PREFIX": str(self.build_path / "wheel" / "opt"),
+                    "PYTHON_PREFIX": self.cross_venv.sysconfig_data["prefix"],
                     "PLATLIB": self.cross_venv.scheme_paths["platlib"],
                 }
             ),

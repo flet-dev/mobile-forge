@@ -1,0 +1,18 @@
+{% set version = "9.5.0" %}
+
+package:
+  name: flet-libproj
+  version: '{{ version }}'
+
+source:
+  url:  https://download.osgeo.org/proj/proj-{{ version }}.tar.gz
+
+build:
+  number: 1
+
+requirements:
+  build:
+    - cmake
+  host:
+    - flet-libtiff 4.7.0
+    - flet-libcurl 8.11.0
