@@ -1,0 +1,75 @@
+diff --git a/setup.py b/setup.py
+index d49d722..ca3c433 100644
+--- a/setup.py
++++ b/setup.py
+@@ -73,39 +73,39 @@ def get_geos_paths():
+             "libraries": ["geos_c"],
+         }
+ 
+-    geos_version = get_geos_config("--version")
+-    if not geos_version:
+-        log.warning(
+-            "Could not find geos-config executable. Either append the path to geos-config"
+-            " to PATH or manually provide the include_dirs, library_dirs, libraries and "
+-            "other link args for compiling against a GEOS version >=%s.",
+-            MIN_GEOS_VERSION,
+-        )
+-        return {}
+-
+-    def version_tuple(ver):
+-        return tuple(int(itm) if itm.isnumeric() else itm for itm in ver.split("."))
+-
+-    if version_tuple(geos_version) < version_tuple(MIN_GEOS_VERSION):
+-        raise ImportError(
+-            f"GEOS version should be >={MIN_GEOS_VERSION}, found {geos_version}"
+-        )
+-
+-    libraries = []
++    # geos_version = get_geos_config("--version")
++    # if not geos_version:
++    #     log.warning(
++    #         "Could not find geos-config executable. Either append the path to geos-config"
++    #         " to PATH or manually provide the include_dirs, library_dirs, libraries and "
++    #         "other link args for compiling against a GEOS version >=%s.",
++    #         MIN_GEOS_VERSION,
++    #     )
++    #     return {}
++
++    # def version_tuple(ver):
++    #     return tuple(int(itm) if itm.isnumeric() else itm for itm in ver.split("."))
++
++    # if version_tuple(geos_version) < version_tuple(MIN_GEOS_VERSION):
++    #     raise ImportError(
++    #         f"GEOS version should be >={MIN_GEOS_VERSION}, found {geos_version}"
++    #     )
++
++    libraries = ["geos_c"]
+     library_dirs = []
+     include_dirs = ["./src"]
+-    extra_link_args = []
+-    for item in get_geos_config("--cflags").split():
+-        if item.startswith("-I"):
+-            include_dirs.extend(item[2:].split(":"))
+-
+-    for item in get_geos_config("--clibs").split():
+-        if item.startswith("-L"):
+-            library_dirs.extend(item[2:].split(":"))
+-        elif item.startswith("-l"):
+-            libraries.append(item[2:])
+-        else:
+-            extra_link_args.append(item)
++    extra_link_args = ["-undefined", "dynamic_lookup"] if sys.platform == "ios" else []
++    # for item in get_geos_config("--cflags").split():
++    #     if item.startswith("-I"):
++    #         include_dirs.extend(item[2:].split(":"))
++
++    # for item in get_geos_config("--clibs").split():
++    #     if item.startswith("-L"):
++    #         library_dirs.extend(item[2:].split(":"))
++    #     elif item.startswith("-l"):
++    #         libraries.append(item[2:])
++    #     else:
++    #         extra_link_args.append(item)
+ 
+     return {
+         "include_dirs": include_dirs,
