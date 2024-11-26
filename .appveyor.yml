@@ -16,18 +16,22 @@ environment:
     secure: trYGM65OQ1+HYnOYOe/NOHrofLpP3bz64nHwVWPJhiUIYll3MrrQd7ilFNp+zSkI
 
   matrix:
-    - job_name: 'Android: protobuf'
+    - job_name: 'Android: shapely'
       job_group: build_android
       FORGE_ARCH: android
       FORGE_PACKAGES: >-
-        protobuf:5.28.3
+        flet-geos:3.13.0
+        numpy:2.1.1
+        shapely:2.0.6
       BUILD_NUMBER: 1
 
-    - job_name: 'iOS: protobuf'
+    - job_name: 'iOS: shapely'
       job_group: build_ios
       FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
-        protobuf:5.28.3
+        flet-geos:3.13.0
+        numpy:2.1.1
+        shapely:2.0.6
       BUILD_NUMBER: 1
 
     # ==================================================
