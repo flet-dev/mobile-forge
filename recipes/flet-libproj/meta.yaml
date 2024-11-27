@@ -5,7 +5,7 @@ package:
   version: '{{ version }}'
 
 source:
-  url:  https://download.osgeo.org/proj/proj-{{ version }}.tar.gz
+  url: https://download.osgeo.org/proj/proj-{{ version }}.tar.gz
 
 build:
   number: 1

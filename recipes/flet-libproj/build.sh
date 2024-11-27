@@ -14,7 +14,7 @@ if [ $CROSS_VENV_SDK == "android" ]; then
         -DTIFF_INCLUDE_DIR="$PLATLIB/opt/include" \
         -DCURL_LIBRARY="$PLATLIB/opt/lib/libcurl.so" \
         -DCURL_INCLUDE_DIR="$PLATLIB/opt/include" \
-        -DSQLite3_LIBRARY=$PYTHON_PREFIX/lib/libsqlite3.so \
+        -DSQLite3_LIBRARY=$PYTHON_PREFIX/lib/libsqlite3_python.so \
         -DSQLite3_INCLUDE_DIR=$PYTHON_PREFIX/include
 else
     cmake \
