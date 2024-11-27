@@ -1,5 +1,5 @@
 package:
-  name: flet-geos
+  name: flet-libgeos
   version: 3.13.0
 
 build:

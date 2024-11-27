@@ -20,7 +20,7 @@ environment:
       job_group: build_android
       FORGE_ARCH: android
       FORGE_PACKAGES: >-
-        flet-geos:3.13.0
+        flet-libgeos:3.13.0
         numpy:2.1.1
         shapely:2.0.6
       BUILD_NUMBER: 1
@@ -29,13 +29,14 @@ environment:
       job_group: build_ios
       FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
-        flet-geos:3.13.0
+        flet-libgeos:3.13.0
         numpy:2.1.1
         shapely:2.0.6
       BUILD_NUMBER: 1
 
     # flet-libpsl
     # flet-libcurl
+    # flet-libtiff
     # flet-libproj
 
     # ==================================================
