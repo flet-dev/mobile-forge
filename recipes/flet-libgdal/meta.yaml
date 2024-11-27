@@ -1,0 +1,24 @@
+{% set version = "3.10.0" %}
+
+package:
+  name: flet-libgdal
+  version: '{{ version }}'
+
+source:
+  url: https://github.com/OSGeo/gdal/releases/download/v{{ version }}/gdal-{{ version }}.tar.gz
+
+build:
+  number: 1
+
+requirements:
+  build:
+    - cmake
+  host:
+    - flet-libproj 9.5.0
+#     - flet-libcurl 8.11.0
+
+# # {% if sdk != 'android' %}
+# build:
+#   script_env:
+#     LDFLAGS: '-undefined dynamic_lookup'
+# # {% endif %}
