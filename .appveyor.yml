@@ -211,6 +211,7 @@ for:
       NDK_VERSION: r27c
 
     install:
+      - sudo apt install sqlite3
       - . .ci/common.sh
 
       # download Python for Android

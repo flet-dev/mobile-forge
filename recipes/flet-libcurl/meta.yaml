@@ -14,3 +14,6 @@ requirements:
   host:
     - openssl 3.0.15
     - flet-libpsl 0.21.5
+
+patches:
+  - config.patch
