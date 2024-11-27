@@ -1,7 +1,7 @@
 #!/bin/bash
 set -eu
 
-./configure --host=$HOST_TRIPLET --build=$BUILD_TRIPLET --prefix=$PREFIX
+./configure --host=$HOST_TRIPLET --build=$BUILD_TRIPLET --prefix=$PREFIX --disable-runtime
 make -j $CPU_COUNT
 make install
 

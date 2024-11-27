@@ -9,3 +9,6 @@ source:
 
 build:
   number: 1
+
+patches:
+  - config.patch
