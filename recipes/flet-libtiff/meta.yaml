@@ -13,3 +13,6 @@ build:
 requirements:
   host:
     - flet-libjpeg 3.0.90
+
+patches:
+  - config.patch

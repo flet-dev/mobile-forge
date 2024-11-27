@@ -1,0 +1,13 @@
+diff --git a/config/config.sub b/config/config.sub
+index 4aaae46..1692095 100755
+--- a/config/config.sub
++++ b/config/config.sub
+@@ -2259,6 +2259,8 @@ case $kernel-$os-$obj in
+ 	--*)
+ 		# Blank kernel and OS with real machine code file format is always fine.
+ 		;;
++	ios-simulator*-)
++		;;
+ 	*-*-*)
+ 		echo "Invalid configuration '$1': Kernel '$kernel' not known to work with OS '$os'." 1>&2
+ 		exit 1
