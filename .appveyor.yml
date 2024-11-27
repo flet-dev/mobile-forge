@@ -34,10 +34,10 @@ environment:
       FORGE_PACKAGES: >-
         flet-libpsl:0.21.5
         flet-libcurl:8.11.0
-      # flet-libjpeg:3.0.90
-      # flet-libtiff:4.7.0
-      # flet-libproj:9.5.0
-      # pyproj:3.7.0
+        flet-libjpeg:3.0.90
+        flet-libtiff:4.7.0
+        flet-libproj:9.5.0
+        pyproj:3.7.0
       BUILD_NUMBER: 1
 
     # flet-libpsl
