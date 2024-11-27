@@ -1,7 +1,7 @@
 #!/bin/bash
 set -eu
 
-./configure --host=$HOST_TRIPLET --prefix=$PREFIX --with-openssl
+./configure --host=$HOST_TRIPLET --prefix=$PREFIX --with-openssl=$PLATLIB/opt
 make -j $CPU_COUNT
 make install
 
