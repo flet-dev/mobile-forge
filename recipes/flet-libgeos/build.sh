@@ -26,7 +26,3 @@ make install
 
 rm -rf $PREFIX/bin
 rm -rf $PREFIX/lib/{cmake,pkgconfig}
-
-# As recommended by the documentation, most users of this library link against libgeos_c, which
-# has a copy of libgeos built into it.
-rm $PREFIX/lib/libgeos.*

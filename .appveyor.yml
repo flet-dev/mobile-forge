@@ -22,18 +22,14 @@ environment:
       FORGE_ARCH: android
       FORGE_PACKAGES: >-
         flet-libgeos:3.13.0
-        numpy:2.1.1
-        shapely:2.0.6
-      BUILD_NUMBER: 1
+      BUILD_NUMBER: 2
 
     - job_name: 'iOS: shapely'
       job_group: build_ios
       FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
         flet-libgeos:3.13.0
-        numpy:2.1.1
-        shapely:2.0.6
-      BUILD_NUMBER: 1
+      BUILD_NUMBER: 2
 
     # ==================================================
 
