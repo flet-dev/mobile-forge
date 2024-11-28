@@ -16,19 +16,20 @@ environment:
     secure: trYGM65OQ1+HYnOYOe/NOHrofLpP3bz64nHwVWPJhiUIYll3MrrQd7ilFNp+zSkI
 
   matrix:
-    # - job_name: 'Android: pyproj'
-    #   job_group: build_android
-    #   FORGE_ARCH: android
-    #   FORGE_PACKAGES: >-
-    #     flet-libpsl:0.21.5
-    #     flet-libcurl:8.11.0
-    #     flet-libjpeg:3.0.90
-    #     flet-libtiff:4.7.0
-    #     flet-libproj:9.5.0
-    #     pyproj:3.7.0
-    #   BUILD_NUMBER: 1
+    - job_name: 'Android: flet-libgdal, fiona'
+      job_group: build_android
+      FORGE_ARCH: android
+      FORGE_PACKAGES: >-
+        flet-libpsl:0.21.5
+        flet-libcurl:8.11.0
+        flet-libjpeg:3.0.90
+        flet-libtiff:4.7.0
+        flet-libproj:9.5.0
+        flet-libgdal:3.10.0
+        fiona:1:10.1
+      BUILD_NUMBER: 1
 
-    - job_name: 'iOS: pyproj'
+    - job_name: 'iOS: flet-libgdal, fiona'
       job_group: build_ios
       FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
@@ -37,7 +38,8 @@ environment:
         flet-libjpeg:3.0.90
         flet-libtiff:4.7.0
         flet-libproj:9.5.0
-        pyproj:3.7.0
+        flet-libgdal:3.10.0
+        fiona:1:10.1
       BUILD_NUMBER: 1
 
     # flet-libpsl

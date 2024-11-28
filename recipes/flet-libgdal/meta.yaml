@@ -15,10 +15,3 @@ requirements:
     - cmake
   host:
     - flet-libproj 9.5.0
-#     - flet-libcurl 8.11.0
-
-# # {% if sdk != 'android' %}
-# build:
-#   script_env:
-#     LDFLAGS: '-undefined dynamic_lookup'
-# # {% endif %}
