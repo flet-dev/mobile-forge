@@ -24,6 +24,7 @@ if [ $CROSS_VENV_SDK == "android" ]; then
         -DGDAL_USE_EXPAT=OFF \
         -DGDAL_USE_OPENSSL=OFF \
         -DGDAL_USE_CURL=OFF \
+        -DGDAL_USE_LIBXML2=OFF \
         -DBUILD_APPS=OFF \
         -DBUILD_TESTING=OFF
 else
