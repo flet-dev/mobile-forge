@@ -214,7 +214,7 @@ class Builder(ABC):
                 )
                 shutil.rmtree(self.build_path)
 
-        if not self.source_archive_path.is_file():
+        if os.getenv(f"MOBILE_FORGE_CACHE_DOWNLOADS_OFF") or not self.source_archive_path.is_file():
             log(self.log_file, f"\n[{self.cross_venv}] Download package sources")
             self.download_source()
 

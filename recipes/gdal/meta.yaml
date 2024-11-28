@@ -1,0 +1,19 @@
+package:
+  name: gdal
+  version: 3.10.0
+
+requirements:
+  host:
+    - flet-libgdal 3.10.0
+
+build:
+  script_env:
+    GDAL_VERSION: 3.10.0
+    GDAL_PREFIX: '{platlib}/opt'
+    GDAL_CFLAGS: ''
+# {% if sdk != 'android' %}
+    LDFLAGS: '-undefined dynamic_lookup'
+# {% endif %}
+
+patches:
+  - config.patch

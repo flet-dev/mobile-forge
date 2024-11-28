@@ -14,6 +14,7 @@ environment:
   CF_BUCKET_NAME: flet-simple
   GEMFURY_TOKEN:
     secure: trYGM65OQ1+HYnOYOe/NOHrofLpP3bz64nHwVWPJhiUIYll3MrrQd7ilFNp+zSkI
+  MOBILE_FORGE_CACHE_DOWNLOADS_OFF: 1
 
   matrix:
     - job_name: 'Android: flet-libgdal, fiona'
@@ -26,8 +27,9 @@ environment:
         flet-libtiff:4.7.0
         flet-libproj:9.5.0
         flet-libgdal:3.10.0
-        fiona:1:10.1
+        fiona:1.10.1
         pyogrio:0.10.0
+        gdal:3.10.0
       BUILD_NUMBER: 1
 
     - job_name: 'iOS: flet-libgdal, fiona'
@@ -40,8 +42,9 @@ environment:
         flet-libtiff:4.7.0
         flet-libproj:9.5.0
         flet-libgdal:3.10.0
-        fiona:1:10.1
+        fiona:1.10.1
         pyogrio:0.10.0
+        gdal:3.10.0
       BUILD_NUMBER: 1
 
     # flet-libpsl

@@ -17,6 +17,8 @@ if [ $CROSS_VENV_SDK == "android" ]; then
         -DCMAKE_FIND_USE_CMAKE_SYSTEM_PATH=NO \
         -DPROJ_LIBRARY=$PLATLIB/opt/lib/libproj.so \
         -DPROJ_INCLUDE_DIR=$PLATLIB/opt/include \
+        -DSQLite3_LIBRARY=$PYTHON_PREFIX/lib/libsqlite3_python.so \
+        -DSQLite3_INCLUDE_DIR=$PYTHON_PREFIX/include \
         -DGDAL_BUILD_OPTIONAL_DRIVERS=OFF \
         -DOGR_BUILD_OPTIONAL_DRIVERS=OFF \
         -DBUILD_APPS=OFF \
@@ -36,6 +38,8 @@ else
         -DGDAL_USE_EXTERNAL_LIBS=OFF \
         -DPROJ_LIBRARY=$PLATLIB/opt/lib/libproj.a \
         -DPROJ_INCLUDE_DIR=$PLATLIB/opt/include \
+        -DSQLite3_LIBRARY=$SDK_ROOT/usr/lib/libsqlite3.tbd \
+        -DSQLite3_INCLUDE_DIR=$SDK_ROOT/usr/include \
         -DGDAL_BUILD_OPTIONAL_DRIVERS=OFF \
         -DOGR_BUILD_OPTIONAL_DRIVERS=OFF \
         -DBUILD_APPS=OFF \
