@@ -17,20 +17,20 @@ environment:
   MOBILE_FORGE_CACHE_DOWNLOADS_OFF: 1
 
   matrix:
-    # - job_name: 'Android: flet-libgdal, fiona'
-    #   job_group: build_android
-    #   FORGE_ARCH: android
-    #   FORGE_PACKAGES: >-
-    #     flet-libpsl:0.21.5
-    #     flet-libcurl:8.11.0
-    #     flet-libjpeg:3.0.90
-    #     flet-libtiff:4.7.0
-    #     flet-libproj:9.5.0
-    #     flet-libgdal:3.10.0
-    #     fiona:1.10.1
-    #     pyogrio:0.10.0
-    #     gdal:3.10.0
-    #   BUILD_NUMBER: 1
+    - job_name: 'Android: flet-libgdal, fiona'
+      job_group: build_android
+      FORGE_ARCH: android
+      FORGE_PACKAGES: >-
+        flet-libpsl:0.21.5
+        flet-libcurl:8.11.0
+        flet-libjpeg:3.0.90
+        flet-libtiff:4.7.0
+        flet-libproj:9.5.0
+        flet-libgdal:3.10.0
+        fiona:1.10.1
+        pyogrio:0.10.0
+        gdal:3.10.0
+      BUILD_NUMBER: 1
 
     # - job_name: 'iOS: flet-libgdal, fiona'
     #   job_group: build_ios
@@ -46,28 +46,6 @@ environment:
     #     pyogrio:0.10.0
     #     gdal:3.10.0
     #   BUILD_NUMBER: 1
-
-    - job_name: 'Android: flet-libcrc32c, google-crc32c, flet-libfreetype, pillow'
-      job_group: build_android
-      FORGE_ARCH: android
-      FORGE_PACKAGES: >-
-        flet-libcrc32c:1.1.2
-        google-crc32c:1.6.0
-        flet-libfreetype:2.13.3
-        flet-libjpeg:3.0.90
-        pillow:10.4.0
-      BUILD_NUMBER: 2
-
-    - job_name: 'iOS: flet-libcrc32c, google-crc32c, flet-libfreetype, pillow'
-      job_group: build_ios
-      FORGE_ARCH: iOS
-      FORGE_PACKAGES: >-
-        flet-libcrc32c:1.1.2
-        google-crc32c:1.6.0
-        flet-libfreetype:2.13.3
-        flet-libjpeg:3.0.90
-        pillow:10.4.0
-      BUILD_NUMBER: 2
 
     # ==================================================
 

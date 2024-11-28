@@ -21,6 +21,9 @@ if [ $CROSS_VENV_SDK == "android" ]; then
         -DSQLite3_INCLUDE_DIR=$PYTHON_PREFIX/include \
         -DGDAL_BUILD_OPTIONAL_DRIVERS=OFF \
         -DOGR_BUILD_OPTIONAL_DRIVERS=OFF \
+        -DGDAL_USE_EXPAT=OFF \
+        -DGDAL_USE_OPENSSL=OFF \
+        -DGDAL_USE_CURL=OFF \
         -DBUILD_APPS=OFF \
         -DBUILD_TESTING=OFF
 else
