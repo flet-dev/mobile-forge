@@ -1,0 +1,21 @@
+--- aaa/lib/Cryptodome/Util/_raw_api.py	2024-09-30 18:09:41.000000000 +0000
++++ src/lib/Cryptodome/Util/_raw_api.py	2024-10-23 16:10:01.744278766 +0000
+@@ -312,6 +312,18 @@
+             return load_lib(full_name, cdecl)
+         except OSError as exp:
+             attempts.append("Cannot load '%s': %s" % (filename, str(exp)))
++
++    # This technique will work both before and after the importer redesign in Chaquopy 6.3.
++    import pkgutil
++    import Cryptodome
++    for entry in Cryptodome.__path__:
++        importer = pkgutil.get_importer(entry)
++        try:
++            filename = importer.extract_if_changed(name.replace(".", "/") + ".so")
++            return load_lib(filename, cdecl)
++        except KeyError:
++            attempts.append("Trying importer for '%s'" % entry)
++
+     raise OSError("Cannot load native module '%s': %s" % (name, ", ".join(attempts)))
+ 
+ 
