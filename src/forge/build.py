@@ -650,7 +650,7 @@ class PythonPackageBuilder(Builder):
                 # Install the build requirements in the build environment
                 self.cross_venv.pip_install(
                     self.log_file,
-                    ["build", "wheel"] + pyproject["build-system"]["requires"],
+                    ["build", "wheel"] + (pyproject["build-system"]["requires"] if "build-system" in pyproject else []),
                     paths=[Path.cwd() / "dist"],
                     build=True,
                 )
