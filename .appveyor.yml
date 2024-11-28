@@ -54,6 +54,7 @@ environment:
         flet-libcrc32c:1.1.2
         google-crc32c:1.6.0
         flet-libfreetype:2.13.3
+        flet-libjpeg:3.0.90
         pillow:10.4.0
       BUILD_NUMBER: 2
 
@@ -64,6 +65,7 @@ environment:
         flet-libcrc32c:1.1.2
         google-crc32c:1.6.0
         flet-libfreetype:2.13.3
+        flet-libjpeg:3.0.90
         pillow:10.4.0
       BUILD_NUMBER: 2
 
