@@ -27,6 +27,7 @@ environment:
         flet-libproj:9.5.0
         flet-libgdal:3.10.0
         fiona:1:10.1
+        pyogrio:0.10.0
       BUILD_NUMBER: 1
 
     - job_name: 'iOS: flet-libgdal, fiona'
@@ -40,6 +41,7 @@ environment:
         flet-libproj:9.5.0
         flet-libgdal:3.10.0
         fiona:1:10.1
+        pyogrio:0.10.0
       BUILD_NUMBER: 1
 
     # flet-libpsl
