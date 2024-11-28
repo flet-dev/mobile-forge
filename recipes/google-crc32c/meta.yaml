@@ -4,7 +4,7 @@ package:
 
 requirements:
   host:
-    - flet-crc32c 1.1.2
+    - flet-libcrc32c 1.1.2
 
 # {% if sdk != 'android' %}
 build:

@@ -12,5 +12,8 @@ rmdir $PREFIX/include/freetype2
 # has an SONAME of libfreetype.so, so there's no conflict.
 # rm -r $PREFIX/lib/{*.a,*.la,pkgconfig}
 rm -r $PREFIX/lib/{*.la,pkgconfig}
-
 rm -r $PREFIX/share
+
+if [ $CROSS_VENV_SDK == "android" ]; then
+    rm -r $PREFIX/lib/*.a
+fi

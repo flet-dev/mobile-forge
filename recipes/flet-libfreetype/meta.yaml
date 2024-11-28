@@ -1,5 +1,5 @@
 package:
-  name: flet-freetype
+  name: flet-libfreetype
   version: 2.13.3
 
 build:

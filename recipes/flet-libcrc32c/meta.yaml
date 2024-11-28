@@ -1,5 +1,5 @@
 package:
-  name: flet-crc32c
+  name: flet-libcrc32c
   version: 1.1.2
 
 build:
