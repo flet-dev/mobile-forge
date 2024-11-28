@@ -214,7 +214,7 @@ class Builder(ABC):
                 )
                 shutil.rmtree(self.build_path)
 
-        if not self.source_archive_path.is_file():
+        if os.getenv(f"MOBILE_FORGE_CACHE_DOWNLOADS_OFF") or not self.source_archive_path.is_file():
             log(self.log_file, f"\n[{self.cross_venv}] Download package sources")
             self.download_source()
 
@@ -335,6 +335,20 @@ class Builder(ABC):
             ),
         }
         env.update(kwargs)
+
+        script_vars = {
+            **env,
+            **self.cross_venv.scheme_paths,
+            **self.cross_venv.sysconfig_data,
+            "sysconfigdata_name": self.cross_venv.sysconfigdata_name,
+        }
+
+        # Set up any additional environment variables needed in the script environment.
+        for key, value in self.package.meta["build"]["script_env"].items():
+            if key in ["LDFLAGS", "CFLAGS", "CPPFLAGS"]:
+                env[key] += " " + value
+            else:
+                env[key] = str(value).format(**script_vars)
 
         if self.cross_venv.sdk == "android":
             cc_parts = cc.split("/")
@@ -551,9 +565,15 @@ class SimplePackageBuilder(Builder):
                     "HOST_ARCH": self.cross_venv.arch,
                     "SDK": self.cross_venv.sdk,
                     "SDK_VERSION": self.cross_venv.sdk_version,
+                    "SDK_ROOT": (
+                        str(self.cross_venv.sdk_root)
+                        if self.cross_venv.sdk != "android"
+                        else ""
+                    ),
                     "BUILD_TRIPLET": f"{os.uname().machine}-apple-darwin",
                     "CPU_COUNT": str(multiprocessing.cpu_count()),
                     "PREFIX": str(self.build_path / "wheel" / "opt"),
+                    "PYTHON_PREFIX": self.cross_venv.sysconfig_data["prefix"],
                     "PLATLIB": self.cross_venv.scheme_paths["platlib"],
                 }
             ),
@@ -715,20 +735,6 @@ class PythonPackageBuilder(Builder):
 
     def _build(self):
         env = self.compile_env()
-
-        script_vars = {
-            **env,
-            **self.cross_venv.scheme_paths,
-            **self.cross_venv.sysconfig_data,
-            "sysconfigdata_name": self.cross_venv.sysconfigdata_name,
-        }
-
-        # Set up any additional environment variables needed in the script environment.
-        for key, value in self.package.meta["build"]["script_env"].items():
-            if key in ["LDFLAGS", "CFLAGS", "CPPFLAGS"]:
-                env[key] += " " + value
-            else:
-                env[key] = str(value).format(**script_vars)
 
         # Set the cross host platform in the environment
         env["_PYTHON_HOST_PLATFORM"] = self.cross_venv.platform_identifier

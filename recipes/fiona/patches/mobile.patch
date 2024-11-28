@@ -1,0 +1,26 @@
+diff --git a/setup.py b/setup.py
+index e1f48a6..6c04d39 100644
+--- a/setup.py
++++ b/setup.py
+@@ -9,7 +9,6 @@ import sys
+ from setuptools import setup
+ from setuptools.extension import Extension
+ 
+-
+ # Ensure minimum version of Python is running
+ if sys.version_info[0:2] < (3, 6):
+     raise RuntimeError('Fiona requires Python>=3.6')
+@@ -85,6 +84,13 @@ if 'clean' not in sys.argv:
+         else:
+             logging.warning("Failed to get options via gdal-config: %s", str(e))
+ 
++    if 'GDAL_LIB_PATH' in os.environ:
++        library_dirs.extend(os.environ['GDAL_LIB_PATH'].split(":"))
++    if 'GDAL_INCLUDE_PATH' in os.environ:
++        include_dirs.extend(os.environ['GDAL_INCLUDE_PATH'].split(":"))
++    if 'GDAL_LIBS' in os.environ:
++        libraries.extend(os.environ['GDAL_LIBS'].split(","))
++
+     # Get GDAL API version from environment variable.
+     if 'GDAL_VERSION' in os.environ:
+         gdalversion = os.environ['GDAL_VERSION']

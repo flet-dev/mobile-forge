@@ -1,0 +1,14 @@
+diff --git a/setup.py b/setup.py
+index 5c6ac95..26bb5fa 100644
+--- a/setup.py
++++ b/setup.py
+@@ -228,6 +228,9 @@ class gdal_ext(build_ext):
+ 
+     def get_gdal_config(self, option):
+         try:
++            var_name = f"GDAL_{option.upper()}"
++            if var_name in os.environ:
++                return os.environ[var_name]
+             return fetch_config(option, gdal_config=self.gdal_config)
+         except gdal_config_error:
+             msg = 'Could not find gdal-config. Make sure you have installed the GDAL native library and development headers.'

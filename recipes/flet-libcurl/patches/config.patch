@@ -1,0 +1,13 @@
+diff --git a/config.sub b/config.sub
+index dba16e8..215b8e2 100755
+--- a/config.sub
++++ b/config.sub
+@@ -1792,6 +1792,8 @@ case $kernel-$os in
+ 		;;
+ 	*-eabi* | *-gnueabi*)
+ 		;;
++	ios-simulator)
++		;;
+ 	-*)
+ 		# Blank kernel with real OS is always fine.
+ 		;;
