@@ -43,7 +43,7 @@ index d49d722..ca3c433 100644
 +    #         f"GEOS version should be >={MIN_GEOS_VERSION}, found {geos_version}"
 +    #     )
 +
-+    libraries = ["geos_c"]
++    libraries = ["geos", "geos_c"]
      library_dirs = []
      include_dirs = ["./src"]
 -    extra_link_args = []
