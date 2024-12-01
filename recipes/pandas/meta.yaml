@@ -2,6 +2,9 @@ package:
   name: pandas
   version: 2.2.2
 
+# {% if not version or version >= (2,1) %}
+# pandas >= 2.1.0
+
 requirements:
   build:
     - ninja
@@ -18,3 +21,12 @@ build:
   backend-args:
     - -Csetup-args=--cross-file
     - -Csetup-args={MESON_CROSS_FILE}
+
+# {% else %}
+# pandas < 2.1.0
+
+requirements:
+  host:
+    - numpy 1.26.4
+
+# {% endif %}
