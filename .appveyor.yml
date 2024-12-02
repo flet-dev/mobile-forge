@@ -31,7 +31,7 @@ environment:
         pyogrio:0.10.0
         pyproj:3.7.0
         gdal:3.10.0
-      BUILD_NUMBER: 1
+      BUILD_NUMBER: 2
 
     - job_name: 'iOS: flet-libgdal, fiona, pyogrio, gdal, pyproj'
       job_group: build_ios
@@ -47,7 +47,7 @@ environment:
         pyogrio:0.10.0
         pyproj:3.7.0
         gdal:3.10.0
-      BUILD_NUMBER: 1
+      BUILD_NUMBER: 2
 
     # ==================================================
 
