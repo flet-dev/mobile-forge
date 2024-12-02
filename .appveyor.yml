@@ -17,20 +17,20 @@ environment:
   MOBILE_FORGE_CACHE_DOWNLOADS_OFF: 1
 
   matrix:
-    - job_name: 'Android: msgspec, msgpack'
+    - job_name: 'Android: jq'
       job_group: build_android
       FORGE_ARCH: android
       FORGE_PACKAGES: >-
-        msgspec:0.18.6
-        msgpack:1.1.0
+        flet-libjq:1.7.1
+        jq:1.8.0
       BUILD_NUMBER: 1
 
-    - job_name: 'iOS: msgspec, msgpack'
+    - job_name: 'iOS: jq'
       job_group: build_ios
       FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
-        msgspec:0.18.6
-        msgpack:1.1.0
+        flet-libjq:1.7.1
+        jq:1.8.0
       BUILD_NUMBER: 1
 
     # ==================================================

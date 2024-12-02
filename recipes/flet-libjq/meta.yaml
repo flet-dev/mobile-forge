@@ -13,3 +13,6 @@ build:
 requirements:
   build:
     - cmake
+
+patches:
+  - config.patch
