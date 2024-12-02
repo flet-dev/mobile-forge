@@ -1,3 +1,19 @@
+diff --git a/osgeo/__init__.py b/osgeo/__init__.py
+index f5e090c..43718cf 100644
+--- a/osgeo/__init__.py
++++ b/osgeo/__init__.py
+@@ -1,5 +1,11 @@
+ # __init__ for osgeo package.
+ 
++# Flet
++import os
++from os.path import dirname
++os.environ["GDAL_DATA"] = f"{dirname(dirname(__file__))}/opt/share/gdal"
++os.environ["PROJ_DATA"] = f"{dirname(dirname(__file__))}/opt/share/proj"
++
+ # making the osgeo package version the same as the gdal version:
+ from sys import platform, version_info
+ if version_info >= (3, 8, 0) and platform == 'win32':
 diff --git a/setup.py b/setup.py
 index 5c6ac95..26bb5fa 100644
 --- a/setup.py

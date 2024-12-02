@@ -1,0 +1,17 @@
+diff --git a/pyogrio/__init__.py b/pyogrio/__init__.py
+index c5450c6..8b3af90 100644
+--- a/pyogrio/__init__.py
++++ b/pyogrio/__init__.py
+@@ -8,6 +8,12 @@ try:
+ except Exception:
+     pass
+ 
++# Flet
++import os
++from os.path import dirname
++os.environ["GDAL_DATA"] = f"{dirname(dirname(__file__))}/opt/share/gdal"
++os.environ["PROJ_DATA"] = f"{dirname(dirname(__file__))}/opt/share/proj"
++
+ from pyogrio._version import get_versions
+ from pyogrio.core import (
+     __gdal_geos_version__,

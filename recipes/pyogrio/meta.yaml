@@ -20,3 +20,6 @@ build:
 # {% if sdk != 'android' %}
     LDFLAGS: '-lproj -ltiff -ljpeg -lcurl -lpsl -lcrypto -lssl -undefined dynamic_lookup'
 # {% endif %}
+
+patches:
+  - mobile.patch

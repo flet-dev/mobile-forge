@@ -1,3 +1,20 @@
+diff --git a/fiona/__init__.py b/fiona/__init__.py
+index 2971192..ab51dc5 100644
+--- a/fiona/__init__.py
++++ b/fiona/__init__.py
+@@ -28,6 +28,12 @@ from pathlib import Path
+ import platform
+ import warnings
+ 
++# Flet
++import os
++from os.path import dirname
++os.environ["GDAL_DATA"] = f"{dirname(dirname(__file__))}/opt/share/gdal"
++os.environ["PROJ_DATA"] = f"{dirname(dirname(__file__))}/opt/share/proj"
++
+ if platform.system() == "Windows":
+     _whl_dir = os.path.join(os.path.dirname(__file__), ".libs")
+     if os.path.exists(_whl_dir):
 diff --git a/setup.py b/setup.py
 index e1f48a6..6c04d39 100644
 --- a/setup.py

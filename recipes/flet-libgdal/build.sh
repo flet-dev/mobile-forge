@@ -53,5 +53,6 @@ fi
 cmake --build . -j $CPU_COUNT
 cmake --build . --target install
 
-#rm -rf $PREFIX/{bin,share}
+rm -rf $PREFIX/bin
+rm -rf $PREFIX/share/{bash-completion,man}
 rm -rf $PREFIX/lib/{cmake,pkgconfig}
