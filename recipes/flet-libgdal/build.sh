@@ -19,8 +19,8 @@ if [ $CROSS_VENV_SDK == "android" ]; then
         -DPROJ_INCLUDE_DIR=$PLATLIB/opt/include \
         -DSQLite3_LIBRARY=$PYTHON_PREFIX/lib/libsqlite3_python.so \
         -DSQLite3_INCLUDE_DIR=$PYTHON_PREFIX/include \
-        -DGDAL_BUILD_OPTIONAL_DRIVERS=OFF \
-        -DOGR_BUILD_OPTIONAL_DRIVERS=OFF \
+        -DGDAL_BUILD_OPTIONAL_DRIVERS=ON \
+        -DOGR_BUILD_OPTIONAL_DRIVERS=ON \
         -DGDAL_USE_EXPAT=OFF \
         -DGDAL_USE_OPENSSL=OFF \
         -DGDAL_USE_CURL=OFF \
@@ -44,8 +44,8 @@ else
         -DPROJ_INCLUDE_DIR=$PLATLIB/opt/include \
         -DSQLite3_LIBRARY=$SDK_ROOT/usr/lib/libsqlite3.tbd \
         -DSQLite3_INCLUDE_DIR=$SDK_ROOT/usr/include \
-        -DGDAL_BUILD_OPTIONAL_DRIVERS=OFF \
-        -DOGR_BUILD_OPTIONAL_DRIVERS=OFF \
+        -DGDAL_BUILD_OPTIONAL_DRIVERS=ON \
+        -DOGR_BUILD_OPTIONAL_DRIVERS=ON \
         -DBUILD_APPS=OFF \
         -DBUILD_TESTING=OFF
 fi
@@ -56,3 +56,7 @@ cmake --build . --target install
 rm -rf $PREFIX/bin
 rm -rf $PREFIX/share/{bash-completion,man}
 rm -rf $PREFIX/lib/{cmake,pkgconfig}
+
+if [ $CROSS_VENV_SDK == "android" ]; then
+    rm -r $PREFIX/share
+fi
