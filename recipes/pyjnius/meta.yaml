@@ -1,0 +1,11 @@
+package:
+  name: pyjnius
+  version: 1.6.1
+
+build:
+  script_env:
+    NDKPLATFORM: NOTNONE
+    LIBLINK: 1
+  
+patches:
+  - mobile.patch
