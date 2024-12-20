@@ -24,18 +24,10 @@ index 3a17bbb..4f43c6a 100644
      ctypedef signed long    ffi_sarg
      ctypedef enum: FFI_TYPE_STRUCT
 diff --git a/setup.py b/setup.py
-index 0de7708..f0698c0 100644
+index 0de7708..c8deb36 100644
 --- a/setup.py
 +++ b/setup.py
-@@ -4,6 +4,7 @@ from os.path import dirname, join, exists
- import sys
- import platform
- from distutils.command.build_ext import build_ext
-+from Cython.Build import cythonize
- 
- with open(join('pyobjus', '__init__.py')) as fd:
-     VERSION = [
-@@ -20,12 +21,12 @@ if kivy_ios_root is not None:
+@@ -20,13 +20,7 @@ if kivy_ios_root is not None:
  print("Pyobjus platform is {}".format(dev_platform))
  
  # OSX
@@ -45,16 +37,12 @@ index 0de7708..f0698c0 100644
 -# iOS
 -elif dev_platform == 'ios':
 -    files = ['pyobjus.c']
+-
 +files = ['pyobjus.pyx']
-+# if dev_platform == 'darwin':
-+#     files = ['pyobjus.pyx']
-+# # iOS
-+# elif dev_platform == 'ios':
-+#     files = ['pyobjus.c']
- 
  
  class PyObjusBuildExt(build_ext, object):
-@@ -43,13 +44,10 @@ class PyObjusBuildExt(build_ext, object):
+ 
+@@ -43,13 +37,10 @@ class PyObjusBuildExt(build_ext, object):
          # The following essentially supply a dynamically generated subclass
          # that mix in the cython version of build_ext so that the
          # functionality provided will also be executed.
@@ -72,7 +60,7 @@ index 0de7708..f0698c0 100644
  
      def build_extensions(self):
          # create a configuration file for pyobjus (export the platform)
-@@ -57,23 +55,22 @@ class PyObjusBuildExt(build_ext, object):
+@@ -57,11 +48,9 @@ class PyObjusBuildExt(build_ext, object):
          config_pxi_need_update = True
          config_pxi = 'DEF PLATFORM = "{}"\n'.format(dev_platform)
          config_pxi += 'DEF ARCH = "{}"\n'.format(arch)
@@ -87,12 +75,7 @@ index 0de7708..f0698c0 100644
          config_pxi += f"DEF PYOBJUS_CYTHON_3 = {cython3}"
          if exists(config_pxi_fn):
              with open(config_pxi_fn) as fd:
-                 config_pxi_need_update = fd.read() != config_pxi
-         if config_pxi_need_update:
-+            print("UPDATE CONFIG!")
-             with open(config_pxi_fn, 'w') as fd:
-                 fd.write(config_pxi)
- 
+@@ -73,7 +62,7 @@ class PyObjusBuildExt(build_ext, object):
          super().build_extensions()
  
  

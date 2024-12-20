@@ -134,18 +134,10 @@ index 0000000..d67972a
 +    return Android_JNI_GetEnv();
 +}
 diff --git a/setup.py b/setup.py
-index 3cca8c1..af7b600 100644
+index 3cca8c1..5178994 100644
 --- a/setup.py
 +++ b/setup.py
-@@ -14,6 +14,7 @@ from os import environ
- from os.path import dirname, join
- import sys
- from setup_sdist import SETUP_KWARGS
-+from Cython.Build import cythonize
- 
- # XXX hack to be able to import jnius.env withough having build
- # jnius.jnius yet, better solution welcome
-@@ -35,6 +36,7 @@ def getenv(key):
+@@ -35,6 +35,7 @@ def getenv(key):
  
  PYX_FILES = [
      'jnius.pyx',
@@ -153,25 +145,19 @@ index 3cca8c1..af7b600 100644
  ]
  PXI_FILES = [
      'jnius_compat.pxi',
-@@ -60,8 +62,8 @@ if NDKPLATFORM is not None and getenv('LIBLINK'):
-     PLATFORM = 'android'
+@@ -54,14 +55,7 @@ PXI_FILES = [
+ EXTRA_LINK_ARGS = []
  
- # detect platform
+ # detect Python for android
+-PLATFORM = sys.platform
+-NDKPLATFORM = getenv('NDKPLATFORM')
+-if NDKPLATFORM is not None and getenv('LIBLINK'):
+-    PLATFORM = 'android'
+-
+-# detect platform
 -if PLATFORM == 'android':
 -    PYX_FILES = [fn[:-3] + 'c' for fn in PYX_FILES]
-+# if PLATFORM == 'android':
-+#     PYX_FILES = [fn[:-3] + 'c' for fn in PYX_FILES]
++PLATFORM = 'android'
  
  JAVA=get_java_setup(PLATFORM)
  
-@@ -99,6 +101,10 @@ with open(join(dirname(__file__), 'jnius', 'config.pxi'), 'w') as fd:
- # pop setup.py from included files in the installed package
- SETUP_KWARGS['py_modules'].remove('setup')
- 
-+print("PYX_FILES:", PYX_FILES)
-+print("PXI_FILES:", PXI_FILES)
-+#exit(1)
-+
- ext_modules = [
-     Extension(
-         'jnius', 
