@@ -21,6 +21,7 @@ environment:
       job_group: build_android
       FORGE_ARCH: android
       FORGE_PACKAGES: >-
+        flet-libpyjni:1.0.1
         pyjnius:1.6.1
       BUILD_NUMBER: 1
 
