@@ -4,3 +4,7 @@ package:
 
 patches:
   - mobile.patch
+
+requirements:
+  host:
+    - flet-libpyjni 1.0.1
