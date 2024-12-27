@@ -11,19 +11,113 @@ index ea12d82..4111845 100644
  
      def get_include_dirs(self):
          # When cross-compiling for Android, we should not use the include dirs
+diff --git a/jnius/jnius_conversion.pxi b/jnius/jnius_conversion.pxi
+index 2e0b48d..e474445 100644
+--- a/jnius/jnius_conversion.pxi
++++ b/jnius/jnius_conversion.pxi
+@@ -719,7 +719,7 @@ cdef jobject convert_pyarray_to_java(JNIEnv *j_env, definition, pyarray) except
+ 
+     elif definition[0] == 'L':
+         defstr = str_for_c(definition[1:-1])
+-        j_class = j_env[0].FindClass(j_env, <bytes>defstr)
++        j_class = PyJni_FindClass(<bytes>defstr)
+ 
+         if j_class == NULL:
+             raise JavaException(
+diff --git a/jnius/jnius_export_class.pxi b/jnius/jnius_export_class.pxi
+index a688e2b..7018adf 100644
+--- a/jnius/jnius_export_class.pxi
++++ b/jnius/jnius_export_class.pxi
+@@ -146,7 +146,7 @@ class MetaJavaClass(MetaJavaBase):
+ 
+         if NULL == obj:
+             for interface in getattr(value, '__javainterfaces__', []):
+-                obj = j_env[0].FindClass(j_env, str_for_c(interface))
++                obj = PyJni_FindClass(str_for_c(interface))
+                 if obj == NULL:
+                     j_env[0].ExceptionClear(j_env)
+                 elif 0 != j_env[0].IsAssignableFrom(j_env, obj, me.j_cls):
+@@ -177,11 +177,11 @@ class MetaJavaClass(MetaJavaBase):
+         cdef JNIEnv *j_env = get_jnienv()
+ 
+         if __javainterfaces__ and __javabaseclass__:
+-            baseclass = j_env[0].FindClass(j_env, <char*>__javabaseclass__)
++            baseclass = PyJni_FindClass(<char*>__javabaseclass__)
+             interfaces = <jclass *>malloc(sizeof(jclass) * len(__javainterfaces__))
+ 
+             for n, i in enumerate(__javainterfaces__):
+-                interfaces[n] = j_env[0].FindClass(j_env, <char*>i)
++                interfaces[n] = PyJni_FindClass(<char*>i)
+ 
+             getProxyClass = j_env[0].GetStaticMethodID(
+                 j_env, baseclass, "getProxyClass",
+@@ -206,8 +206,7 @@ class MetaJavaClass(MetaJavaBase):
+                         ' {0}'.format(__javaclass__))
+         else:
+             class_name = str_for_c(__javaclass__)
+-            jcs.j_cls = j_env[0].FindClass(j_env,
+-                    <char *>class_name)
++            jcs.j_cls = PyJni_FindClass(<char *>class_name)
+             if jcs.j_cls == NULL:
+                 raise JavaException('Unable to find the class'
+                         ' {0}'.format(__javaclass__))
+diff --git a/jnius/jnius_export_func.pxi b/jnius/jnius_export_func.pxi
+index 3a76dd5..c3e1375 100644
+--- a/jnius/jnius_export_func.pxi
++++ b/jnius/jnius_export_func.pxi
+@@ -18,7 +18,7 @@ def find_javaclass(namestr):
+     cdef jclass jc
+     cdef JNIEnv *j_env = get_jnienv()
+ 
+-    jc = j_env[0].FindClass(j_env, name)
++    jc = PyJni_FindClass(name)
+     check_exception(j_env)
+ 
+     cls = Class(noinstance=True)
 diff --git a/jnius/jnius_jvm_android.pxi b/jnius/jnius_jvm_android.pxi
-index dae6b31..d1e27a4 100644
+index dae6b31..17fe0e2 100644
 --- a/jnius/jnius_jvm_android.pxi
 +++ b/jnius/jnius_jvm_android.pxi
-@@ -1,6 +1,6 @@
+@@ -1,6 +1,7 @@
  # on android, rely on SDL to get the JNI env
 -cdef extern JNIEnv *SDL_AndroidGetJNIEnv()
-+cdef extern JNIEnv *WebView_AndroidGetJNIEnv()
++cdef extern JNIEnv *PyJni_AndroidGetJNIEnv()
  
++cdef extern jclass *PyJni_FindClass(const char* className)
  
  cdef JNIEnv *get_platform_jnienv() except NULL:
 -    return <JNIEnv*>SDL_AndroidGetJNIEnv()
-+    return <JNIEnv*>WebView_AndroidGetJNIEnv()
++    return <JNIEnv*>PyJni_AndroidGetJNIEnv()
+diff --git a/jnius/jnius_utils.pxi b/jnius/jnius_utils.pxi
+index ef5d6ab..a6edb0c 100644
+--- a/jnius/jnius_utils.pxi
++++ b/jnius/jnius_utils.pxi
+@@ -164,14 +164,14 @@ cdef void check_assignable_from_str(JNIEnv *env, source, target) except *:
+             return
+ 
+         s_source = str_for_c(source)
+-        cls_source = env[0].FindClass(env, s_source)
++        cls_source = PyJni_FindClass(s_source)
+ 
+         if cls_source == NULL:
+             raise JavaException('Unable to find the class for {0!r}'.format(
+                 source))
+ 
+         s_target = str_for_c(target)
+-        cls_target = env[0].FindClass(env, s_target)
++        cls_target = PyJni_FindClass(s_target)
+ 
+         if cls_target == NULL:
+             raise JavaException('Unable to find the class for {0!r}'.format(
+@@ -238,7 +238,7 @@ cdef void check_assignable_from(JNIEnv *env, JavaClass jc, signature) except *:
+         # we got an object that doesn't match with the signature
+         # check if we can use it.
+         s = str_for_c(signature)
+-        cls = env[0].FindClass(env, s)
++        cls = PyJni_FindClass(s)
+         if cls == NULL:
+             raise JavaException('Unable to found the class for {0!r}'.format(
+                 signature))
 diff --git a/setup.py b/setup.py
 index 3cca8c1..a7f40f0 100644
 --- a/setup.py
