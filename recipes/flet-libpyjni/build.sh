@@ -20,6 +20,3 @@ fi
 
 make -j $CPU_COUNT
 make install
-
-# cleanup
-#rm -r $PREFIX/lib/cmake
