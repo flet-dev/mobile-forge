@@ -17,21 +17,20 @@ environment:
   MOBILE_FORGE_CACHE_DOWNLOADS_OFF: 1
 
   matrix:
-    - job_name: 'Android: jq'
+    - job_name: 'Android: pyjnius'
       job_group: build_android
       FORGE_ARCH: android
       FORGE_PACKAGES: >-
-        flet-libjq:1.7.1
-        jq:1.8.0
+        flet-libpyjni:1.0.1
+        pyjnius:1.6.1
       BUILD_NUMBER: 1
 
-    - job_name: 'iOS: jq'
-      job_group: build_ios
-      FORGE_ARCH: iOS
-      FORGE_PACKAGES: >-
-        flet-libjq:1.7.1
-        jq:1.8.0
-      BUILD_NUMBER: 1
+    # - job_name: 'iOS: pyobjus'
+    #   job_group: build_ios
+    #   FORGE_ARCH: iOS
+    #   FORGE_PACKAGES: >-
+    #     pyobjus:1.2.3
+    #   BUILD_NUMBER: 1
 
     # ==================================================
 
