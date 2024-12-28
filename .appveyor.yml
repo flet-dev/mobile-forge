@@ -17,18 +17,18 @@ environment:
   MOBILE_FORGE_CACHE_DOWNLOADS_OFF: 1
 
   matrix:
-    - job_name: 'Android: regex'
+    - job_name: 'Android: zstandard'
       job_group: build_android
       FORGE_ARCH: android
       FORGE_PACKAGES: >-
-        regex:2024.11.6
+        zstandard:0.23.0
       BUILD_NUMBER: 1
 
-    - job_name: 'iOS: regex'
+    - job_name: 'iOS: zstandard'
       job_group: build_ios
       FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
-        regex:2024.11.6
+        zstandard:0.23.0
       BUILD_NUMBER: 1
 
     # ==================================================

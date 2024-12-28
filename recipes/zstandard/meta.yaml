@@ -1,0 +1,3 @@
+package:
+  name: zstandard
+  version: 0.23.0
