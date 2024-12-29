@@ -1,0 +1,6 @@
+package:
+  name: pyxirr
+  version: 0.10.6
+
+patches:
+  - mobile.patch
