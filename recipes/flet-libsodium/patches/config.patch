@@ -1,0 +1,13 @@
+diff --git a/build-aux/config.sub b/build-aux/config.sub
+index 2c6a07a..3dbe6a0 100644
+--- a/build-aux/config.sub
++++ b/build-aux/config.sub
+@@ -1866,6 +1866,8 @@ case $kernel-$os-$obj in
+ 		;;
+ 	*-eabi*- | *-gnueabi*-)
+ 		;;
++	ios-simulator-)
++		;;
+ 	none--*)
+ 		# None (no kernel, i.e. freestanding / bare metal),
+ 		# can be paired with an machine code file format
