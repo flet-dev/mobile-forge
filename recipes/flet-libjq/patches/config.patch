@@ -1,0 +1,26 @@
+diff --git a/config/config.sub b/config/config.sub
+index dba16e8..215b8e2 100755
+--- a/config/config.sub
++++ b/config/config.sub
+@@ -1792,6 +1792,8 @@ case $kernel-$os in
+ 		;;
+ 	*-eabi* | *-gnueabi*)
+ 		;;
++	ios-simulator)
++		;;
+ 	-*)
+ 		# Blank kernel with real OS is always fine.
+ 		;;
+diff --git a/modules/oniguruma/config.sub b/modules/oniguruma/config.sub
+index 0753e30..fe182ac 100755
+--- a/modules/oniguruma/config.sub
++++ b/modules/oniguruma/config.sub
+@@ -1753,6 +1753,8 @@ case $kernel-$os in
+ 		;;
+ 	*-eabi* | *-gnueabi*)
+ 		;;
++	ios-simulator)
++		;;
+ 	-*)
+ 		# Blank kernel with real OS is always fine.
+ 		;;
