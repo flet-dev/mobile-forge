@@ -26,5 +26,5 @@ make install
 rm -r $PREFIX/lib/{*.a,*.la,pkgconfig}
 
 if [ $CROSS_VENV_SDK != "android" ]; then
-    mv $PREFIX/lib/libsodium.dylib $PREFIX/lib/libsodium.so
+    mv $PREFIX/lib/libsodium.dylib $PREFIX/../libsodium.so
 fi
