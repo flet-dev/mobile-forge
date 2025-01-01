@@ -6,9 +6,3 @@ package:
 
 source:
   url: https://github.com/jedisct1/libsodium/releases/download/{{ version }}-RELEASE/libsodium-{{ version }}.tar.gz
-
-build:
-  number: 1
-
-patches:
-  - config.patch

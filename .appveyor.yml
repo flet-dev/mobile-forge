@@ -17,18 +17,18 @@ environment:
   MOBILE_FORGE_CACHE_DOWNLOADS_OFF: 1
 
   matrix:
-    - job_name: 'Android: pyxirr'
+    - job_name: 'Android: flet-libsodium'
       job_group: build_android
       FORGE_ARCH: android
       FORGE_PACKAGES: >-
-        pyxirr:0.10.6
+        flet-libsodium:1.0.20
       BUILD_NUMBER: 1
 
-    - job_name: 'iOS: pyxirr'
+    - job_name: 'iOS: flet-libsodium'
       job_group: build_ios
       FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
-        pyxirr:0.10.6
+        flet-libsodium:1.0.20
       BUILD_NUMBER: 1
 
     # ==================================================
