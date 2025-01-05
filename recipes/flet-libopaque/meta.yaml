@@ -1,0 +1,20 @@
+{% set version = "0.99.8" %}
+
+package:
+  name: flet-libopaque
+  version: '{{ version }}'
+
+source:
+  url: https://github.com/stef/libopaque/archive/refs/tags/v{{ version }}.tar.gz
+
+requirements:
+  host:
+    - flet-libsodium 1.0.20
+    - flet-liboprf 0.5.0
+
+# build:
+#   script_env:
+#     CFLAGS: '-Qunused-arguments -Wno-unreachable-code'
+
+patches:
+  - mobile.patch
