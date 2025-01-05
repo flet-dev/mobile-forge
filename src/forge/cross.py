@@ -483,6 +483,7 @@ class CrossVEnv:
                 if paths
                 else []
             )
+            + (["--extra-index-url", "https://pypi.flet.dev"])
             # Finally, the list of packages to install.
             + packages,
         )
