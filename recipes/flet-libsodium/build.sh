@@ -23,8 +23,10 @@ fi
 make -j $CPU_COUNT
 make install
 
-rm -r $PREFIX/lib/{*.a,*.la,pkgconfig}
+rm -r $PREFIX/lib/{*.la,pkgconfig}
 
-if [ $CROSS_VENV_SDK != "android" ]; then
+if [ $CROSS_VENV_SDK == "android" ]; then
+    rm -r $PREFIX/lib/*.a
+else
     mv $PREFIX/lib/libsodium.dylib $PREFIX/../libsodium.so
 fi

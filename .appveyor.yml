@@ -17,18 +17,22 @@ environment:
   MOBILE_FORGE_CACHE_DOWNLOADS_OFF: 1
 
   matrix:
-    - job_name: 'Android: flet-libsodium'
+    - job_name: 'Android: flet-libsodium, flet-liboprf, flet-libopaque'
       job_group: build_android
       FORGE_ARCH: android
       FORGE_PACKAGES: >-
         flet-libsodium:1.0.20
+        flet-liboprf:0.5.0
+        flet-libopaque:0.99.8
       BUILD_NUMBER: 1
 
-    - job_name: 'iOS: flet-libsodium'
+    - job_name: 'iOS: flet-libsodium, flet-liboprf, flet-libopaque'
       job_group: build_ios
       FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
         flet-libsodium:1.0.20
+        flet-liboprf:0.5.0
+        flet-libopaque:0.99.8
       BUILD_NUMBER: 1
 
     # ==================================================
