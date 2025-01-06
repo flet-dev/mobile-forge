@@ -17,18 +17,18 @@ environment:
   MOBILE_FORGE_CACHE_DOWNLOADS_OFF: 1
 
   matrix:
-    - job_name: 'Android: PyNaCl'
+    - job_name: 'Android: sqlalchemy'
       job_group: build_android
       FORGE_ARCH: android
       FORGE_PACKAGES: >-
-        pynacl:1.5.0
+        sqlalchemy:2.0.36
       BUILD_NUMBER: 1
 
-    - job_name: 'iOS: PyNaCl'
+    - job_name: 'iOS: sqlalchemy'
       job_group: build_ios
       FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
-        pynacl:1.5.0
+        sqlalchemy:2.0.36
       BUILD_NUMBER: 1
 
     # ==================================================
