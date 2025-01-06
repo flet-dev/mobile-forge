@@ -12,9 +12,5 @@ requirements:
     - flet-libsodium 1.0.20
     - flet-liboprf 0.5.0
 
-# build:
-#   script_env:
-#     CFLAGS: '-Qunused-arguments -Wno-unreachable-code'
-
 patches:
   - mobile.patch
