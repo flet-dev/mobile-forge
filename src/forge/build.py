@@ -432,18 +432,17 @@ class Builder(ABC):
             generator.Generator(f, maxheaderlen=0).flatten(msg)
 
     def fix_wheel(self, wheel_dir: Path):
-        if self.cross_venv.sdk != "android":
-            return
 
         log(self.log_file, f"[{self.cross_venv}] Fixing wheel contents")
-        env = self.compile_env()
+        if self.cross_venv.sdk == "android":
+            env = self.compile_env()
 
-        for so in wheel_dir.glob("**/*.so"):
-            log(self.log_file, f"[{self.cross_venv}] Stripping {so}")
-            self.cross_venv.run(
-                self.log_file,
-                [env["STRIP"], "--strip-unneeded", str(so)],
-            )
+            for so in wheel_dir.glob("**/*.so"):
+                log(self.log_file, f"[{self.cross_venv}] Stripping {so}")
+                self.cross_venv.run(
+                    self.log_file,
+                    [env["STRIP"], "--strip-unneeded", str(so)],
+                )
 
         # add missing requirements from "host"
         if len(self.package.meta["requirements"]["host"]):
