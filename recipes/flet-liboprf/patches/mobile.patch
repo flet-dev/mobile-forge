@@ -1,5 +1,5 @@
 diff --git a/src/makefile b/src/makefile
-index f7819af..1f54446 100644
+index f7819af..b76083f 100644
 --- a/src/makefile
 +++ b/src/makefile
 @@ -7,33 +7,33 @@ CFLAGS?=-march=native -Wall -O2 -g \
@@ -68,15 +68,13 @@ index f7819af..1f54446 100644
  
  AR ?= ar
  
--liboprf.$(SOEXT): $(SOURCES) noise_xk/liboprf-noiseXK.$(SOEXT)
+ liboprf.$(SOEXT): $(SOURCES) noise_xk/liboprf-noiseXK.$(SOEXT)
 -	$(CC) $(CFLAGS) -fPIC -shared $(SOFLAGS) -o $@ $^ $(LDFLAGS)
-+liboprf.$(SOEXT): $(SOURCES)
-+	$(CC) $(CFLAGS) -fPIC -shared $(SOFLAGS) -o $@ $^ $(LDFLAGS_PRIVATE)
++	$(CC) $(CFLAGS) -fPIC -shared $(SOFLAGS) -o $@ $(SOURCES) $(LDFLAGS_PRIVATE)
  
--liboprf-corrupt-dkg.$(SOEXT): $(SOURCES) noise_xk/liboprf-noiseXK.$(SOEXT)
+ liboprf-corrupt-dkg.$(SOEXT): $(SOURCES) noise_xk/liboprf-noiseXK.$(SOEXT)
 -	$(CC) $(CFLAGS) -DUNITTEST -DUNITTEST_CORRUPT -fPIC -shared $(SOFLAGS) -o $@ $^ $(LDFLAGS)
-+liboprf-corrupt-dkg.$(SOEXT): $(SOURCES)
-+	$(CC) $(CFLAGS) -DUNITTEST -DUNITTEST_CORRUPT -fPIC -shared $(SOFLAGS) -o $@ $^ $(LDFLAGS_PRIVATE)
++	$(CC) $(CFLAGS) -DUNITTEST -DUNITTEST_CORRUPT -fPIC -shared $(SOFLAGS) -o $@ $(SOURCES) $(LDFLAGS_PRIVATE)
  
  liboprf.$(STATICEXT): $(OBJECTS)
  	$(AR) rcs $@ $^
