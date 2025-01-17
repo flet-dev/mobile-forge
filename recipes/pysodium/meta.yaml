@@ -1,0 +1,7 @@
+package:
+  name: pysodium
+  version: 0.7.18
+
+requirements:
+  host:
+    - flet-libsodium 1.0.20
