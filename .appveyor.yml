@@ -17,18 +17,20 @@ environment:
   MOBILE_FORGE_CACHE_DOWNLOADS_OFF: 1
 
   matrix:
-    - job_name: 'Android: contourpy'
+    - job_name: 'Android: pandas, matplotlib'
       job_group: build_android
       FORGE_ARCH: android
       FORGE_PACKAGES: >-
-        contourpy:1.3.1
+        pandas:2.2.3
+        matplotlib:3.10.0
       BUILD_NUMBER: 1
 
-    - job_name: 'iOS: contourpy'
+    - job_name: 'iOS: pandas, matplotlib'
       job_group: build_ios
       FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
-        contourpy:1.3.1
+        pandas:2.2.3
+        matplotlib:3.10.0
       BUILD_NUMBER: 1
 
     # ==================================================
