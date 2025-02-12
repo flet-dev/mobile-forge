@@ -17,19 +17,21 @@ environment:
   MOBILE_FORGE_CACHE_DOWNLOADS_OFF: 1
 
   matrix:
-    - job_name: 'Android: flet-liboprf'
+    - job_name: 'Android: numpy'
       job_group: build_android
       FORGE_ARCH: android
       FORGE_PACKAGES: >-
-        flet-liboprf:0.5.0
-      BUILD_NUMBER: 1
+        numpy:1.26.4
+        numpy:2.2.2
+      BUILD_NUMBER: 2
 
-    - job_name: 'iOS: flet-liboprf'
+    - job_name: 'iOS: numpy'
       job_group: build_ios
       FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
-        flet-liboprf:0.5.0
-      BUILD_NUMBER: 1
+        numpy:1.26.4
+        numpy:2.2.2
+      BUILD_NUMBER: 2
 
     # ==================================================
 
