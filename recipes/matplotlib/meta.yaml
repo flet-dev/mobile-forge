@@ -1,10 +1,11 @@
 package:
   name: matplotlib
-  version: 3.9.2
+  version: 3.10.0
 
 requirements:
   build:
     - ninja
+    - git+https://github.com/flet-dev/meson@ios-dynamiclib
   host:
     - numpy ^2.0.0
     - pybind11
@@ -14,3 +15,6 @@ build:
   backend-args:
     - -Csetup-args=--cross-file
     - -Csetup-args={MESON_CROSS_FILE}
+
+# potential issues:
+# https://github.com/godotengine/godot/pull/101036/files
