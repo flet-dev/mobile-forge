@@ -12,6 +12,10 @@ requirements:
     - flet-libjpeg 3.0.90
 
 build:
+# {% if sdk == 'android' and arch in ['armeabi-v7a', 'x86'] %}
+  script_env:
+    CPPFLAGS: -Wno-c++11-narrowing
+# {% endif %}
   backend-args:
     - -Csetup-args=--cross-file
     - -Csetup-args={MESON_CROSS_FILE}
