@@ -1,0 +1,167 @@
+diff --git a/src/makefile b/src/makefile
+index f7819af..b76083f 100644
+--- a/src/makefile
++++ b/src/makefile
+@@ -7,33 +7,33 @@ CFLAGS?=-march=native -Wall -O2 -g \
+ 		  -fstack-protector-strong -fasynchronous-unwind-tables -fpic \
+ 		  -ftrapv -D_GLIBCXX_ASSERTIONS $(DEFINES)
+ 
+-LDFLAGS?=-lsodium -loprf-noiseXK -Lnoise_xk
++LDFLAGS_PRIVATE=$(LDFLAGS) -lsodium -loprf-noiseXK -Lnoise_xk
+ CC?=gcc
+ SOEXT?=so
+ STATICEXT?=a
+ SOVER=0
+ 
+-UNAME := $(shell uname -s)
+-ARCH := $(shell uname -m)
+-ifeq ($(UNAME),Darwin)
+-	SOEXT=dylib
+-	SOFLAGS=-Wl,-install_name,$(DESTDIR)$(PREFIX)/lib/liboprf.$(SOEXT)
+-else
+-	CFLAGS+=-Wl,-z,defs -Wl,-z,relro -Wl,-z,noexecstack -Wl,-z,now -Wtrampolines \
+-			  -fsanitize=signed-integer-overflow -fsanitize-undefined-trap-on-error
+-			  #-fstrict-flex-arrays=3 -mbranch-protection=standard
+-	SOEXT=so
+-	SOFLAGS=-Wl,-soname,liboprf.$(SOEXT).$(SOVER)
+-   ifeq ($(ARCH),x86_64)
+-		CFLAGS+=-fcf-protection=full
+-   endif
+-
+-   ifeq ($(ARCH),parisc64)
+-   else ifeq ($(ARCH),parisc64)
+-   else
+-		CFLAGS+=-fstack-clash-protection
+-   endif
+-endif
++# UNAME := $(shell uname -s)
++# ARCH := $(shell uname -m)
++# ifeq ($(UNAME),Darwin)
++# 	SOEXT=dylib
++# 	SOFLAGS=-Wl,-install_name,$(DESTDIR)$(PREFIX)/lib/liboprf.$(SOEXT)
++# else
++# 	CFLAGS+=-Wl,-z,defs -Wl,-z,relro -Wl,-z,noexecstack -Wl,-z,now -Wtrampolines \
++# 			  -fsanitize=signed-integer-overflow -fsanitize-undefined-trap-on-error
++# 			  #-fstrict-flex-arrays=3 -mbranch-protection=standard
++# 	SOEXT=so
++# 	SOFLAGS=-Wl,-soname,liboprf.$(SOEXT).$(SOVER)
++#    ifeq ($(ARCH),x86_64)
++# 		CFLAGS+=-fcf-protection=full
++#    endif
++
++#    ifeq ($(ARCH),parisc64)
++#    else ifeq ($(ARCH),parisc64)
++#    else
++# 		CFLAGS+=-fstack-clash-protection
++#    endif
++# endif
+ 
+ CFLAGS+=$(INCLUDES)
+ 
+@@ -55,16 +55,16 @@ asan:
+ 	else
+ 		CFLAGS+=-fstack-clash-protection
+ 	endif
+-asan: LDFLAGS+= -fsanitize=address -static-libasan
++asan: LDFLAGS_PRIVATE+= -fsanitize=address -static-libasan
+ asan: all
+ 
+ AR ?= ar
+ 
+ liboprf.$(SOEXT): $(SOURCES) noise_xk/liboprf-noiseXK.$(SOEXT)
+-	$(CC) $(CFLAGS) -fPIC -shared $(SOFLAGS) -o $@ $^ $(LDFLAGS)
++	$(CC) $(CFLAGS) -fPIC -shared $(SOFLAGS) -o $@ $(SOURCES) $(LDFLAGS_PRIVATE)
+ 
+ liboprf-corrupt-dkg.$(SOEXT): $(SOURCES) noise_xk/liboprf-noiseXK.$(SOEXT)
+-	$(CC) $(CFLAGS) -DUNITTEST -DUNITTEST_CORRUPT -fPIC -shared $(SOFLAGS) -o $@ $^ $(LDFLAGS)
++	$(CC) $(CFLAGS) -DUNITTEST -DUNITTEST_CORRUPT -fPIC -shared $(SOFLAGS) -o $@ $(SOURCES) $(LDFLAGS_PRIVATE)
+ 
+ liboprf.$(STATICEXT): $(OBJECTS)
+ 	$(AR) rcs $@ $^
+@@ -98,8 +98,7 @@ uninstall-noiseXK:
+ 
+ $(DESTDIR)$(PREFIX)/lib/liboprf.$(SOEXT): liboprf.$(SOEXT)
+ 	mkdir -p $(DESTDIR)$(PREFIX)/lib
+-	cp $< $@.$(SOVER)
+-	ln -sf $@.$(SOVER) $@
++	cp $< $@
+ 
+ $(DESTDIR)$(PREFIX)/lib/liboprf.$(STATICEXT): liboprf.$(STATICEXT)
+ 	mkdir -p $(DESTDIR)$(PREFIX)/lib
+diff --git a/src/noise_xk/makefile b/src/noise_xk/makefile
+index 8d69ae9..b8fc7b9 100644
+--- a/src/noise_xk/makefile
++++ b/src/noise_xk/makefile
+@@ -1,5 +1,5 @@
+ PREFIX?=/usr/local
+-LDFLAGS=-lsodium
++LDFLAGS_PRIVATE=$(LDFLAGS) -lsodium
+ SOURCES=src/Noise_XK.c src/XK.c
+ 
+ CFLAGS 	+= -Iinclude -I include/karmel -I include/karmel/minimal \
+@@ -17,26 +17,26 @@ SOEXT?=so
+ STATICEXT?=a
+ SOVER=0
+ 
+-UNAME := $(shell uname -s)
+-ARCH := $(shell uname -m)
+-ifeq ($(UNAME),Darwin)
+-   SOEXT=dylib
+-   SOFLAGS=-Wl,-install_name,$(DESTDIR)$(PREFIX)/lib/liboprf-noiseXK.$(SOEXT)
+-else
+-   ifeq ($(shell uname),Linux)
+-	CFLAGS 	+= -Wl,--error-unresolved-symbols -Wl,-z,defs -Wl,-z,relro -Wl,-z,noexecstack
+-	SOEXT=so
+-	SOFLAGS=-Wl,-soname,liboprf-noiseXK.$(SOEXT).$(SOVER)
+-   endif
+-   ifeq ($(ARCH),x86_64)
+-   	CFLAGS+=-fcf-protection=full 
+-   endif
+-   ifeq ($(ARCH),parisc64)
+-   else ifeq ($(ARCH),parisc64)
+-   else
+-   	CFLAGS+=-fstack-clash-protection
+-   endif
+-endif
++# UNAME := $(shell uname -s)
++# ARCH := $(shell uname -m)
++# ifeq ($(UNAME),Darwin)
++#    SOEXT=dylib
++#    SOFLAGS=-Wl,-install_name,$(DESTDIR)$(PREFIX)/lib/liboprf-noiseXK.$(SOEXT)
++# else
++#    ifeq ($(shell uname),Linux)
++# 	CFLAGS 	+= -Wl,--error-unresolved-symbols -Wl,-z,defs -Wl,-z,relro -Wl,-z,noexecstack
++# 	SOEXT=so
++# 	SOFLAGS=-Wl,-soname,liboprf-noiseXK.$(SOEXT).$(SOVER)
++#    endif
++#    ifeq ($(ARCH),x86_64)
++#    	CFLAGS+=-fcf-protection=full 
++#    endif
++#    ifeq ($(ARCH),parisc64)
++#    else ifeq ($(ARCH),parisc64)
++#    else
++#    	CFLAGS+=-fstack-clash-protection
++#    endif
++# endif
+ 
+ OBJS 	+= $(patsubst %.c,%.o,$(SOURCES))
+ 
+@@ -48,7 +48,7 @@ AR ?= ar
+ 	$(AR) rcs $@ $^
+ 
+ %.$(SOEXT): $(OBJS)
+-	$(CC) $(CFLAGS) -fPIC -shared $(SOFLAGS) -o $@ $^ $(LDFLAGS)
++	$(CC) $(CFLAGS) -fPIC -shared $(SOFLAGS) -o $@ $^ $(LDFLAGS_PRIVATE)
+ 
+ clean:
+ 	rm -rf *.so *.a src/*.o
+@@ -64,8 +64,7 @@ uninstall: $(DESTDIR)$(PREFIX)/lib/liboprf-noiseXK.$(SOEXT) $(DESTDIR)$(PREFIX)/
+ 
+ $(DESTDIR)$(PREFIX)/lib/liboprf-noiseXK.$(SOEXT): liboprf-noiseXK.$(SOEXT)
+ 	mkdir -p $(DESTDIR)$(PREFIX)/lib/
+-	cp $< $@.$(SOVER)
+-	ln -sf $@.$(SOVER) $@
++	cp $< $@
+ 
+ $(DESTDIR)$(PREFIX)/lib/liboprf-noiseXK.$(STATICEXT): liboprf-noiseXK.$(STATICEXT)
+ 	mkdir -p $(DESTDIR)$(PREFIX)/lib/

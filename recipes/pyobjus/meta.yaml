@@ -1,0 +1,10 @@
+package:
+  name: pyobjus
+  version: 1.2.3
+  
+patches:
+  - mobile.patch
+
+requirements:
+  host:
+    - libffi

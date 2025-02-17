@@ -1,6 +1,6 @@
 package:
   name: pandas
-  version: 2.2.2
+  version: 2.2.3
 
 # {% if not version or version >= (2,1) %}
 # pandas >= 2.1.0
@@ -8,6 +8,7 @@ package:
 requirements:
   build:
     - ninja
+    - git+https://github.com/flet-dev/meson@ios-dynamiclib
   host:
     - numpy ^2.0.0
 # {% if sdk == 'android' %}

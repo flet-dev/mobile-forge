@@ -17,20 +17,18 @@ environment:
   MOBILE_FORGE_CACHE_DOWNLOADS_OFF: 1
 
   matrix:
-    - job_name: 'Android: pandas 2.0.3'
+    - job_name: 'Android: greenlet'
       job_group: build_android
       FORGE_ARCH: android
       FORGE_PACKAGES: >-
-        numpy:1.26.4
-        pandas:2.0.3
+        greenlet:3.1.1
       BUILD_NUMBER: 1
 
-    - job_name: 'iOS: pandas 2.0.3'
+    - job_name: 'iOS: greenlet'
       job_group: build_ios
       FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
-        numpy:1.26.4
-        pandas:2.0.3
+        greenlet:3.1.1
       BUILD_NUMBER: 1
 
     # ==================================================

@@ -1,0 +1,8 @@
+{% set version = "1.0.20" %}
+
+package:
+  name: flet-libsodium
+  version: '{{ version }}'
+
+source:
+  url: https://github.com/jedisct1/libsodium/releases/download/{{ version }}-RELEASE/libsodium-{{ version }}.tar.gz

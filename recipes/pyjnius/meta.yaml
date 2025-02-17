@@ -1,0 +1,10 @@
+package:
+  name: pyjnius
+  version: 1.6.1
+
+patches:
+  - mobile.patch
+
+requirements:
+  host:
+    - flet-libpyjni 1.0.1

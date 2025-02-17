@@ -214,7 +214,10 @@ class Builder(ABC):
                 )
                 shutil.rmtree(self.build_path)
 
-        if os.getenv(f"MOBILE_FORGE_CACHE_DOWNLOADS_OFF") or not self.source_archive_path.is_file():
+        if (
+            os.getenv(f"MOBILE_FORGE_CACHE_DOWNLOADS_OFF")
+            or not self.source_archive_path.is_file()
+        ):
             log(self.log_file, f"\n[{self.cross_venv}] Download package sources")
             self.download_source()
 
@@ -248,7 +251,11 @@ class Builder(ABC):
             if ar and self.cross_venv.sdk == "android"
             else "strip"
         )
-
+        ranlib = (
+            str(Path(ar).parent.joinpath("llvm-ranlib"))
+            if ar and self.cross_venv.sdk == "android"
+            else "ranlib"
+        )
         cflags = self.cross_venv.sysconfig_data["CFLAGS"]
         cppflags = self.cross_venv.sysconfig_data["CPPFLAGS"]
 
@@ -316,6 +323,7 @@ class Builder(ABC):
             "CC": cc,
             "CXX": cxx,
             "STRIP": strip,
+            "RANLIB": ranlib,
             "CFLAGS": cflags,
             "CPPFLAGS": cppflags,
             "LDFLAGS": ldflags,
@@ -424,18 +432,17 @@ class Builder(ABC):
             generator.Generator(f, maxheaderlen=0).flatten(msg)
 
     def fix_wheel(self, wheel_dir: Path):
-        if self.cross_venv.sdk != "android":
-            return
 
         log(self.log_file, f"[{self.cross_venv}] Fixing wheel contents")
-        env = self.compile_env()
+        if self.cross_venv.sdk == "android":
+            env = self.compile_env()
 
-        for so in wheel_dir.glob("**/*.so"):
-            log(self.log_file, f"[{self.cross_venv}] Stripping {so}")
-            self.cross_venv.run(
-                self.log_file,
-                [env["STRIP"], "--strip-unneeded", str(so)],
-            )
+            for so in wheel_dir.glob("**/*.so"):
+                log(self.log_file, f"[{self.cross_venv}] Stripping {so}")
+                self.cross_venv.run(
+                    self.log_file,
+                    [env["STRIP"], "--strip-unneeded", str(so)],
+                )
 
         # add missing requirements from "host"
         if len(self.package.meta["requirements"]["host"]):
@@ -650,7 +657,12 @@ class PythonPackageBuilder(Builder):
                 # Install the build requirements in the build environment
                 self.cross_venv.pip_install(
                     self.log_file,
-                    ["build", "wheel"] + (pyproject["build-system"]["requires"] if "build-system" in pyproject else []),
+                    ["build", "wheel"]
+                    + (
+                        pyproject["build-system"]["requires"]
+                        if "build-system" in pyproject
+                        else []
+                    ),
                     paths=[Path.cwd() / "dist"],
                     build=True,
                 )
