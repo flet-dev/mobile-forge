@@ -1,5 +1,5 @@
 diff --git a/pyproject.toml b/pyproject.toml
-index db9f055..3e3d399 100644
+index 238abd8..37de5c7 100644
 --- a/pyproject.toml
 +++ b/pyproject.toml
 @@ -2,8 +2,8 @@
@@ -8,8 +8,8 @@ index db9f055..3e3d399 100644
  requires = [
 -    "meson-python==0.13.1",
 -    "meson==1.2.1",
-+    "meson-python>=0.15.0",
++    "meson-python==0.15.0",
 +    #"meson==1.2.1",
      "wheel",
-     "Cython==3.0.5",  # Note: sync with setup.py, environment.yml and asv.conf.json
-     # Force numpy higher than 2.0rc1, so that built wheels are compatible
+     "Cython~=3.0.5",  # Note: sync with setup.py, environment.yml and asv.conf.json
+     # Force numpy higher than 2.0, so that built wheels are compatible

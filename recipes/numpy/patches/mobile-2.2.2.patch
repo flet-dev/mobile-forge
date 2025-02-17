@@ -1,0 +1,13 @@
+diff --git a/vendored-meson/meson/mesonbuild/linkers/linkers.py b/vendored-meson/meson/mesonbuild/linkers/linkers.py
+index 4eec82e..ca4586f 100644
+--- a/vendored-meson/meson/mesonbuild/linkers/linkers.py
++++ b/vendored-meson/meson/mesonbuild/linkers/linkers.py
+@@ -761,7 +761,7 @@ def get_allow_undefined_args(self) -> T.List[str]:
+         return self._apply_prefix('-undefined,dynamic_lookup')
+ 
+     def get_std_shared_module_args(self, options: 'KeyedOptionDictType') -> T.List[str]:
+-        return ['-bundle'] + self._apply_prefix('-undefined,dynamic_lookup')
++        return ['-dynamiclib'] + self._apply_prefix('-undefined,dynamic_lookup')
+ 
+     def get_pie_args(self) -> T.List[str]:
+         return []
