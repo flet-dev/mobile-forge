@@ -11,15 +11,14 @@ requirements:
 # {% if version and version >= (11,0,0) %}
 # pillow >= 11.x
 
-build:
-  backend-args:
-    - -Csetup-args=--pillow-configuration=platform-guessing=disable
+patches:
+  - setup-11.x.patch
 
 # {% else %}
 # pillow <= 10.x
 
 patches:
-  - setup.patch
+  - setup-10.x.patch
 
 # {% endif %}
 
