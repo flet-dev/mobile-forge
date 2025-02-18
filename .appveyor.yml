@@ -19,17 +19,17 @@ environment:
   matrix:
     - job_name: 'Android: pillow 11.1.0'
       job_group: build_android
-      FORGE_ARCH: android
+      FORGE_ARCH: android:arm64-v8a
       FORGE_PACKAGES: >-
         pillow:11.1.0
       BUILD_NUMBER: 1
 
-    - job_name: 'iOS: pillow 11.1.0'
-      job_group: build_ios
-      FORGE_ARCH: iOS
-      FORGE_PACKAGES: >-
-        pillow:11.1.0
-      BUILD_NUMBER: 1
+    # - job_name: 'iOS: pillow 11.1.0'
+    #   job_group: build_ios
+    #   FORGE_ARCH: iOS
+    #   FORGE_PACKAGES: >-
+    #     pillow:11.1.0
+    #   BUILD_NUMBER: 1
 
     # ==================================================
 
