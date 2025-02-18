@@ -1,6 +1,6 @@
 package:
   name: Pillow
-  version: 10.4.0
+  version: 11.1.0
 
 requirements:
   host:
@@ -8,8 +8,13 @@ requirements:
     - flet-libjpeg 3.0.90
     - flet-libfreetype 2.13.3
 
+# {% if version and version <= (10,4,0) %}
+# pillow <= 10.x
+
 patches:
   - setup.patch
+
+# {% endif %}
 
 # {% if sdk != 'android' %}
 build:

@@ -17,18 +17,18 @@ environment:
   MOBILE_FORGE_CACHE_DOWNLOADS_OFF: 1
 
   matrix:
-    - job_name: 'Android: pydantic-core'
+    - job_name: 'Android: pillow 11.1.0'
       job_group: build_android
       FORGE_ARCH: android
       FORGE_PACKAGES: >-
-        pydantic-core:2.29.0
+        pillow:11.1.0
       BUILD_NUMBER: 1
 
-    - job_name: 'iOS: pydantic-core'
+    - job_name: 'iOS: pillow 11.1.0'
       job_group: build_ios
       FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
-        pydantic-core:2.29.0
+        pillow:11.1.0
       BUILD_NUMBER: 1
 
     # ==================================================
