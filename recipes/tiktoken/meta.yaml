@@ -1,0 +1,7 @@
+package:
+  name: tiktoken
+  version: 0.9.0
+
+build:
+  script_env:
+    _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
