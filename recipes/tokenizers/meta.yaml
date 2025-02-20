@@ -2,6 +2,6 @@ package:
   name: tokenizers
   version: 0.21.0
 
-# build:
-#   script_env:
-#     _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
+build:
+  script_env:
+    _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'

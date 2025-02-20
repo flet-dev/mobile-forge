@@ -17,12 +17,12 @@ environment:
   MOBILE_FORGE_CACHE_DOWNLOADS_OFF: 1
 
   matrix:
-    - job_name: 'Android: tokenizers 0.21.0'
-      job_group: build_android
-      FORGE_ARCH: android
-      FORGE_PACKAGES: >-
-        tokenizers:0.21.0
-      BUILD_NUMBER: 1
+    # - job_name: 'Android: tokenizers 0.21.0'
+    #   job_group: build_android
+    #   FORGE_ARCH: android
+    #   FORGE_PACKAGES: >-
+    #     tokenizers:0.21.0
+    #   BUILD_NUMBER: 1
 
     - job_name: 'iOS: tokenizers 0.21.0'
       job_group: build_ios
