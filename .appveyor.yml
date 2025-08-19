@@ -189,6 +189,7 @@ for:
       NDK_VERSION: r27c
 
     install:
+      - sudo apt update
       - sudo apt install sqlite3
       - . .ci/common.sh
 
