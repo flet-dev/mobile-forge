@@ -1,0 +1,3 @@
+package:
+  name: pymongo
+  version: 4.10.1
