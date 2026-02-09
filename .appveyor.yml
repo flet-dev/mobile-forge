@@ -10,20 +10,18 @@ environment:
   MOBILE_FORGE_CACHE_DOWNLOADS_OFF: 1
 
   matrix:
-    - job_name: 'Android: jiter, rpds-py'
+    - job_name: 'Android: pydantic-core 2.33.2'
       job_group: build_android
       FORGE_ARCH: android
       FORGE_PACKAGES: >-
-        jiter:0.8.2
-        rpds-py:0.23.1
+        pydantic-core:2.33.2
       BUILD_NUMBER: 1
 
-    - job_name: 'iOS: jiter, rpds-py'
+    - job_name: 'iOS: pydantic-core 2.33.2'
       job_group: build_ios
       FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
-        jiter:0.8.2
-        rpds-py:0.23.1
+        pydantic-core:2.33.2
       BUILD_NUMBER: 1
 
     # ==================================================
