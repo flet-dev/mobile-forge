@@ -3,11 +3,18 @@
 
 package:
   name: numpy
-  version: 2.1.1
+  version: 2.2.2
 
 requirements:
  build:
   - ninja
+
+patches:
+{% if version and version < (2, 0) %}
+  - mobile-1.26.4.patch
+{% else %}
+  - mobile-2.2.2.patch
+{% endif %}
 
 build:
   script_env:

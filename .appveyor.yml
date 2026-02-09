@@ -5,30 +5,23 @@ skip_branch_with_pr: true
 environment:
   PYTHON_VERSION: 3.12.7
   PYTHON_SHORT_VERSION: 3.12
-  CF_ACCESS_KEY_ID:
-    secure: +m1fzbrEPRecXKCCMn4uA781PAASzJSWAxuJj1c7ctLfWbi5oW4PMnowPK96XtQ5
-  CF_SECRET_ACCESS_KEY:
-    secure: siQTjK+IAmy+zcTSO0d/dnyU/SHC52+gaW8xOT3GFqW8dyRAWr7YXtCU0QvlIC5MFVnbEmgDcDKqINaWN1iD5Cuuw/QAFsF1L/zDnQSvAtE=
-  CF_ENDPOINT_URL:
-    secure: lSQBfrqIXIOAYhA0NGej7Pfll1wOSKTTFwQCl8N8lvI22uI5CA/UjRKaqw6KlIZMcXvqTP1w11CVqC2CWnyM3hK857X2tAe8nkO8KT0DCzw=
-  CF_BUCKET_NAME: flet-simple
   GEMFURY_TOKEN:
     secure: trYGM65OQ1+HYnOYOe/NOHrofLpP3bz64nHwVWPJhiUIYll3MrrQd7ilFNp+zSkI
   MOBILE_FORGE_CACHE_DOWNLOADS_OFF: 1
 
   matrix:
-    - job_name: 'Android: pymongo'
+    - job_name: 'Android: pydantic-core 2.33.2'
       job_group: build_android
       FORGE_ARCH: android
       FORGE_PACKAGES: >-
-        pymongo:4.10.1
+        pydantic-core:2.33.2
       BUILD_NUMBER: 1
 
-    - job_name: 'iOS: pymongo'
+    - job_name: 'iOS: pydantic-core 2.33.2'
       job_group: build_ios
       FORGE_ARCH: iOS
       FORGE_PACKAGES: >-
-        pymongo:4.10.1
+        pydantic-core:2.33.2
       BUILD_NUMBER: 1
 
     # ==================================================
@@ -196,6 +189,7 @@ for:
       NDK_VERSION: r27c
 
     install:
+      - sudo apt update
       - sudo apt install sqlite3
       - . .ci/common.sh
 

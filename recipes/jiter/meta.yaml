@@ -1,6 +1,6 @@
 package:
-  name: pydantic-core
-  version: 2.33.2
+  name: jiter
+  version: 0.8.2
 
 build:
   script_env:

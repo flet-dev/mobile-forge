@@ -1,0 +1,9 @@
+package:
+  name: greenlet
+  version: 3.1.1
+
+# {% if sdk != 'android' %}
+build:
+  script_env:
+    CXXFLAGS: -std=c++14
+# {% endif %}
