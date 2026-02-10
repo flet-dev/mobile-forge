@@ -64,8 +64,10 @@ class Builder(ABC):
         requirements = []
         for requirement in self.package.meta["requirements"][target]:
             try:
-                package, version = requirement.split()
-                if version.startswith("^"):
+                package, version = requirement.split(maxsplit=1)
+                if version.startswith((">=", "<=", "!=", "==", "~=", ">", "<")):
+                    specifier = f"{package}{version}"
+                elif version.startswith("^"):
                     specifier = f"{package}>={version[1:]}"
                 elif version.startswith("~"):
                     specifier = f"{package}~={version[1:]}"
