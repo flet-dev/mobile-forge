@@ -270,11 +270,26 @@ class CrossVEnv:
                 f"_sysconfigdata__{self.host_os.lower()}_{self.arch}-{self.sdk}"
             )
 
-            host_sysconfig = (
+            legacy_host_sysconfig = (
                 self.host_python_home
                 / f"lib/python3.{sys.version_info.minor}"
                 / f"{self.sysconfigdata_name}.py"
             )
+            platform_config_host_sysconfig = (
+                self.host_python_home
+                / "platform-config"
+                / f"{self.arch}-{self.sdk}"
+                / f"{self.sysconfigdata_name}.py"
+            )
+            if legacy_host_sysconfig.is_file():
+                host_sysconfig = legacy_host_sysconfig
+            elif platform_config_host_sysconfig.is_file():
+                host_sysconfig = platform_config_host_sysconfig
+            else:
+                raise RuntimeError(
+                    "Can't find host sysconfig. Tried: "
+                    f"{legacy_host_sysconfig} and {platform_config_host_sysconfig}"
+                )
         else:
             host_sysconfig = next(
                 (self.host_python_home / f"lib/python3.{sys.version_info.minor}").glob(
@@ -283,7 +298,7 @@ class CrossVEnv:
             )
             self.sysconfigdata_name = host_sysconfig.stem
 
-        if not host_sysconfig.is_file():
+        if self.host_os != "iOS" and not host_sysconfig.is_file():
             raise RuntimeError(f"Can't find host sysconfig {host_sysconfig}")
 
         self.location = Path(location).resolve() if location else Path.cwd()
