@@ -22,7 +22,7 @@ class CrossVEnv:
 
     ANDROID_HOST_ARCHS = (
         ("arm64-v8a", "x86_64")
-        if sys.version_info[:2] == (3, 13)
+        if sys.version_info[:2] >= (3, 13)
         else ("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
     )
 
@@ -73,6 +73,12 @@ class CrossVEnv:
         "x86_64": "x86_64-linux-android",
         "x86": "i686-linux-android",
     }
+    ANDROID_PLATFORM_MACHINE = {
+        "arm64-v8a": "aarch64",
+        "armeabi-v7a": "arm",
+        "x86_64": "x86_64",
+        "x86": "i686",
+    }
 
     def __init__(self, sdk, sdk_version, arch):
         self.sdk = sdk
@@ -84,7 +90,7 @@ class CrossVEnv:
         }[self.sdk]
         self.platform_identifier = self._platform_identifier(sdk, sdk_version, arch)
         self.tag = (
-            self._platform_identifier(sdk, sdk_version, arch)
+            self._tag_identifier(sdk, sdk_version, arch)
             .replace("-", "_")
             .replace(".", "_")
         )
@@ -228,9 +234,12 @@ class CrossVEnv:
     @classmethod
     def _platform_identifier(self, sdk, version, arch):
         if sdk == "android":
-            if version is None:
-                version = 21
-            identifier = f"{sdk}-{version}-{arch}"
+            if sys.version_info[:2] >= (3, 13):
+                identifier = f"{sdk}-{self.ANDROID_PLATFORM_MACHINE[arch]}"
+            else:
+                if version is None:
+                    version = 21
+                identifier = f"{sdk}-{version}-{arch}"
         elif sdk in {"iphoneos", "iphonesimulator"}:
             if version is None:
                 version = "13.0"
@@ -246,6 +255,14 @@ class CrossVEnv:
         else:
             raise ValueError(f"Don't know how to build wheels for {sdk}")
         return identifier
+
+    @classmethod
+    def _tag_identifier(self, sdk, version, arch):
+        if sdk == "android":
+            if version is None:
+                version = 21
+            return f"{sdk}-{version}-{arch}"
+        return self._platform_identifier(sdk, version, arch)
 
     def create(
         self,

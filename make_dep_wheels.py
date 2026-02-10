@@ -56,7 +56,7 @@ def get_dependencies(os_name):
 
 def get_targets(os_name):
     if os_name == "android":
-        if sys.version_info[:2] == (3, 13):
+        if sys.version_info[:2] >= (3, 13):
             return ["arm64-v8a", "x86_64"]
         return ["arm64-v8a", "armeabi-v7a", "x86_64", "x86"]
     return [

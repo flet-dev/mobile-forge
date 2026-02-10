@@ -361,6 +361,7 @@ class Builder(ABC):
         if self.cross_venv.sdk == "android":
             cc_parts = cc.split("/")
             env["NDK_ROOT"] = "/".join(cc_parts[: cc_parts.index("toolchains")])
+            env["NDK_SYSROOT"] = str(Path(cc).parent.parent / "sysroot")
             env["ANDROID_ABI"] = self.cross_venv.arch
             env["HOST_TRIPLET"] = self.cross_venv.platform_triplet
 
@@ -749,7 +750,9 @@ class PythonPackageBuilder(Builder):
         env = self.compile_env()
 
         # Set the cross host platform in the environment
-        env["_PYTHON_HOST_PLATFORM"] = self.cross_venv.platform_identifier
+        env["_PYTHON_HOST_PLATFORM"] = self.cross_venv._tag_identifier(
+            self.cross_venv.sdk, self.cross_venv.sdk_version, self.cross_venv.arch
+        )
 
         meson_cross_file = self._create_meson_cross(env)
 
