@@ -6,7 +6,7 @@ requirements:
   build:
     - ninja
     - cmake
-    - git+https://github.com/flet-dev/meson@ios-dynamiclib
+    - meson
   host:
     - pybind11
 # {% if sdk == 'android' %}

@@ -8,7 +8,7 @@ package:
 requirements:
   build:
     - ninja
-    - git+https://github.com/flet-dev/meson@ios-dynamiclib
+    - meson
   host:
     - numpy ^2.0.0
 # {% if sdk == 'android' %}

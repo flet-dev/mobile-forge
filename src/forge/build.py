@@ -104,10 +104,27 @@ class Builder(ABC):
                         [
                             "#!/bin/sh\n",
                             "'''exec' {} \"$0\" \"$@\"\n".format(python_path),
-                            "' '''\n",
+                            "' '''\n\n",
                         ]
                         + lines[1:]
                     )
+            elif (
+                len(lines) > 2
+                and lines[0].strip() == "#!/bin/sh"
+                and lines[1].startswith("'''exec' ")
+                and lines[2].startswith("' '''")
+                and lines[2].strip() != "' '''"
+            ):
+                # Repair legacy malformed shim output where the separator line was
+                # accidentally merged with Python code (e.g. "' '''import sys").
+                log(self.log_file, f"Repairing malformed host shim: {shim}")
+                suffix = lines[2][len("' '''") :]
+                repaired = [lines[0], lines[1], "' '''\n"]
+                if suffix:
+                    repaired.append(suffix)
+                repaired += lines[3:]
+                with open(shim, "w") as f:
+                    f.writelines(repaired)
 
     @abstractmethod
     def download_source_url(self): ...
