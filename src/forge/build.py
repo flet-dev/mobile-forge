@@ -258,6 +258,7 @@ class Builder(ABC):
         )
         cflags = self.cross_venv.sysconfig_data["CFLAGS"]
         cppflags = self.cross_venv.sysconfig_data["CPPFLAGS"]
+        ndk_sysroot = None
 
         # Add install root include
         if (install_root / "include").is_dir():
@@ -278,6 +279,10 @@ class Builder(ABC):
                 cflags += f" -I{self.cross_venv.sdk_root}/usr/include"
 
             cppflags += f" -mios-version-min={self.cross_venv.sdk_version}"
+        else:
+            ndk_sysroot = Path(cc).parent.parent / "sysroot"
+            if (ndk_sysroot / "usr" / "include").is_dir():
+                cflags += f" -I{ndk_sysroot}/usr/include"
 
         ldflags = self.cross_venv.sysconfig_data["LDFLAGS"]
 
@@ -287,6 +292,22 @@ class Builder(ABC):
         # Add install root lib
         if (install_root / "lib").is_dir():
             ldflags += f" -L{install_root}/lib"
+
+        if self.cross_venv.sdk == "android" and ndk_sysroot:
+            ndk_triplet_lib = (
+                ndk_sysroot
+                / "usr"
+                / "lib"
+                / self.cross_venv.platform_triplet
+                / str(self.cross_venv.sdk_version)
+            )
+            ndk_arch_lib = (
+                ndk_sysroot / "usr" / "lib" / self.cross_venv.platform_triplet
+            )
+            if ndk_triplet_lib.is_dir():
+                ldflags += f" -L{ndk_triplet_lib}"
+            elif ndk_arch_lib.is_dir():
+                ldflags += f" -L{ndk_arch_lib}"
 
         # cargo_ldflags = re.sub(r"-march=[\w-]+", "", ldflags)
         cargo_ldflags = " -L{}/lib".format(self.cross_venv.sysconfig_data["prefix"])
@@ -361,7 +382,9 @@ class Builder(ABC):
         if self.cross_venv.sdk == "android":
             cc_parts = cc.split("/")
             env["NDK_ROOT"] = "/".join(cc_parts[: cc_parts.index("toolchains")])
-            env["NDK_SYSROOT"] = str(Path(cc).parent.parent / "sysroot")
+            env["NDK_SYSROOT"] = str(
+                ndk_sysroot or (Path(cc).parent.parent / "sysroot")
+            )
             env["ANDROID_ABI"] = self.cross_venv.arch
             env["HOST_TRIPLET"] = self.cross_venv.platform_triplet
 
