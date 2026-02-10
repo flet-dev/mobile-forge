@@ -54,6 +54,8 @@ jobs:
           set -euxo pipefail
 
           . .ci/common.sh
+          export MOBILE_FORGE_ANDROID_SUPPORT_PATH=""
+          export MOBILE_FORGE_IOS_SUPPORT_PATH=""
 
           if [[ "$PLATFORM" == "android" ]]; then
             sudo apt-get update
