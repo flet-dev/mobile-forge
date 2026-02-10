@@ -8,7 +8,7 @@ requirements:
     - flet-libjpeg 3.0.90
     - flet-libfreetype 2.13.3
 
-# {% if version and version >= (11,0,0) %}
+# {% if not version or version >= (11,0,0) %}
 # pillow >= 11.x
 
 patches:
