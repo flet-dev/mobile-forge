@@ -20,13 +20,14 @@ class CrossVEnv:
         "watchOS": "4.0",
     }
 
+    ANDROID_HOST_ARCHS = (
+        ("arm64-v8a", "x86_64")
+        if sys.version_info[:2] == (3, 13)
+        else ("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+    )
+
     HOST_SDKS = {
-        "android": [
-            ("android", "arm64-v8a"),
-            ("android", "armeabi-v7a"),
-            ("android", "x86_64"),
-            ("android", "x86"),
-        ],
+        "android": [("android", arch) for arch in ANDROID_HOST_ARCHS],
         "iOS": [
             ("iphoneos", "arm64"),
             ("iphonesimulator", "arm64"),
