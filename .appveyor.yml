@@ -186,7 +186,7 @@ for:
 
     environment:
       APPVEYOR_BUILD_WORKER_IMAGE: ubuntu-gce-c
-      NDK_VERSION: r27c
+      NDK_VERSION: r27d
 
     install:
       - sudo apt update

@@ -457,9 +457,23 @@ class Builder(ABC):
         with filename.open("w", encoding="utf-8") as f:
             generator.Generator(f, maxheaderlen=0).flatten(msg)
 
+    @property
+    def wheel_tag(self) -> str:
+        return f"py3-none-{self.cross_venv.tag}"
+
     def fix_wheel(self, wheel_dir: Path):
 
         log(self.log_file, f"[{self.cross_venv}] Fixing wheel contents")
+
+        # Normalize wheel tags to forge platform tags so repacked wheels use
+        # android_24_arm64_v8a / ios_13_0_arm64_iphoneos style platform tags.
+        wheel_metadata_path = next(wheel_dir.glob("*.dist-info")) / "WHEEL"
+        wheel_metadata = self.read_message_file(wheel_metadata_path)
+        if "Tag" in wheel_metadata:
+            del wheel_metadata["Tag"]
+        wheel_metadata["Tag"] = self.wheel_tag
+        self.write_message_file(wheel_metadata_path, wheel_metadata)
+
         if self.cross_venv.sdk == "android":
             env = self.compile_env()
 
@@ -551,7 +565,7 @@ class SimplePackageBuilder(Builder):
                 "Root-Is-Purelib": "false",
                 "Generator": "mobile-forge",
                 "Build": build_num,
-                "Tag": f"py3-none-{self.cross_venv.tag}",
+                "Tag": self.wheel_tag,
             },
         )
         self.write_message_file(
@@ -655,6 +669,11 @@ class PythonPackageBuilder(Builder):
             / "logs"
             / f"{self.package.name}-{self.package.version}-cp3{sys.version_info.minor}-{self.cross_venv.tag}.log"
         )
+
+    @property
+    def wheel_tag(self) -> str:
+        py_tag = f"cp3{sys.version_info.minor}"
+        return f"{py_tag}-{py_tag}-{self.cross_venv.tag}"
 
     def download_source_url(self):
         return get_pypi_source_urls(self.package.name)[self.package.version]
