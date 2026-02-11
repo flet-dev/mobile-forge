@@ -105,6 +105,7 @@ class CrossVEnv:
         self._scheme_paths = None
         self._install_root = None
         self._sdk_root = None
+        self.host_sysconfig = None
 
     def __str__(self):
         return self.venv_name
@@ -314,6 +315,8 @@ class CrossVEnv:
                 )
             )
             self.sysconfigdata_name = host_sysconfig.stem
+
+        self.host_sysconfig = host_sysconfig
 
         if self.host_os != "iOS" and not host_sysconfig.is_file():
             raise RuntimeError(f"Can't find host sysconfig {host_sysconfig}")

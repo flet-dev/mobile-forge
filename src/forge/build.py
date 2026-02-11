@@ -378,8 +378,14 @@ class Builder(ABC):
             "PYO3_CROSS_PYTHON_VERSION": self.cross_venv.sysconfig_data[
                 "py_version_short"
             ],
-            "PYO3_CROSS_LIB_DIR": "{}/lib".format(
-                self.cross_venv.sysconfig_data["prefix"]
+            # pyo3 expects a directory containing _sysconfigdata__*.py.
+            # Newer Apple support layouts place this outside prefix/lib.
+            "PYO3_CROSS_LIB_DIR": str(
+                (
+                    self.cross_venv.host_sysconfig.parent
+                    if self.cross_venv.host_sysconfig is not None
+                    else Path(self.cross_venv.sysconfig_data["prefix"]) / "lib"
+                )
             ),
         }
         env.update(kwargs)
