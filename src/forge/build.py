@@ -265,16 +265,8 @@ class Builder(ABC):
         ar = sysconfig_data["AR"]
         cc = sysconfig_data["CC"]
         cxx = sysconfig_data["CXX"]
-        strip = (
-            str(Path(ar).parent.joinpath("llvm-strip"))
-            if ar and self.cross_venv.sdk == "android"
-            else "strip"
-        )
-        ranlib = (
-            str(Path(ar).parent.joinpath("llvm-ranlib"))
-            if ar and self.cross_venv.sdk == "android"
-            else "ranlib"
-        )
+        strip = "strip"
+        ranlib = "ranlib"
         cflags = self.cross_venv.sysconfig_data["CFLAGS"]
         cppflags = self.cross_venv.sysconfig_data["CPPFLAGS"]
         ndk_sysroot = None
@@ -315,9 +307,26 @@ class Builder(ABC):
                         cxx = str(ndk_bin / Path(cxx).name)
                     if not Path(ar).is_file():
                         ar = str(ndk_bin / Path(ar).name)
+                    if not Path(strip).is_file():
+                        strip = str(ndk_bin / "llvm-strip")
+                    if not Path(ranlib).is_file():
+                        ranlib = str(ndk_bin / "llvm-ranlib")
+
+            # Derive strip/ranlib from the final AR location when available.
+            if ar:
+                ar_parent = Path(ar).parent
+                derived_strip = ar_parent / "llvm-strip"
+                derived_ranlib = ar_parent / "llvm-ranlib"
+                if derived_strip.is_file():
+                    strip = str(derived_strip)
+                if derived_ranlib.is_file():
+                    ranlib = str(derived_ranlib)
             ndk_sysroot = Path(cc).parent.parent / "sysroot"
             if (ndk_sysroot / "usr" / "include").is_dir():
                 cflags += f" -I{ndk_sysroot}/usr/include"
+        if self.cross_venv.sdk != "android":
+            strip = "strip"
+            ranlib = "ranlib"
 
         ldflags = self.cross_venv.sysconfig_data["LDFLAGS"]
 
