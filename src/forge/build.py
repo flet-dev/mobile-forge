@@ -632,6 +632,8 @@ class SimplePackageBuilder(Builder):
 
         # Re-pack the wheel file
         log(self.log_file, f"\n[{self.cross_venv}] Packing wheel")
+        dist_dir = Path.cwd() / "dist"
+        dist_dir.mkdir(parents=True, exist_ok=True)
         self.cross_venv.run(
             self.log_file,
             [
@@ -641,7 +643,7 @@ class SimplePackageBuilder(Builder):
                 "pack",
                 str(self.build_path / "wheel"),
                 "--dest-dir",
-                str(Path.cwd() / "dist"),
+                str(dist_dir),
                 "--build-number",
                 str(build_num),
             ],
@@ -916,6 +918,8 @@ class PythonPackageBuilder(Builder):
 
         # re-pack the wheel to "dist"
         log(self.log_file, f"\n[{self.cross_venv}] Packing wheel to dist")
+        dist_dir = Path.cwd() / "dist"
+        dist_dir.mkdir(parents=True, exist_ok=True)
         pack_args = [
             "build-python",
             "-m",
@@ -923,7 +927,7 @@ class PythonPackageBuilder(Builder):
             "pack",
             str(tmp_wheel_dir),
             "--dest-dir",
-            str(Path.cwd() / "dist"),
+            str(dist_dir),
         ]
         if self.package.meta["build"]["number"]:
             pack_args.extend(
