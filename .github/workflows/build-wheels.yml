@@ -66,7 +66,7 @@ jobs:
             mkdir -p "$python_android_dir"
             tar -xzf "python-android-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz" -C "$python_android_dir"
 
-            .ci/install_ndk.sh
+            . .ci/install_ndk.sh
 
             curl https://sh.rustup.rs -sSf | sh -s -- -y
             . "$HOME/.cargo/env"

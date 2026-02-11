@@ -299,6 +299,22 @@ class Builder(ABC):
 
             cppflags += f" -mios-version-min={self.cross_venv.sdk_version}"
         else:
+            # Some Python Android support archives reference an embedded NDK path
+            # that isn't present in CI. If NDK_HOME is set, re-point missing
+            # compiler/binutils paths to that installed NDK toolchain.
+            ndk_home = os.environ.get("NDK_HOME")
+            if ndk_home:
+                prebuilt_dirs = list(
+                    (Path(ndk_home) / "toolchains" / "llvm" / "prebuilt").glob("*")
+                )
+                if prebuilt_dirs:
+                    ndk_bin = prebuilt_dirs[0] / "bin"
+                    if not Path(cc).is_file():
+                        cc = str(ndk_bin / Path(cc).name)
+                    if not Path(cxx).is_file():
+                        cxx = str(ndk_bin / Path(cxx).name)
+                    if not Path(ar).is_file():
+                        ar = str(ndk_bin / Path(ar).name)
             ndk_sysroot = Path(cc).parent.parent / "sysroot"
             if (ndk_sysroot / "usr" / "include").is_dir():
                 cflags += f" -I{ndk_sysroot}/usr/include"
