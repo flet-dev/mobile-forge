@@ -12,6 +12,7 @@ if [ $CROSS_VENV_SDK == "android" ]; then
         -DCRC32C_USE_GLOG=0 \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_SHARED_LIBS=1 \
+        -DCMAKE_SHARED_LINKER_FLAGS="$LDFLAGS" \
         -DCMAKE_INSTALL_PREFIX="$PREFIX"
 else
     cmake \

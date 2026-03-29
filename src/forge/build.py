@@ -353,9 +353,16 @@ class Builder(ABC):
             elif ndk_arch_lib.is_dir():
                 ldflags += f" -L{ndk_arch_lib}"
 
+            # 16 KB page alignment required by Google Play (Android 15+)
+            ldflags += " -Wl,-z,max-page-size=16384"
+
         # cargo_ldflags = re.sub(r"-march=[\w-]+", "", ldflags)
         cargo_ldflags = " -L{}/lib".format(self.cross_venv.sysconfig_data["prefix"])
         cargo_ldflags += " -C link-arg=-undefined -C link-arg=dynamic_lookup"
+
+        if self.cross_venv.sdk == "android":
+            # 16 KB page alignment required by Google Play (Android 15+)
+            cargo_ldflags += " -C link-arg=-z -C link-arg=max-page-size=16384"
 
         if self.cross_venv.sdk != "android":
             # Replace any hard-coded reference to -isysroot <sysroot> with the actual reference
