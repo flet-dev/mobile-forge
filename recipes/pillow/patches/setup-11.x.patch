@@ -25,3 +25,16 @@ diff --git a/setup.py b/setup.py
 
          #
          # add platform directories
+@@ -684,6 +684,12 @@ class pil_build_ext(build_ext):
+         self.compiler.include_dirs = include_dirs + self.compiler.include_dirs
+
+         #
++        # When cross-compiling, remove host system include/lib paths that
++        # leak in from the build Python's sysconfig (e.g. /usr/include).
++        if self.disable_platform_guessing:
++            self.compiler.include_dirs = [d for d in self.compiler.include_dirs if not d.startswith("/usr/")]
++            self.compiler.library_dirs = [d for d in self.compiler.library_dirs if not d.startswith("/usr/")]
++        #
+         # look for available libraries
+
+         feature = self.feature
