@@ -64,8 +64,10 @@ class Builder(ABC):
         requirements = []
         for requirement in self.package.meta["requirements"][target]:
             try:
-                package, version = requirement.split()
-                if version.startswith("^"):
+                package, version = requirement.split(maxsplit=1)
+                if version.startswith((">=", "<=", "!=", "==", "~=", ">", "<")):
+                    specifier = f"{package}{version}"
+                elif version.startswith("^"):
                     specifier = f"{package}>={version[1:]}"
                 elif version.startswith("~"):
                     specifier = f"{package}~={version[1:]}"
@@ -102,10 +104,27 @@ class Builder(ABC):
                         [
                             "#!/bin/sh\n",
                             "'''exec' {} \"$0\" \"$@\"\n".format(python_path),
-                            "' '''\n",
+                            "' '''\n\n",
                         ]
                         + lines[1:]
                     )
+            elif (
+                len(lines) > 2
+                and lines[0].strip() == "#!/bin/sh"
+                and lines[1].startswith("'''exec' ")
+                and lines[2].startswith("' '''")
+                and lines[2].strip() != "' '''"
+            ):
+                # Repair legacy malformed shim output where the separator line was
+                # accidentally merged with Python code (e.g. "' '''import sys").
+                log(self.log_file, f"Repairing malformed host shim: {shim}")
+                suffix = lines[2][len("' '''") :]
+                repaired = [lines[0], lines[1], "' '''\n"]
+                if suffix:
+                    repaired.append(suffix)
+                repaired += lines[3:]
+                with open(shim, "w") as f:
+                    f.writelines(repaired)
 
     @abstractmethod
     def download_source_url(self): ...
@@ -246,18 +265,11 @@ class Builder(ABC):
         ar = sysconfig_data["AR"]
         cc = sysconfig_data["CC"]
         cxx = sysconfig_data["CXX"]
-        strip = (
-            str(Path(ar).parent.joinpath("llvm-strip"))
-            if ar and self.cross_venv.sdk == "android"
-            else "strip"
-        )
-        ranlib = (
-            str(Path(ar).parent.joinpath("llvm-ranlib"))
-            if ar and self.cross_venv.sdk == "android"
-            else "ranlib"
-        )
+        strip = "strip"
+        ranlib = "ranlib"
         cflags = self.cross_venv.sysconfig_data["CFLAGS"]
         cppflags = self.cross_venv.sysconfig_data["CPPFLAGS"]
+        ndk_sysroot = None
 
         # Add install root include
         if (install_root / "include").is_dir():
@@ -278,6 +290,43 @@ class Builder(ABC):
                 cflags += f" -I{self.cross_venv.sdk_root}/usr/include"
 
             cppflags += f" -mios-version-min={self.cross_venv.sdk_version}"
+        else:
+            # Some Python Android support archives reference an embedded NDK path
+            # that isn't present in CI. If NDK_HOME is set, re-point missing
+            # compiler/binutils paths to that installed NDK toolchain.
+            ndk_home = os.environ.get("NDK_HOME")
+            if ndk_home:
+                prebuilt_dirs = list(
+                    (Path(ndk_home) / "toolchains" / "llvm" / "prebuilt").glob("*")
+                )
+                if prebuilt_dirs:
+                    ndk_bin = prebuilt_dirs[0] / "bin"
+                    if not Path(cc).is_file():
+                        cc = str(ndk_bin / Path(cc).name)
+                    if not Path(cxx).is_file():
+                        cxx = str(ndk_bin / Path(cxx).name)
+                    if not Path(ar).is_file():
+                        ar = str(ndk_bin / Path(ar).name)
+                    if not Path(strip).is_file():
+                        strip = str(ndk_bin / "llvm-strip")
+                    if not Path(ranlib).is_file():
+                        ranlib = str(ndk_bin / "llvm-ranlib")
+
+            # Derive strip/ranlib from the final AR location when available.
+            if ar:
+                ar_parent = Path(ar).parent
+                derived_strip = ar_parent / "llvm-strip"
+                derived_ranlib = ar_parent / "llvm-ranlib"
+                if derived_strip.is_file():
+                    strip = str(derived_strip)
+                if derived_ranlib.is_file():
+                    ranlib = str(derived_ranlib)
+            ndk_sysroot = Path(cc).parent.parent / "sysroot"
+            if (ndk_sysroot / "usr" / "include").is_dir():
+                cflags += f" -I{ndk_sysroot}/usr/include"
+        if self.cross_venv.sdk != "android":
+            strip = "strip"
+            ranlib = "ranlib"
 
         ldflags = self.cross_venv.sysconfig_data["LDFLAGS"]
 
@@ -288,9 +337,32 @@ class Builder(ABC):
         if (install_root / "lib").is_dir():
             ldflags += f" -L{install_root}/lib"
 
+        if self.cross_venv.sdk == "android" and ndk_sysroot:
+            ndk_triplet_lib = (
+                ndk_sysroot
+                / "usr"
+                / "lib"
+                / self.cross_venv.platform_triplet
+                / str(self.cross_venv.sdk_version)
+            )
+            ndk_arch_lib = (
+                ndk_sysroot / "usr" / "lib" / self.cross_venv.platform_triplet
+            )
+            if ndk_triplet_lib.is_dir():
+                ldflags += f" -L{ndk_triplet_lib}"
+            elif ndk_arch_lib.is_dir():
+                ldflags += f" -L{ndk_arch_lib}"
+
+            # 16 KB page alignment required by Google Play (Android 15+)
+            ldflags += " -Wl,-z,max-page-size=16384"
+
         # cargo_ldflags = re.sub(r"-march=[\w-]+", "", ldflags)
         cargo_ldflags = " -L{}/lib".format(self.cross_venv.sysconfig_data["prefix"])
         cargo_ldflags += " -C link-arg=-undefined -C link-arg=dynamic_lookup"
+
+        if self.cross_venv.sdk == "android":
+            # 16 KB page alignment required by Google Play (Android 15+)
+            cargo_ldflags += " -C link-arg=-z -C link-arg=max-page-size=16384"
 
         if self.cross_venv.sdk != "android":
             # Replace any hard-coded reference to -isysroot <sysroot> with the actual reference
@@ -338,8 +410,14 @@ class Builder(ABC):
             "PYO3_CROSS_PYTHON_VERSION": self.cross_venv.sysconfig_data[
                 "py_version_short"
             ],
-            "PYO3_CROSS_LIB_DIR": "{}/lib".format(
-                self.cross_venv.sysconfig_data["prefix"]
+            # pyo3 expects a directory containing _sysconfigdata__*.py.
+            # Newer Apple support layouts place this outside prefix/lib.
+            "PYO3_CROSS_LIB_DIR": str(
+                (
+                    self.cross_venv.host_sysconfig.parent
+                    if self.cross_venv.host_sysconfig is not None
+                    else Path(self.cross_venv.sysconfig_data["prefix"]) / "lib"
+                )
             ),
         }
         env.update(kwargs)
@@ -361,6 +439,9 @@ class Builder(ABC):
         if self.cross_venv.sdk == "android":
             cc_parts = cc.split("/")
             env["NDK_ROOT"] = "/".join(cc_parts[: cc_parts.index("toolchains")])
+            env["NDK_SYSROOT"] = str(
+                ndk_sysroot or (Path(cc).parent.parent / "sysroot")
+            )
             env["ANDROID_ABI"] = self.cross_venv.arch
             env["HOST_TRIPLET"] = self.cross_venv.platform_triplet
 
@@ -431,9 +512,23 @@ class Builder(ABC):
         with filename.open("w", encoding="utf-8") as f:
             generator.Generator(f, maxheaderlen=0).flatten(msg)
 
+    @property
+    def wheel_tag(self) -> str:
+        return f"py3-none-{self.cross_venv.tag}"
+
     def fix_wheel(self, wheel_dir: Path):
 
         log(self.log_file, f"[{self.cross_venv}] Fixing wheel contents")
+
+        # Normalize wheel tags to forge platform tags so repacked wheels use
+        # android_24_arm64_v8a / ios_13_0_arm64_iphoneos style platform tags.
+        wheel_metadata_path = next(wheel_dir.glob("*.dist-info")) / "WHEEL"
+        wheel_metadata = self.read_message_file(wheel_metadata_path)
+        if "Tag" in wheel_metadata:
+            del wheel_metadata["Tag"]
+        wheel_metadata["Tag"] = self.wheel_tag
+        self.write_message_file(wheel_metadata_path, wheel_metadata)
+
         if self.cross_venv.sdk == "android":
             env = self.compile_env()
 
@@ -525,7 +620,7 @@ class SimplePackageBuilder(Builder):
                 "Root-Is-Purelib": "false",
                 "Generator": "mobile-forge",
                 "Build": build_num,
-                "Tag": f"py3-none-{self.cross_venv.tag}",
+                "Tag": self.wheel_tag,
             },
         )
         self.write_message_file(
@@ -544,6 +639,8 @@ class SimplePackageBuilder(Builder):
 
         # Re-pack the wheel file
         log(self.log_file, f"\n[{self.cross_venv}] Packing wheel")
+        dist_dir = Path.cwd() / "dist"
+        dist_dir.mkdir(parents=True, exist_ok=True)
         self.cross_venv.run(
             self.log_file,
             [
@@ -553,7 +650,7 @@ class SimplePackageBuilder(Builder):
                 "pack",
                 str(self.build_path / "wheel"),
                 "--dest-dir",
-                str(Path.cwd() / "dist"),
+                str(dist_dir),
                 "--build-number",
                 str(build_num),
             ],
@@ -629,6 +726,11 @@ class PythonPackageBuilder(Builder):
             / "logs"
             / f"{self.package.name}-{self.package.version}-cp3{sys.version_info.minor}-{self.cross_venv.tag}.log"
         )
+
+    @property
+    def wheel_tag(self) -> str:
+        py_tag = f"cp3{sys.version_info.minor}"
+        return f"{py_tag}-{py_tag}-{self.cross_venv.tag}"
 
     def download_source_url(self):
         return get_pypi_source_urls(self.package.name)[self.package.version]
@@ -749,7 +851,9 @@ class PythonPackageBuilder(Builder):
         env = self.compile_env()
 
         # Set the cross host platform in the environment
-        env["_PYTHON_HOST_PLATFORM"] = self.cross_venv.platform_identifier
+        env["_PYTHON_HOST_PLATFORM"] = self.cross_venv._tag_identifier(
+            self.cross_venv.sdk, self.cross_venv.sdk_version, self.cross_venv.arch
+        )
 
         meson_cross_file = self._create_meson_cross(env)
 
@@ -821,6 +925,8 @@ class PythonPackageBuilder(Builder):
 
         # re-pack the wheel to "dist"
         log(self.log_file, f"\n[{self.cross_venv}] Packing wheel to dist")
+        dist_dir = Path.cwd() / "dist"
+        dist_dir.mkdir(parents=True, exist_ok=True)
         pack_args = [
             "build-python",
             "-m",
@@ -828,7 +934,7 @@ class PythonPackageBuilder(Builder):
             "pack",
             str(tmp_wheel_dir),
             "--dest-dir",
-            str(Path.cwd() / "dist"),
+            str(dist_dir),
         ]
         if self.package.meta["build"]["number"]:
             pack_args.extend(

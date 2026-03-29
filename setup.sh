@@ -146,19 +146,21 @@ if [ ! -z "$MOBILE_FORGE_ANDROID_SUPPORT_PATH" ]; then
         return
     fi
 
-    if [ ! -e $MOBILE_FORGE_ANDROID_SUPPORT_PATH/install/android/armeabi-v7a/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
-        echo "MOBILE_FORGE_ANDROID_SUPPORT_PATH does not appear to contain a Python $PYTHON_VERSION Android armeabi-v7a device binary."
-        return
-    fi
-
     if [ ! -e $MOBILE_FORGE_ANDROID_SUPPORT_PATH/install/android/x86_64/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
         echo "MOBILE_FORGE_ANDROID_SUPPORT_PATH does not appear to contain a Python $PYTHON_VERSION Android x86_64 device binary."
         return
     fi
 
-    if [ ! -e $MOBILE_FORGE_ANDROID_SUPPORT_PATH/install/android/x86/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
-        echo "MOBILE_FORGE_ANDROID_SUPPORT_PATH does not appear to contain a Python $PYTHON_VERSION Android x86 device binary."
-        return
+    if [ "$PYTHON_VER" = "3.12" ]; then
+        if [ ! -e $MOBILE_FORGE_ANDROID_SUPPORT_PATH/install/android/armeabi-v7a/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
+            echo "MOBILE_FORGE_ANDROID_SUPPORT_PATH does not appear to contain a Python $PYTHON_VERSION Android armeabi-v7a device binary."
+            return
+        fi
+
+        if [ ! -e $MOBILE_FORGE_ANDROID_SUPPORT_PATH/install/android/x86/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
+            echo "MOBILE_FORGE_ANDROID_SUPPORT_PATH does not appear to contain a Python $PYTHON_VERSION Android x86 device binary."
+            return
+        fi
     fi
 
     echo "MOBILE_FORGE_ANDROID_SUPPORT_PATH: $MOBILE_FORGE_ANDROID_SUPPORT_PATH"

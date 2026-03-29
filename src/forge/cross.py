@@ -20,13 +20,14 @@ class CrossVEnv:
         "watchOS": "4.0",
     }
 
+    ANDROID_HOST_ARCHS = (
+        ("arm64-v8a", "x86_64")
+        if sys.version_info[:2] >= (3, 13)
+        else ("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+    )
+
     HOST_SDKS = {
-        "android": [
-            ("android", "arm64-v8a"),
-            ("android", "armeabi-v7a"),
-            ("android", "x86_64"),
-            ("android", "x86"),
-        ],
+        "android": [("android", arch) for arch in ANDROID_HOST_ARCHS],
         "iOS": [
             ("iphoneos", "arm64"),
             ("iphonesimulator", "arm64"),
@@ -72,6 +73,12 @@ class CrossVEnv:
         "x86_64": "x86_64-linux-android",
         "x86": "i686-linux-android",
     }
+    ANDROID_PLATFORM_MACHINE = {
+        "arm64-v8a": "aarch64",
+        "armeabi-v7a": "arm",
+        "x86_64": "x86_64",
+        "x86": "i686",
+    }
 
     def __init__(self, sdk, sdk_version, arch):
         self.sdk = sdk
@@ -83,7 +90,7 @@ class CrossVEnv:
         }[self.sdk]
         self.platform_identifier = self._platform_identifier(sdk, sdk_version, arch)
         self.tag = (
-            self._platform_identifier(sdk, sdk_version, arch)
+            self._tag_identifier(sdk, sdk_version, arch)
             .replace("-", "_")
             .replace(".", "_")
         )
@@ -98,6 +105,7 @@ class CrossVEnv:
         self._scheme_paths = None
         self._install_root = None
         self._sdk_root = None
+        self.host_sysconfig = None
 
     def __str__(self):
         return self.venv_name
@@ -227,9 +235,12 @@ class CrossVEnv:
     @classmethod
     def _platform_identifier(self, sdk, version, arch):
         if sdk == "android":
-            if version is None:
-                version = 21
-            identifier = f"{sdk}-{version}-{arch}"
+            if sys.version_info[:2] >= (3, 13):
+                identifier = f"{sdk}-{self.ANDROID_PLATFORM_MACHINE[arch]}"
+            else:
+                if version is None:
+                    version = 21
+                identifier = f"{sdk}-{version}-{arch}"
         elif sdk in {"iphoneos", "iphonesimulator"}:
             if version is None:
                 version = "13.0"
@@ -245,6 +256,14 @@ class CrossVEnv:
         else:
             raise ValueError(f"Don't know how to build wheels for {sdk}")
         return identifier
+
+    @classmethod
+    def _tag_identifier(self, sdk, version, arch):
+        if sdk == "android":
+            if version is None:
+                version = 21
+            return f"{sdk}-{version}-{arch}"
+        return self._platform_identifier(sdk, version, arch)
 
     def create(
         self,
@@ -296,6 +315,8 @@ class CrossVEnv:
                 )
             )
             self.sysconfigdata_name = host_sysconfig.stem
+
+        self.host_sysconfig = host_sysconfig
 
         if self.host_os != "iOS" and not host_sysconfig.is_file():
             raise RuntimeError(f"Can't find host sysconfig {host_sysconfig}")

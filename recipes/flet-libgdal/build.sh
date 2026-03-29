@@ -11,6 +11,7 @@ if [ $CROSS_VENV_SDK == "android" ]; then
         -DANDROID_ABI=$ANDROID_ABI \
         -DCMAKE_TOOLCHAIN_FILE=$NDK_ROOT/build/cmake/android.toolchain.cmake \
         -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_SHARED_LINKER_FLAGS="$LDFLAGS" \
         -DCMAKE_INSTALL_PREFIX="$PREFIX" \
         -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER \
         -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER \

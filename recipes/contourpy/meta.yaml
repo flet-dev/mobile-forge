@@ -6,11 +6,11 @@ requirements:
   build:
     - ninja
     - cmake
-    - git+https://github.com/flet-dev/meson@ios-dynamiclib
+    - meson
   host:
     - pybind11
 # {% if sdk == 'android' %}
-    - flet-libcpp-shared 27.2.12479018
+    - flet-libcpp-shared >=27.2.12479018
 # {% endif %}
 
 build:

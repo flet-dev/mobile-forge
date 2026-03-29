@@ -12,6 +12,7 @@ if [ $CROSS_VENV_SDK == "android" ]; then
         -DCMAKE_TOOLCHAIN_FILE=$NDK_ROOT/build/cmake/android.toolchain.cmake \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_SHARED_LIBS=1 \
+        -DCMAKE_SHARED_LINKER_FLAGS="$LDFLAGS" \
         -DCMAKE_INSTALL_PREFIX="$PREFIX"
 else
     echo "flet-libpyjni library can be built for Android only."

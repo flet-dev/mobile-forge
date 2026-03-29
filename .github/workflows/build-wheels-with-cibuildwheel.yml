@@ -1,0 +1,44 @@
+name: wheels-android
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build_android_wheels:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"  # cibuildwheel runner python; not the target
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build Android wheels
+        env:
+          CIBW_PLATFORM: android
+          CIBW_BUILD: "cp313-android_*"
+          CIBW_ARCHS_ANDROID: "arm64_v8a x86_64"
+          ANDROID_API_LEVEL: "24"
+        run: |
+          wget https://files.pythonhosted.org/packages/04/24/4b2031d72e840ce4c1ccb255f693b15c334757fc50023e4db9537080b8c4/websockets-16.0.tar.gz
+          tar xf websockets-16.0.tar.gz
+          cd websockets-16.0
+          python -m pip install -U pip cibuildwheel
+          cibuildwheel --output-dir wheelhouse
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-android
+          path: websockets-16.0/wheelhouse/*.whl

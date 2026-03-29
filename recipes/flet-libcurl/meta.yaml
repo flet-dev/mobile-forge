@@ -12,7 +12,9 @@ build:
 
 requirements:
   host:
-    - openssl 3.0.15
+    # {% if sdk in ['iphoneos', 'iphonesimulator'] %}
+    - openssl >=3.0.15
+    # {% endif %}
     - flet-libpsl 0.21.5
 
 patches:

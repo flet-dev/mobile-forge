@@ -16,6 +16,56 @@ import tempfile
 from pathlib import Path
 
 
+def get_versions_path(os_name):
+    support = Path(
+        os.environ[
+            (
+                "MOBILE_FORGE_ANDROID_SUPPORT_PATH"
+                if os_name == "android"
+                else "MOBILE_FORGE_IOS_SUPPORT_PATH"
+            )
+        ]
+    )
+    return (
+        support
+        / "support"
+        / ".".join(sys.version.split(".")[:2])
+        / os_name
+        / "VERSIONS"
+    )
+
+
+def get_dependencies(os_name):
+    versions_file = get_versions_path(os_name)
+    dependencies = []
+    with versions_file.open(encoding="utf-8") as f:
+        for line in f:
+            match = re.match(r"^([^:]+):\s+(.+)$", line.strip())
+            if not match:
+                continue
+            key = match[1]
+            if (
+                key.lower() == "python version"
+                or key.lower() == "build"
+                or key.lower().startswith("min ")
+            ):
+                continue
+            dependencies.append(key)
+    return dependencies
+
+
+def get_targets(os_name):
+    if os_name == "android":
+        if sys.version_info[:2] >= (3, 13):
+            return ["arm64-v8a", "x86_64"]
+        return ["arm64-v8a", "armeabi-v7a", "x86_64", "x86"]
+    return [
+        "iphoneos.arm64",
+        "iphonesimulator.arm64",
+        "iphonesimulator.x86_64",
+    ]
+
+
 def make_wheel(package, os_name, target):
     """Create a target-specific wheel for a given package.
 
@@ -26,30 +76,15 @@ def make_wheel(package, os_name, target):
     :param os_name: The OS name to target (e.g., "iOS")
     :param target: The target specifier (e.g., "iphoneos.arm64")
     """
-    support = Path(
-        os.environ[
-            (
-                "MOBILE_FORGE_ANDROID_SUPPORT_PATH"
-                if os_name == "android"
-                else "MOBILE_FORGE_IOS_SUPPORT_PATH"
-            )
-        ]
-    )
-
-    versions_file = (
-        support
-        / "support"
-        / ".".join(sys.version.split(".")[:2])
-        / os_name
-        / "VERSIONS"
-    )
+    support = get_versions_path(os_name).parents[3]
+    versions_file = get_versions_path(os_name)
     with versions_file.open(encoding="utf-8") as f:
         versions = f.read()
 
     package_version_build = re.search(
         rf"^{package}: (.*)", versions, re.MULTILINE | re.IGNORECASE
     )[1]
-    min_version = re.search(rf"^Min {os_name} version: (.*)", versions, re.MULTILINE)[1]
+    min_version = re.search(rf"^Min {os_name} version: (.*)", versions, re.MULTILINE | re.IGNORECASE)[1]
 
     package_version, package_build = package_version_build.split("-")
 
@@ -136,13 +171,7 @@ def make_wheel(package, os_name, target):
 
 if __name__ == "__main__":
     os_name = sys.argv[1]
-    for target in {
-        "android": ["arm64-v8a", "armeabi-v7a", "x86_64", "x86"],
-        "iOS": [
-            "iphoneos.arm64",
-            "iphonesimulator.arm64",
-            "iphonesimulator.x86_64",
-        ],
-    }[os_name]:
-        for dep in ["BZip2", "XZ", "libFFI", "OpenSSL"]:
+    dependencies = get_dependencies(os_name)
+    for target in get_targets(os_name):
+        for dep in dependencies:
             make_wheel(dep, os_name, target)

@@ -186,7 +186,7 @@ for:
 
     environment:
       APPVEYOR_BUILD_WORKER_IMAGE: ubuntu-gce-c
-      NDK_VERSION: r27c
+      NDK_VERSION: r27d
 
     install:
       - sudo apt update
@@ -200,7 +200,7 @@ for:
       - tar -xzf python-android-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz -C $python_android_dir
 
       # install Android NDK
-      - .ci/install_ndk.sh
+      - . .ci/install_ndk.sh
 
       # install Rust
       - curl https://sh.rustup.rs -sSf | sh -s -- -y
