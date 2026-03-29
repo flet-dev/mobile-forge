@@ -3,6 +3,7 @@ set -eu
 
 if [ $CROSS_VENV_SDK == "android" ]; then
     cmake \
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DCMAKE_SYSTEM_NAME=Android \
         -DANDROID_PLATFORM=$SDK_VERSION \
         -DANDROID_ABI=$ANDROID_ABI \
@@ -16,6 +17,7 @@ if [ $CROSS_VENV_SDK == "android" ]; then
         -DCMAKE_INSTALL_PREFIX="$PREFIX"
 else
     cmake \
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DCMAKE_SYSTEM_NAME=iOS \
         -DCMAKE_OSX_SYSROOT=$SDK \
         -DCMAKE_OSX_ARCHITECTURES=$HOST_ARCH \
