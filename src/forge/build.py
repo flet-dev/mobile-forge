@@ -525,31 +525,22 @@ class Builder(ABC):
             if magic != b"\x7fELF":
                 return
             ei_class = struct.unpack("B", f.read(1))[0]
-            is_64 = ei_class == 2
+            if ei_class != 2:  # skip 32-bit ELFs
+                return
 
-            # Read e_phoff, e_phentsize, e_phnum from ELF header
-            if is_64:
-                f.seek(32)
-                e_phoff = struct.unpack("<Q", f.read(8))[0]
-                f.seek(54)
-                e_phentsize, e_phnum = struct.unpack("<HH", f.read(4))
-            else:
-                f.seek(28)
-                e_phoff = struct.unpack("<I", f.read(4))[0]
-                f.seek(42)
-                e_phentsize, e_phnum = struct.unpack("<HH", f.read(4))
+            # Read e_phoff, e_phentsize, e_phnum from ELF64 header
+            f.seek(32)
+            e_phoff = struct.unpack("<Q", f.read(8))[0]
+            f.seek(54)
+            e_phentsize, e_phnum = struct.unpack("<HH", f.read(4))
 
             for i in range(e_phnum):
                 f.seek(e_phoff + i * e_phentsize)
                 p_type = struct.unpack("<I", f.read(4))[0]
                 if p_type != 1:  # PT_LOAD
                     continue
-                if is_64:
-                    f.seek(e_phoff + i * e_phentsize + 48)
-                    p_align = struct.unpack("<Q", f.read(8))[0]
-                else:
-                    f.seek(e_phoff + i * e_phentsize + 28)
-                    p_align = struct.unpack("<I", f.read(4))[0]
+                f.seek(e_phoff + i * e_phentsize + 48)
+                p_align = struct.unpack("<Q", f.read(8))[0]
 
                 if p_align < MIN_ALIGNMENT:
                     raise RuntimeError(
