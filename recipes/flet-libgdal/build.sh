@@ -27,7 +27,8 @@ if [ $CROSS_VENV_SDK == "android" ]; then
         -DGDAL_USE_CURL=OFF \
         -DGDAL_USE_LIBXML2=OFF \
         -DBUILD_APPS=OFF \
-        -DBUILD_TESTING=OFF
+        -DBUILD_TESTING=OFF \
+        -DBUILD_PYTHON_BINDINGS=OFF
 else
     cmake .. \
         -DCMAKE_SYSTEM_NAME=iOS \
