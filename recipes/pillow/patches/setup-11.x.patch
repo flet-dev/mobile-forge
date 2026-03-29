@@ -4,7 +4,7 @@ index a85731d..fbbb5b6 100644
 +++ b/setup.py
 @@ -355,9 +355,7 @@ class pil_build_ext(build_ext):
          return True if value in configuration.get(option, []) else None
- 
+
      def initialize_options(self) -> None:
 -        self.disable_platform_guessing = self.check_configuration(
 -            "platform-guessing", "disable"
@@ -13,3 +13,16 @@ index a85731d..fbbb5b6 100644
          self.add_imaging_libs = ""
          build_ext.initialize_options(self)
          for x in self.feature:
+@@ -548,8 +546,10 @@ class pil_build_ext(build_ext):
+             for d in os.environ[k].split(os.path.pathsep):
+                     _add_directory(library_dirs, d)
+
+-        _add_directory(library_dirs, os.path.join(sys.prefix, "lib"))
+-        _add_directory(include_dirs, os.path.join(sys.prefix, "include"))
++        # Skip adding sys.prefix paths when cross-compiling to avoid host headers
++        if not self.disable_platform_guessing:
++            _add_directory(library_dirs, os.path.join(sys.prefix, "lib"))
++            _add_directory(include_dirs, os.path.join(sys.prefix, "include"))
+
+         #
+         # add platform directories
