@@ -4,6 +4,7 @@ import multiprocessing
 import os
 import re
 import shutil
+import struct
 import sys
 import tarfile
 import zipfile
@@ -516,6 +517,48 @@ class Builder(ABC):
     def wheel_tag(self) -> str:
         return f"py3-none-{self.cross_venv.tag}"
 
+    def _check_elf_alignment(self, so_path: Path):
+        """Verify that all PT_LOAD segments are 16KB-aligned."""
+        MIN_ALIGNMENT = 16384
+        with open(so_path, "rb") as f:
+            magic = f.read(4)
+            if magic != b"\x7fELF":
+                return
+            ei_class = struct.unpack("B", f.read(1))[0]
+            is_64 = ei_class == 2
+
+            # Read e_phoff, e_phentsize, e_phnum from ELF header
+            if is_64:
+                f.seek(32)
+                e_phoff = struct.unpack("<Q", f.read(8))[0]
+                f.seek(54)
+                e_phentsize, e_phnum = struct.unpack("<HH", f.read(4))
+            else:
+                f.seek(28)
+                e_phoff = struct.unpack("<I", f.read(4))[0]
+                f.seek(42)
+                e_phentsize, e_phnum = struct.unpack("<HH", f.read(4))
+
+            for i in range(e_phnum):
+                f.seek(e_phoff + i * e_phentsize)
+                p_type = struct.unpack("<I", f.read(4))[0]
+                if p_type != 1:  # PT_LOAD
+                    continue
+                if is_64:
+                    f.seek(e_phoff + i * e_phentsize + 48)
+                    p_align = struct.unpack("<Q", f.read(8))[0]
+                else:
+                    f.seek(e_phoff + i * e_phentsize + 28)
+                    p_align = struct.unpack("<I", f.read(4))[0]
+
+                if p_align < MIN_ALIGNMENT:
+                    raise RuntimeError(
+                        f"{so_path.name}: PT_LOAD alignment is {p_align}, "
+                        f"expected >= {MIN_ALIGNMENT}. "
+                        f"Library is not 16KB page-aligned."
+                    )
+        log(self.log_file, f"[{self.cross_venv}] {so_path.name}: 16KB alignment OK")
+
     def fix_wheel(self, wheel_dir: Path):
 
         log(self.log_file, f"[{self.cross_venv}] Fixing wheel contents")
@@ -538,6 +581,10 @@ class Builder(ABC):
                     self.log_file,
                     [env["STRIP"], "--strip-unneeded", str(so)],
                 )
+
+            # Verify 16KB page alignment (required by Google Play)
+            for so in wheel_dir.glob("**/*.so"):
+                self._check_elf_alignment(so)
 
         # add missing requirements from "host"
         if len(self.package.meta["requirements"]["host"]):
