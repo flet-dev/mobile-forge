@@ -50,7 +50,7 @@ jobs:
                 runner="macos-latest"
                 platform="ios"
               fi
-              matrix+="{\"job_name\":\"${platform}: ${pkg_name}\",\"runner\":\"$runner\",\"platform\":\"$platform\",\"forge_arch\":\"$arch\",\"forge_packages\":\"$pkg\",\"build_number\":\"$BUILD_NUMBER\"}"
+              matrix+="{\"job_name\":\"${platform}: ${pkg_name}\",\"artifact_name\":\"${platform}-${pkg_name}\",\"runner\":\"$runner\",\"platform\":\"$platform\",\"forge_arch\":\"$arch\",\"forge_packages\":\"$pkg\",\"build_number\":\"$BUILD_NUMBER\"}"
             done
           done
           matrix+=']}'
@@ -143,12 +143,12 @@ jobs:
         if: ${{ success() && hashFiles('logs/*.log') != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: logs-${{ matrix.job_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: logs-${{ matrix.artifact_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: logs/*.log
 
       - name: Upload errors on failure
         if: ${{ failure() && hashFiles('errors/*.log') != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: errors-${{ matrix.job_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: errors-${{ matrix.artifact_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: errors/*.log
