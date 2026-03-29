@@ -1,9 +1,20 @@
 name: Build wheels
 
 on:
-  push:
-  pull_request:
   workflow_dispatch:
+    inputs:
+      archs:
+        description: "Architectures (comma-separated, e.g. android,iOS)"
+        required: false
+        default: "android,iOS"
+      packages:
+        description: "Packages (comma-separated, e.g. pillow:11.1.0,pydantic-core:2.33.2)"
+        required: false
+        default: "pydantic-core:2.33.2"
+      build_number:
+        description: "Build number"
+        required: false
+        default: "1"
 
 env:
   PYTHON_VERSION: "3.12.12"
@@ -12,25 +23,44 @@ env:
   NDK_VERSION: r27d
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - id: set-matrix
+        shell: bash
+        run: |
+          ARCHS="${{ inputs.archs || 'android,iOS' }}"
+          PACKAGES="${{ inputs.packages || 'pydantic-core:2.33.2' }}"
+          BUILD_NUMBER="${{ inputs.build_number || '1' }}"
+
+          matrix='{"include":['
+          first=true
+          for arch in $(echo "$ARCHS" | tr ',' ' '); do
+            for pkg in $(echo "$PACKAGES" | tr ',' ' '); do
+              pkg_name="${pkg%%:*}"
+              if [ "$first" = true ]; then first=false; else matrix+=','; fi
+              if [[ "$arch" == "android" ]]; then
+                runner="ubuntu-latest"
+                platform="android"
+              else
+                runner="macos-latest"
+                platform="ios"
+              fi
+              matrix+="{\"job_name\":\"${platform}: ${pkg_name}\",\"runner\":\"$runner\",\"platform\":\"$platform\",\"forge_arch\":\"$arch\",\"forge_packages\":\"$pkg\",\"build_number\":\"$BUILD_NUMBER\"}"
+            done
+          done
+          matrix+=']}'
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: setup
     name: ${{ matrix.job_name }}
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - job_name: "Android: pydantic-core 2.33.2"
-            runner: ubuntu-latest
-            forge_arch: android
-            forge_packages: "pydantic-core:2.33.2"
-            build_number: "1"
-            platform: android
-          - job_name: "iOS: pydantic-core 2.33.2"
-            runner: macos-latest
-            forge_arch: iOS
-            forge_packages: "pydantic-core:2.33.2"
-            build_number: "1"
-            platform: ios
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
 
     steps:
       - name: Checkout
@@ -45,7 +75,7 @@ jobs:
         shell: bash
         env:
           GEMFURY_TOKEN: ${{ secrets.GEMFURY_TOKEN }}
-          APPVEYOR_PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number || '' }}
+          APPVEYOR_PULL_REQUEST_NUMBER: ""
           FORGE_ARCH: ${{ matrix.forge_arch }}
           FORGE_PACKAGES: ${{ matrix.forge_packages }}
           BUILD_NUMBER: ${{ matrix.build_number }}
@@ -111,12 +141,12 @@ jobs:
         if: ${{ success() && hashFiles('logs/*.log') != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform }}-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          name: logs-${{ matrix.job_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: logs/*.log
 
       - name: Upload errors on failure
         if: ${{ failure() && hashFiles('errors/*.log') != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform }}-errors-${{ github.run_id }}-${{ github.run_attempt }}
+          name: errors-${{ matrix.job_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: errors/*.log
