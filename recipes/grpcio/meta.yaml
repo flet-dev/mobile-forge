@@ -8,8 +8,8 @@ build:
     GRPC_PYTHON_BUILD_SYSTEM_OPENSSL: '1'
     GRPC_PYTHON_BUILD_SYSTEM_ZLIB: '1'
     PLATFORM: android
-    CFLAGS: '-U__ANDROID_API__ -D__ANDROID_API__={{ sdk_version }} -Wno-reserved-user-defined-literal'
-    LDFLAGS: '-llog'
+    CFLAGS: '-U__ANDROID_API__ -D__ANDROID_API__={{ sdk_version }} -Wno-reserved-user-defined-literal -I{platlib}/opt/include'
+    LDFLAGS: '-llog -L{platlib}/opt/lib'
 # {% else %}
     CXXFLAGS: -std=c++14 -Wno-c++11-narrowing
     LDFLAGS: '-framework CoreFoundation'

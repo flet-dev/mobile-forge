@@ -443,7 +443,7 @@ class Builder(ABC):
         # Set up any additional environment variables needed in the script environment.
         for key, value in self.package.meta["build"]["script_env"].items():
             if key in ["LDFLAGS", "CFLAGS", "CPPFLAGS"]:
-                env[key] += " " + value
+                env[key] += " " + str(value).format(**script_vars)
             else:
                 env[key] = str(value).format(**script_vars)
 
