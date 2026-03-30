@@ -423,6 +423,16 @@ class Builder(ABC):
         }
         env.update(kwargs)
 
+        if self.cross_venv.sdk == "android":
+            cc_parts = cc.split("/")
+            env["NDK_ROOT"] = "/".join(cc_parts[: cc_parts.index("toolchains")])
+            env["NDK_SYSROOT"] = str(
+                ndk_sysroot or (Path(cc).parent.parent / "sysroot")
+            )
+            env["ANDROID_ABI"] = self.cross_venv.arch
+            env["ANDROID_API_LEVEL"] = str(self.cross_venv.sdk_version)
+            env["HOST_TRIPLET"] = self.cross_venv.platform_triplet
+
         script_vars = {
             **env,
             **self.cross_venv.scheme_paths,
@@ -436,15 +446,6 @@ class Builder(ABC):
                 env[key] += " " + value
             else:
                 env[key] = str(value).format(**script_vars)
-
-        if self.cross_venv.sdk == "android":
-            cc_parts = cc.split("/")
-            env["NDK_ROOT"] = "/".join(cc_parts[: cc_parts.index("toolchains")])
-            env["NDK_SYSROOT"] = str(
-                ndk_sysroot or (Path(cc).parent.parent / "sysroot")
-            )
-            env["ANDROID_ABI"] = self.cross_venv.arch
-            env["HOST_TRIPLET"] = self.cross_venv.platform_triplet
 
         # Add in some user environment keys that are useful
         for key in [
