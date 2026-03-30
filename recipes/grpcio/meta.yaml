@@ -21,6 +21,6 @@ patches:
 # {% if sdk == 'android' %}
 requirements:
   host:
-    - openssl 3.0.15
-    - flet-libcpp-shared 27.2.12479018
+    - openssl >=3.0.15
+    - flet-libcpp-shared >=27.2.12479018
 # {% endif %}
