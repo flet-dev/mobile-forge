@@ -27,6 +27,7 @@ build:
       -DANDROID_NATIVE_API_LEVEL={ANDROID_API_LEVEL}
       -DANDROID_ALLOW_UNDEFINED_VERSION_SCRIPT_SYMBOLS=1
       -DCMAKE_TOOLCHAIN_FILE={NDK_ROOT}/build/cmake/android.toolchain.cmake
+      -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-z,max-page-size=16384"
       -DOPENCV_FORCE_PYTHON_LIBS=ON
       -DPYTHON3_INCLUDE_PATH={prefix}/include/python{py_version_short}
       -DPYTHON3_LIBRARIES={prefix}/lib/libpython{py_version_short}.so
