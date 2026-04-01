@@ -588,8 +588,15 @@ class Builder(ABC):
                         self.log_file,
                         f"[{self.cross_venv}] Adding {req} requirement to METADATA",
                     )
-                    req_name, req_ver = req.split(" ")
-                    metadata["Requires-Dist"] = f"{req_name} (>={req_ver})"
+                    parts = req.split(" ", 1)
+                    req_name = parts[0]
+                    if len(parts) > 1:
+                        req_ver = parts[1]
+                        if req_ver[0].isdigit():
+                            req_ver = f"=={req_ver}"
+                        metadata["Requires-Dist"] = f"{req_name} ({req_ver})"
+                    else:
+                        metadata["Requires-Dist"] = req_name
             self.write_message_file(metadata_path, metadata)
 
 
