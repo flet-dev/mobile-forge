@@ -17,4 +17,4 @@ rm -r $PREFIX/include/libxml2
 
 shopt -s nullglob
 rm -rf $PREFIX/share
-rm -rf $PREFIX/lib/cmake $PREFIX/lib/pkgconfig $PREFIX/lib/*.a $PREFIX/lib/*.la $PREFIX/lib/*.sh
+rm -rf $PREFIX/lib/cmake $PREFIX/lib/pkgconfig $PREFIX/lib/*.la $PREFIX/lib/*.sh
