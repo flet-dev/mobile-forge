@@ -1,13 +1,22 @@
+# {% set version = "1.1.45" %}
+# {% if version == "1.1.32" %}
+# {%   set libxml2_version = "2.9.8" %}
+# {%   set patch = "mobile-1.1.32.patch" %}
+# {% else %}
+# {%   set libxml2_version = "2.15.3" %}
+# {%   set patch = "mobile-1.1.45.patch" %}
+# {% endif %}
+
 package:
   name: flet-libxslt
-  version: 1.1.32
+  version: '{{ version }}'
 
 source:
-  url: https://download.gnome.org/sources/libxslt/1.1/libxslt-1.1.32.tar.xz
+  url: https://download.gnome.org/sources/libxslt/{{ version.rsplit('.', 1)[0] }}/libxslt-{{ version }}.tar.xz
 
 requirements:
   host:
-    - flet-libxml2 2.9.8
+    - flet-libxml2 {{ libxml2_version }}
 
 patches:
-  - mobile.patch
+  - {{ patch }}

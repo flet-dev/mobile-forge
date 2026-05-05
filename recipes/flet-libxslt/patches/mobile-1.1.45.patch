@@ -1,0 +1,14 @@
+diff --git a/config.sub b/config.sub
+--- a/config.sub
++++ b/config.sub
+@@ -1323,6 +1323,10 @@
+ 	nto-qnx*)
+ 		kernel=nto
+ 		os=`echo "$basic_os" | sed -e 's|nto-qnx|qnx|'`
++		;;
++	ios-simulator*)
++		kernel=
++		os=$basic_os
+ 		;;
+ 	*-*)
+ 		# shellcheck disable=SC2162

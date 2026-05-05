@@ -1,9 +1,16 @@
+# {% set version = "2.15.3" %}
+# {% if version.startswith('2.9.') %}
+# {%   set patch = "mobile-2.9.x.patch" %}
+# {% else %}
+# {%   set patch = "mobile-2.15.x.patch" %}
+# {% endif %}
+
 package:
   name: flet-libxml2
-  version: 2.9.8
+  version: '{{ version }}'
 
 source:
-  url: https://download.gnome.org/sources/libxml2/2.9/libxml2-2.9.8.tar.xz
+  url: https://download.gnome.org/sources/libxml2/{{ version.rsplit('.', 1)[0] }}/libxml2-{{ version }}.tar.xz
 
 patches:
-  - mobile.patch
+  - {{ patch }}

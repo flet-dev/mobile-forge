@@ -1,16 +1,30 @@
+# {% set version = "6.1.0" %}
+# {% if version.startswith('5.') %}
+# {%   set libxml2_version = "2.9.8" %}
+# {%   set libxslt_version = "1.1.32" %}
+# {% else %}
+# {%   set libxml2_version = "2.15.3" %}
+# {%   set libxslt_version = "1.1.45" %}
+# {% endif %}
+
 package:
   name: lxml
-  version: 5.3.0
+  version: '{{ version }}'
 
 build:
   script_env:
     WITH_XML2_CONFIG: '{platlib}/opt/bin/xml2-config'
     WITH_XSLT_CONFIG: '{platlib}/opt/bin/xslt-config'
+# {% if sdk != 'android' %}
+    # libxml2 on iOS is built with iconv; lxml's setup.py doesn't add
+    # -liconv to the link line, so do it here.
+    LDFLAGS: -liconv
+# {% endif %}
 
 patches:
   - mobile.patch
 
 requirements:
   host:
-    - flet-libxslt 1.1.32
-    - flet-libxml2 2.9.8
+    - flet-libxslt {{ libxslt_version }}
+    - flet-libxml2 {{ libxml2_version }}
