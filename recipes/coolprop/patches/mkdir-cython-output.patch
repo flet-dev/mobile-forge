@@ -1,0 +1,12 @@
+--- a/wrappers/Python/CMakeLists.txt
++++ b/wrappers/Python/CMakeLists.txt
+@@ -137,6 +137,9 @@ set(CYTHON_FLAGS
+     --directive c_string_encoding=ascii
+ )
+
++# Cython does not create the output's parent directory; create it ourselves.
++file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/CoolProp")
++
+ # Generate CoolProp module
+ add_custom_command(
+     OUTPUT CoolProp/CoolProp.cpp
