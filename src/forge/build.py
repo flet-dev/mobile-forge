@@ -518,6 +518,98 @@ class Builder(ABC):
     def wheel_tag(self) -> str:
         return f"py3-none-{self.cross_venv.tag}"
 
+    def _rewrite_absolute_needed(self, so_path: Path):
+        # Some libraries (notably libpython built without DT_SONAME) end up
+        # recorded in DT_NEEDED by their absolute build-host path when linked
+        # via CMake's absolute-path style. That path won't exist on the
+        # target device. Shift each DT_NEEDED d_val past the last '/' in the
+        # existing string — no string rewriting needed because the basename
+        # already lives at the suffix of the absolute path.
+        with open(so_path, "r+b") as f:
+            if f.read(4) != b"\x7fELF":
+                return
+            ei_class = struct.unpack("B", f.read(1))[0]
+            if ei_class == 1:
+                # ELF32: 4-byte fields, 8-byte dyn entries, 40-byte sections.
+                shoff_pos, shoff_fmt = 32, "<I"
+                shnum_pos = 46
+                sh_addr_off, sh_off_off, sh_size_off = 12, 16, 20
+                dyn_entry_size, dyn_fmt = 8, "<iI"
+                word_fmt = "<I"
+            elif ei_class == 2:
+                # ELF64: 8-byte fields, 16-byte dyn entries, 64-byte sections.
+                shoff_pos, shoff_fmt = 40, "<Q"
+                shnum_pos = 58
+                sh_addr_off, sh_off_off, sh_size_off = 16, 24, 32
+                dyn_entry_size, dyn_fmt = 16, "<qQ"
+                word_fmt = "<Q"
+            else:
+                return
+
+            word_size = struct.calcsize(word_fmt)
+            f.seek(shoff_pos)
+            e_shoff = struct.unpack(shoff_fmt, f.read(word_size))[0]
+            f.seek(shnum_pos)
+            e_shentsize, e_shnum = struct.unpack("<HH", f.read(4))
+
+            sections = []
+            dyn_offset = dyn_size = 0
+            for i in range(e_shnum):
+                f.seek(e_shoff + i * e_shentsize)
+                sh = f.read(e_shentsize)
+                sh_type = struct.unpack_from("<I", sh, 4)[0]
+                sh_addr = struct.unpack_from(word_fmt, sh, sh_addr_off)[0]
+                sh_offset = struct.unpack_from(word_fmt, sh, sh_off_off)[0]
+                sections.append((sh_type, sh_addr, sh_offset))
+                if sh_type == 6:  # SHT_DYNAMIC
+                    dyn_offset = sh_offset
+                    dyn_size = struct.unpack_from(word_fmt, sh, sh_size_off)[0]
+
+            if not dyn_offset:
+                return
+
+            strtab_addr = 0
+            needed_entries = []
+            for i in range(dyn_size // dyn_entry_size):
+                f.seek(dyn_offset + i * dyn_entry_size)
+                d_tag, d_val = struct.unpack(dyn_fmt, f.read(dyn_entry_size))
+                if d_tag == 0:  # DT_NULL
+                    break
+                if d_tag == 5:  # DT_STRTAB
+                    strtab_addr = d_val
+                elif d_tag == 1:  # DT_NEEDED
+                    needed_entries.append(
+                        (dyn_offset + i * dyn_entry_size + word_size, d_val)
+                    )
+
+            dynstr_offset = 0
+            for sh_type, sh_addr, sh_offset in sections:
+                if sh_type == 3 and sh_addr == strtab_addr:  # SHT_STRTAB
+                    dynstr_offset = sh_offset
+                    break
+
+            if not dynstr_offset:
+                return
+
+            for entry_offset, d_val in needed_entries:
+                f.seek(dynstr_offset + d_val)
+                chunk = f.read(4096)
+                end = chunk.find(b"\x00")
+                if end < 0:
+                    continue
+                name = chunk[:end]
+                slash = name.rfind(b"/")
+                if slash < 0:
+                    continue
+                f.seek(entry_offset)
+                f.write(struct.pack(word_fmt, d_val + slash + 1))
+                log(
+                    self.log_file,
+                    f"[{self.cross_venv}] {so_path.name}: NEEDED "
+                    f"'{name.decode(errors='replace')}' -> "
+                    f"'{name[slash + 1:].decode(errors='replace')}'",
+                )
+
     def _check_elf_alignment(self, so_path: Path):
         """Verify that all PT_LOAD segments are 16KB-aligned."""
         MIN_ALIGNMENT = 16384
@@ -573,6 +665,11 @@ class Builder(ABC):
                     self.log_file,
                     [env["STRIP"], "--strip-unneeded", str(so)],
                 )
+
+            # Rewrite any absolute-path DT_NEEDED entries to their basename
+            # (e.g. libpython linked by absolute path under CMake builds).
+            for so in wheel_dir.glob("**/*.so"):
+                self._rewrite_absolute_needed(so)
 
             # Verify 16KB page alignment (required by Google Play)
             for so in wheel_dir.glob("**/*.so"):
