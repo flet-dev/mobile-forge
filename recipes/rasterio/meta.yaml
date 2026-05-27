@@ -1,0 +1,21 @@
+package:
+  name: rasterio
+  version: 1.5.0
+
+requirements:
+  host:
+    - flet-libgdal 3.10.0
+    - numpy ^2.0.0
+    
+build:
+  script_env:
+    GDAL_VERSION: 3.10.0
+    GDAL_LIB_PATH: '{platlib}/opt/lib'
+    GDAL_INCLUDE_PATH: '{platlib}/opt/include'
+    GDAL_LIBS: gdal
+# {% if sdk != 'android' %}
+    LDFLAGS: '-undefined dynamic_lookup'
+# {% endif %}
+
+patches:
+  - mobile.patch
