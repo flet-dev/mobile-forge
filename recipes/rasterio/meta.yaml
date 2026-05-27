@@ -6,7 +6,10 @@ requirements:
   host:
     - flet-libgdal 3.10.0
     - numpy ^2.0.0
-    
+# {% if sdk == 'android' %}
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
+
 build:
   script_env:
     GDAL_VERSION: 3.10.0
