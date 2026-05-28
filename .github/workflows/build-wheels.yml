@@ -17,6 +17,10 @@ on:
         description: "Build number"
         required: false
         default: "1"
+      publish:
+        description: "Publish to PyPI"
+        type: boolean
+        default: false
 
 env:
   UV_PYTHON: "3.12.12"
@@ -29,11 +33,43 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get changed recipes
+        id: changed-recipes
+        uses: tj-actions/changed-files@v45
+        with:
+          files: recipes/**
+          dir_names: true
+          dir_names_max_depth: 2
+
+      - id: detect-packages
+        shell: bash
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          INPUT_PACKAGES: ${{ inputs.packages }}
+          CHANGED_DIRS: ${{ steps.changed-recipes.outputs.all_changed_files }}
+        run: |
+          SMOKE_TEST="pydantic-core:2.33.2"
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            pkgs="${INPUT_PACKAGES:-$SMOKE_TEST}"
+          else
+            pkgs=""
+            for dir in $CHANGED_DIRS; do
+              [[ -f "$dir/meta.yaml" ]] || continue   # skip deleted recipes
+              pkgs="${pkgs:+$pkgs,}${dir#recipes/}:"
+            done
+            pkgs="${pkgs:-$SMOKE_TEST}"
+          fi
+          echo "Detected packages: $pkgs"
+          echo "packages=$pkgs" >> "$GITHUB_OUTPUT"
+
       - id: set-matrix
         shell: bash
         run: |
           ARCHS="${{ inputs.archs || 'android,iOS' }}"
-          PACKAGES="${{ inputs.packages || 'pydantic-core:2.33.2' }}"
+          PACKAGES="${{ steps.detect-packages.outputs.packages }}"
           BUILD_NUMBER="${{ inputs.build_number || '1' }}"
 
           matrix='{"include":['
@@ -122,7 +158,7 @@ jobs:
           rm -f dist/bzip2-* dist/xz-* dist/openssl-* dist/libffi-*
 
       - name: Publish wheels
-        if: ${{ github.event_name != 'pull_request' && hashFiles('dist/*.whl') != '' }}
+        if: ${{ inputs.publish && hashFiles('dist/*.whl') != '' }}
         shell: bash
         env:
           GEMFURY_TOKEN: ${{ secrets.GEMFURY_TOKEN }}
