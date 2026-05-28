@@ -73,11 +73,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_SHORT_VERSION }}
 
-      - name: Build and publish wheels
+      - name: Build wheels
         shell: bash
         env:
-          GEMFURY_TOKEN: ${{ secrets.GEMFURY_TOKEN }}
-          APPVEYOR_PULL_REQUEST_NUMBER: ""
           FORGE_ARCH: ${{ matrix.forge_arch }}
           FORGE_PACKAGES: ${{ matrix.forge_packages }}
           BUILD_NUMBER: ${{ matrix.build_number }}
@@ -135,9 +133,15 @@ jobs:
 
           rm -f dist/bzip2-* dist/xz-* dist/openssl-* dist/libffi-*
 
-          if compgen -G "dist/*.whl" > /dev/null; then
-            publish_to_pypi dist/*.whl
-          fi
+      - name: Publish wheels
+        if: ${{ github.event_name != 'pull_request' && hashFiles('dist/*.whl') != '' }}
+        shell: bash
+        env:
+          GEMFURY_TOKEN: ${{ secrets.GEMFURY_TOKEN }}
+        run: |
+          set -euxo pipefail
+          . .ci/common.sh
+          publish_to_pypi dist/*.whl
 
       - name: Upload logs on success
         if: ${{ success() && hashFiles('logs/*.log') != '' }}
