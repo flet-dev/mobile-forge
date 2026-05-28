@@ -19,8 +19,7 @@ on:
         default: "1"
 
 env:
-  PYTHON_VERSION: "3.12.12"
-  PYTHON_SHORT_VERSION: "3.12"
+  UV_PYTHON: "3.12.12"
   MOBILE_FORGE_CACHE_DOWNLOADS_OFF: "1"
   NDK_VERSION: r27d
 
@@ -68,10 +67,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_SHORT_VERSION }}
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
 
       - name: Build wheels
         shell: bash
@@ -82,6 +79,8 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
         run: |
           set -euxo pipefail
+
+          PYTHON_SHORT_VERSION="${UV_PYTHON%.*}"
 
           . .ci/common.sh
           export MOBILE_FORGE_ANDROID_SUPPORT_PATH=""
@@ -123,7 +122,7 @@ jobs:
             export MOBILE_FORGE_IOS_SUPPORT_PATH="$python_ios_dir"
           fi
 
-          source ./setup.sh "$PYTHON_VERSION"
+          source ./setup.sh "$UV_PYTHON"
           export PATH="$PATH:$HOME/.cargo/bin"
 
           IFS=' ' read -r -a packages <<< "$FORGE_PACKAGES"
