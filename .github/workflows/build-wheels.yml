@@ -45,11 +45,13 @@ jobs:
               if [[ "$arch" == "android" ]]; then
                 runner="ubuntu-latest"
                 platform="android"
+                rust_targets="aarch64-linux-android,arm-linux-androideabi,x86_64-linux-android,i686-linux-android"
               else
                 runner="macos-latest"
                 platform="ios"
+                rust_targets="aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios"
               fi
-              matrix+="{\"job_name\":\"${platform}: ${pkg_name}\",\"artifact_name\":\"${platform}-${pkg_name}\",\"runner\":\"$runner\",\"platform\":\"$platform\",\"forge_arch\":\"$arch\",\"forge_packages\":\"$pkg\",\"build_number\":\"$BUILD_NUMBER\"}"
+              matrix+="{\"job_name\":\"${platform}: ${pkg_name}\",\"artifact_name\":\"${platform}-${pkg_name}\",\"runner\":\"$runner\",\"platform\":\"$platform\",\"forge_arch\":\"$arch\",\"forge_packages\":\"$pkg\",\"build_number\":\"$BUILD_NUMBER\",\"rust_targets\":\"$rust_targets\"}"
             done
           done
           matrix+=']}'
@@ -69,6 +71,11 @@ jobs:
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
 
       - name: Build wheels
         shell: bash
@@ -94,36 +101,18 @@ jobs:
             curl -#OL "https://github.com/flet-dev/python-build/releases/download/v${PYTHON_SHORT_VERSION}/python-android-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz"
             mkdir -p "$python_android_dir"
             tar -xzf "python-android-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz" -C "$python_android_dir"
+            export MOBILE_FORGE_ANDROID_SUPPORT_PATH="$python_android_dir"
 
             . .ci/install_ndk.sh
-
-            curl https://sh.rustup.rs -sSf | sh -s -- -y
-            . "$HOME/.cargo/env"
-            export PATH="$PATH:$HOME/.cargo/bin"
-            rustup target add aarch64-linux-android
-            rustup target add arm-linux-androideabi
-            rustup target add x86_64-linux-android
-            rustup target add i686-linux-android
-
-            export MOBILE_FORGE_ANDROID_SUPPORT_PATH="$python_android_dir"
           else
             python_ios_dir="$HOME/projects/python-build/darwin/Python-Apple-support"
             curl -#OL "https://github.com/flet-dev/python-build/releases/download/v${PYTHON_SHORT_VERSION}/python-ios-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz"
             mkdir -p "$python_ios_dir"
             tar -xzf "python-ios-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz" -C "$python_ios_dir"
-
-            curl https://sh.rustup.rs -sSf | sh -s -- -y
-            . "$HOME/.cargo/env"
-            export PATH="$PATH:$HOME/.cargo/bin"
-            rustup target add aarch64-apple-ios
-            rustup target add aarch64-apple-ios-sim
-            rustup target add x86_64-apple-ios
-
             export MOBILE_FORGE_IOS_SUPPORT_PATH="$python_ios_dir"
           fi
 
           source ./setup.sh "$UV_PYTHON"
-          export PATH="$PATH:$HOME/.cargo/bin"
 
           IFS=' ' read -r -a packages <<< "$FORGE_PACKAGES"
           for package in "${packages[@]}"; do
