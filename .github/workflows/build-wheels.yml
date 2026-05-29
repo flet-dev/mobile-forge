@@ -155,7 +155,10 @@ jobs:
             forge "$FORGE_ARCH" "$package:$BUILD_NUMBER"
           done
 
-          rm -f dist/bzip2-* dist/xz-* dist/openssl-* dist/libffi-*
+          # Drop the support-tree dep wheels produced by make_dep_wheels.py
+          # iOS deps: bzip2, libffi, mpdecimal, openssl, xz
+          # Android deps: bzip2, libffi, openssl, sqlite, xz
+          rm -f dist/bzip2-* dist/libffi-* dist/mpdecimal-* dist/openssl-* dist/sqlite-* dist/xz-*
 
       - name: Publish wheels
         if: ${{ inputs.publish && hashFiles('dist/*.whl') != '' }}
