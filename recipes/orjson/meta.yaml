@@ -1,0 +1,7 @@
+package:
+  name: orjson
+  version: 3.11.9
+
+build:
+  script_env:
+    _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
