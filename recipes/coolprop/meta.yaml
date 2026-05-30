@@ -1,0 +1,42 @@
+package:
+  name: coolprop
+  version: 7.2.0
+
+requirements:
+  build:
+    - cmake
+# {% if sdk == 'android' %}
+  host:
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
+
+patches:
+  - mkdir-cython-output.patch
+
+# {% if sdk == 'android' %}
+build:
+  script_env:
+    CMAKE_ARGS: >-
+      -DCMAKE_TOOLCHAIN_FILE={NDK_ROOT}/build/cmake/android.toolchain.cmake
+      -DANDROID_ABI={ANDROID_ABI}
+      -DANDROID_PLATFORM=android-{ANDROID_API_LEVEL}
+      -DANDROID_STL=c++_shared
+      -DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DCMAKE_MODULE_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DPython_LIBRARY={prefix}/lib/libpython{py_version_short}.so
+      -DPython_INCLUDE_DIR={prefix}/include/python{py_version_short}
+      -DPython3_LIBRARY={prefix}/lib/libpython{py_version_short}.so
+      -DPython3_INCLUDE_DIR={prefix}/include/python{py_version_short}
+# {% else %}
+build:
+  script_env:
+    CMAKE_ARGS: >-
+      -DCMAKE_SYSTEM_NAME=iOS
+      -DCMAKE_OSX_SYSROOT={{ sdk }}
+      -DCMAKE_OSX_DEPLOYMENT_TARGET={{ sdk_version }}
+      -DCMAKE_OSX_ARCHITECTURES={{ arch }}
+      -DPython_LIBRARY={prefix}/lib/libpython{py_version_short}.dylib
+      -DPython_INCLUDE_DIR={prefix}/include/python{py_version_short}
+      -DPython3_LIBRARY={prefix}/lib/libpython{py_version_short}.dylib
+      -DPython3_INCLUDE_DIR={prefix}/include/python{py_version_short}
+# {% endif %}

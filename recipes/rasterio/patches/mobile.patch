@@ -1,0 +1,17 @@
+diff --git a/setup.py b/setup.py
+--- a/setup.py
++++ b/setup.py
+@@ -251,6 +251,13 @@
+                 e,
+             )
+
++    if 'GDAL_LIB_PATH' in os.environ:
++        library_dirs.extend(os.environ['GDAL_LIB_PATH'].split(":"))
++    if 'GDAL_INCLUDE_PATH' in os.environ:
++        include_dirs.extend(os.environ['GDAL_INCLUDE_PATH'].split(":"))
++    if 'GDAL_LIBS' in os.environ:
++        libraries.extend(os.environ['GDAL_LIBS'].split(","))
++
+     # Get GDAL API version from environment variable.
+     if 'GDAL_VERSION' in os.environ:
+         gdalversion = os.environ['GDAL_VERSION']
