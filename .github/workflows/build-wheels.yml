@@ -72,7 +72,7 @@ jobs:
           SHARED_RUNNER_CHANGED: ${{ steps.shared-runner.outputs.any_changed }}
         run: |
           SMOKE_TEST="pydantic-core:2.33.2"
-          SMOKE_SET="numpy: pillow: lxml: pandas: bcrypt:"   # plan §5 Q3
+          SMOKE_SET="numpy: pillow: lxml: bcrypt:"
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             pkgs="${INPUT_PACKAGES:-$SMOKE_TEST}"
           else
@@ -196,7 +196,7 @@ jobs:
           rm -f dist/bzip2-* dist/libffi-* dist/mpdecimal-* dist/openssl-* dist/sqlite-* dist/xz-*
 
       # --- Mobile test lane (Phase 1 — Android x86_64 only) -----------------
-      # See playground/test-recipes-on-mobile-PLAN.md §2a. iOS testing is
+      # See test-recipes-on-mobile-PLAN.md §2a. iOS testing is
       # deferred to Phase 3.
 
       - name: Detect test files for this recipe

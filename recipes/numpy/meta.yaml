@@ -8,12 +8,6 @@ package:
 requirements:
  build:
   - ninja
-# numpy's C/C++ object code (SIMD vectorization, the random C++ module, …)
-# is linked against libc++_shared.so on Android. Without this dep the wheel
-# imports cleanly on iOS (Apple's system libc++ is always present) but on
-# Android dies at `import numpy` with `dlopen failed: library
-# "libc++_shared.so" not found` unless something else in the app's dep tree
-# happens to pull it in (e.g. grpcio).
 {% if sdk == 'android' %}
  host:
   - flet-libcpp-shared >=27.2.12479018
