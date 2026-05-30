@@ -1,0 +1,14 @@
+package:
+  name: ujson
+  version: 5.12.1
+
+# {% if sdk == 'android' %}
+# ujson links its bundled double-conversion C++ code against NDK's libc++.
+# NDK r27 defaults to libc++_shared, so the .so has a runtime dlopen() on
+# libc++_shared.so. flet-libcpp-shared ships that .so to jniLibs/<abi>/ via
+# serious_python_android/android/build.gradle's copyOpt_<abi> task.
+# iOS uses Apple's system libc++ — no runtime dep needed.
+requirements:
+  host:
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
