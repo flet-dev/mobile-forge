@@ -60,6 +60,7 @@ jobs:
           files: |
             tests/recipe-tester/**
             .ci/wait_for_console.sh
+            .github/workflows/build-wheels.yml
 
       - id: detect-packages
         shell: bash
