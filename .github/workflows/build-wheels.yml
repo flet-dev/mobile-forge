@@ -161,7 +161,7 @@ jobs:
           rm -f dist/bzip2-* dist/libffi-* dist/mpdecimal-* dist/openssl-* dist/sqlite-* dist/xz-*
 
       - name: Publish wheels
-        if: ${{ inputs.publish && hashFiles('dist/*.whl') != '' }}
+        if: ${{ hashFiles('dist/*.whl') != '' && (inputs.publish || (github.event_name == 'push' && github.ref == 'refs/heads/python3.12')) }}
         shell: bash
         env:
           GEMFURY_TOKEN: ${{ secrets.GEMFURY_TOKEN }}
