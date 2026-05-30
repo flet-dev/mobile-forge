@@ -241,8 +241,11 @@ jobs:
           # build the recipe sdist for the host, which fails for any recipe
           # that doesn't ship a host-compatible wheel.
           uv sync --dev --no-install-package "$PKG_NAME"
+          # `--yes` auto-accepts the interactive Flutter-SDK-install prompt
+          # that flet-cli/flutter_base.py:_prompt_input raises on first run.
+          # Without it, stdin is empty on CI and Confirm.ask hits EOFError.
           PIP_FIND_LINKS="$GITHUB_WORKSPACE/dist" \
-            uv run --no-sync flet build apk --arch x86_64
+            uv run --no-sync flet build apk --arch x86_64 --yes
 
       - name: Test on Android emulator (API 24, x86_64)
         if: steps.detect-tests.outputs.has_tests == 'true'
