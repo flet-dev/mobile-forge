@@ -235,6 +235,29 @@ jobs:
           FLET_CLI_NO_RICH_OUTPUT: 1
         run: |
           set -euxo pipefail
+
+          # Copy just-built wheels into dist-test/ with build tags bumped to
+          # 9999. Reason: pip's resolver merges --find-links and the
+          # --extra-index-url (pypi.flet.dev) and picks the wheel with the
+          # highest build tag per PEP 427. The published wheel on
+          # pypi.flet.dev typically has build tag >= 1, while forge's
+          # freshly-built wheel for the same version may have a lower (or
+          # absent) build tag — so pip silently uses the OLD published wheel
+          # and the recipe fix being validated is bypassed. Bumping local
+          # copies to 9999 guarantees they win. Original dist/ is left
+          # untouched so the publish step still ships at the user-specified
+          # build_number.
+          mkdir -p "$GITHUB_WORKSPACE/dist-test"
+          for w in "$GITHUB_WORKSPACE"/dist/*.whl; do
+              [[ -e "$w" ]] || continue
+              base=$(basename "$w")
+              # name-version[-buildtag]-pytag-abitag-plat.whl
+              # → name-version-9999-pytag-abitag-plat.whl
+              new=$(printf '%s\n' "$base" \
+                    | sed -E 's/^([^-]+-[^-]+)(-[0-9]+)?-(cp[0-9]+-cp[0-9]+)-/\1-9999-\3-/')
+              cp "$w" "$GITHUB_WORKSPACE/dist-test/$new"
+          done
+
           ./tests/recipe-tester/stage_recipe.sh "$PKG_NAME"
           cd tests/recipe-tester
           # `--no-install-package` because the recipe is mobile-only — host
@@ -245,7 +268,7 @@ jobs:
           # `--yes` auto-accepts the interactive Flutter-SDK-install prompt
           # that flet-cli/flutter_base.py:_prompt_input raises on first run.
           # Without it, stdin is empty on CI and Confirm.ask hits EOFError.
-          PIP_FIND_LINKS="$GITHUB_WORKSPACE/dist" \
+          PIP_FIND_LINKS="$GITHUB_WORKSPACE/dist-test" \
             uv run --no-sync flet build apk --arch x86_64 --yes
 
       - name: Test on Android emulator (API 28, x86_64)
