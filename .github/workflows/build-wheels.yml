@@ -257,30 +257,11 @@ jobs:
           arch: x86_64
           target: default
           disable-animations: true
-          # cwd inside `script` is the workspace root.
-          # `script` is run by /usr/bin/sh (dash on Ubuntu), NOT bash —
-          # so no `-o pipefail`, no `[[ ]]`, no `${var,,}`, etc. POSIX only.
-          script: |
-            set -eux
-
-            # Capture diagnostics if anything below fails — AVD is alive at
-            # trap time, gone by the time post-action runs.
-            cleanup() {
-              rc=$?
-              if [ "$rc" -ne 0 ]; then
-                adb logcat -d > logcat-on-failure.txt 2>/dev/null || true
-                adb exec-out screencap -p > screen-on-failure.png 2>/dev/null || true
-              fi
-              return $rc
-            }
-            trap cleanup EXIT
-
-            adb install -r tests/recipe-tester/build/apk/recipe-tester.apk
-            adb logcat -c
-            adb shell monkey -p com.flet.recipe_tester -c android.intent.category.LAUNCHER 1
-            # ~15min hard cap on the device-side run; recipe tests should
-            # finish in <2min, the extra slack is for AVD slowness.
-            TIMEOUT=900 .ci/wait_for_console.sh android
+          # The reactivecircus action invokes EACH LINE of `script:` through
+          # `sh -c` separately — multi-line constructs (functions, traps, if
+          # blocks) don't survive. Logic lives in .ci/run_android_test.sh
+          # instead, which has its own bash shebang.
+          script: .ci/run_android_test.sh
 
       - name: Upload test artifacts
         if: always() && steps.detect-tests.outputs.has_tests == 'true'
