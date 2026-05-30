@@ -8,6 +8,10 @@ package:
 requirements:
  build:
   - ninja
+{% if sdk == 'android' %}
+ host:
+  - flet-libcpp-shared >=27.2.12479018
+{% endif %}
 
 patches:
 {% if version and version < (2, 0) %}
