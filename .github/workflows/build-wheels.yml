@@ -232,6 +232,7 @@ jobs:
         shell: bash
         env:
           PKG_NAME: ${{ steps.detect-tests.outputs.pkg_name }}
+          FLET_CLI_NO_RICH_OUTPUT: 1
         run: |
           set -euxo pipefail
           ./tests/recipe-tester/stage_recipe.sh "$PKG_NAME"
@@ -257,14 +258,16 @@ jobs:
           target: default
           disable-animations: true
           # cwd inside `script` is the workspace root.
+          # `script` is run by /usr/bin/sh (dash on Ubuntu), NOT bash —
+          # so no `-o pipefail`, no `[[ ]]`, no `${var,,}`, etc. POSIX only.
           script: |
-            set -euxo pipefail
+            set -eux
 
             # Capture diagnostics if anything below fails — AVD is alive at
             # trap time, gone by the time post-action runs.
             cleanup() {
               rc=$?
-              if [[ "$rc" -ne 0 ]]; then
+              if [ "$rc" -ne 0 ]; then
                 adb logcat -d > logcat-on-failure.txt 2>/dev/null || true
                 adb exec-out screencap -p > screen-on-failure.png 2>/dev/null || true
               fi
