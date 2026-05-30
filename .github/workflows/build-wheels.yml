@@ -21,6 +21,10 @@ on:
         description: "Publish to PyPI"
         type: boolean
         default: false
+      rerun_all_tests:
+        description: "Re-run mobile tests for every recipe that has a test file"
+        type: boolean
+        default: false
 
 env:
   UV_PYTHON: "3.12.12"
@@ -44,14 +48,30 @@ jobs:
           dir_names: true
           dir_names_max_depth: 2
 
+      # Detect changes to the shared test runner — when this changes we widen
+      # the matrix with a 5-recipe smoke set so regressions in the runner
+      # itself can't slip through on PRs that touch only the runner.
+      # Plan §5 Q3 picks numpy/pillow/lxml/pandas/bcrypt as representative
+      # patterns (BLAS, assets, native-lib linkage, numpy interop, simple cffi).
+      - name: Check if shared test runner changed
+        id: shared-runner
+        uses: tj-actions/changed-files@v45
+        with:
+          files: |
+            tests/recipe-tester/**
+            .ci/wait_for_console.sh
+
       - id: detect-packages
         shell: bash
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           INPUT_PACKAGES: ${{ inputs.packages }}
+          INPUT_RERUN_ALL_TESTS: ${{ inputs.rerun_all_tests }}
           CHANGED_DIRS: ${{ steps.changed-recipes.outputs.all_changed_files }}
+          SHARED_RUNNER_CHANGED: ${{ steps.shared-runner.outputs.any_changed }}
         run: |
           SMOKE_TEST="pydantic-core:2.33.2"
+          SMOKE_SET="numpy: pillow: lxml: pandas: bcrypt:"   # plan §5 Q3
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             pkgs="${INPUT_PACKAGES:-$SMOKE_TEST}"
           else
@@ -62,6 +82,20 @@ jobs:
             done
             pkgs="${pkgs:-$SMOKE_TEST}"
           fi
+
+          # Append the smoke set if the shared runner changed (push/PR) or
+          # the workflow_dispatch rerun_all_tests flag is true. Dedup so a
+          # PR touching both numpy AND main.py doesn't run numpy twice.
+          if [[ "$SHARED_RUNNER_CHANGED" == "true" || "$INPUT_RERUN_ALL_TESTS" == "true" ]]; then
+            for s in $SMOKE_SET; do
+              s_name="${s%%:*}"
+              # match either at start-of-string or after a comma
+              if ! echo ",$pkgs," | grep -q ",${s_name}:"; then
+                pkgs="${pkgs:+$pkgs,}$s"
+              fi
+            done
+          fi
+
           echo "Detected packages: $pkgs"
           echo "packages=$pkgs" >> "$GITHUB_OUTPUT"
 
@@ -160,8 +194,105 @@ jobs:
           # Android deps: bzip2, libffi, openssl, sqlite, xz
           rm -f dist/bzip2-* dist/libffi-* dist/mpdecimal-* dist/openssl-* dist/sqlite-* dist/xz-*
 
+      # --- Mobile test lane (Phase 1 — Android x86_64 only) -----------------
+      # See playground/test-recipes-on-mobile-PLAN.md §2a. iOS testing is
+      # deferred to Phase 3.
+
+      - name: Detect test files for this recipe
+        id: detect-tests
+        if: matrix.platform == 'android'
+        shell: bash
+        env:
+          FORGE_PACKAGES: ${{ matrix.forge_packages }}
+        run: |
+          set -euo pipefail
+          pkg_name="${FORGE_PACKAGES%%:*}"
+          if [[ -d "recipes/$pkg_name/test" ]] || compgen -G "recipes/$pkg_name/test_*.py" > /dev/null; then
+            echo "Found tests for $pkg_name"
+            echo "has_tests=true" >> "$GITHUB_OUTPUT"
+            echo "pkg_name=$pkg_name" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Skipping mobile test — no test_*.py in recipes/$pkg_name/"
+            echo "has_tests=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Enable KVM
+        # GA'd April 2024 on standard Linux runners; needs a udev rule to
+        # grant the runner user rw on /dev/kvm. Pattern from beeware/toga.
+        if: steps.detect-tests.outputs.has_tests == 'true'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Stage tests + build recipe-tester APK
+        if: steps.detect-tests.outputs.has_tests == 'true'
+        shell: bash
+        env:
+          PKG_NAME: ${{ steps.detect-tests.outputs.pkg_name }}
+        run: |
+          set -euxo pipefail
+          ./tests/recipe-tester/stage_recipe.sh "$PKG_NAME"
+          cd tests/recipe-tester
+          # `--no-install-package` because the recipe is mobile-only — host
+          # venv just needs flet + pytest. Without the flag uv tries to
+          # build the recipe sdist for the host, which fails for any recipe
+          # that doesn't ship a host-compatible wheel.
+          uv sync --dev --no-install-package "$PKG_NAME"
+          PIP_FIND_LINKS="$GITHUB_WORKSPACE/dist" \
+            uv run --no-sync flet build apk --arch x86_64
+
+      - name: Test on Android emulator (API 24, x86_64)
+        if: steps.detect-tests.outputs.has_tests == 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        timeout-minutes: 20
+        with:
+          api-level: 24
+          arch: x86_64
+          target: default
+          disable-animations: true
+          # cwd inside `script` is the workspace root.
+          script: |
+            set -euxo pipefail
+
+            # Capture diagnostics if anything below fails — AVD is alive at
+            # trap time, gone by the time post-action runs.
+            cleanup() {
+              rc=$?
+              if [[ "$rc" -ne 0 ]]; then
+                adb logcat -d > logcat-on-failure.txt 2>/dev/null || true
+                adb exec-out screencap -p > screen-on-failure.png 2>/dev/null || true
+              fi
+              return $rc
+            }
+            trap cleanup EXIT
+
+            adb install -r tests/recipe-tester/build/apk/recipe-tester.apk
+            adb logcat -c
+            adb shell monkey -p com.flet.recipe_tester -c android.intent.category.LAUNCHER 1
+            # ~15min hard cap on the device-side run; recipe tests should
+            # finish in <2min, the extra slack is for AVD slowness.
+            TIMEOUT=900 .ci/wait_for_console.sh android
+
+      - name: Upload test artifacts
+        if: always() && steps.detect-tests.outputs.has_tests == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-${{ matrix.artifact_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            console.log
+            logcat-on-failure.txt
+            screen-on-failure.png
+          if-no-files-found: ignore
+          retention-days: 90
+
+      # --- /Mobile test lane ------------------------------------------------
+
       - name: Publish wheels
-        if: ${{ inputs.publish && hashFiles('dist/*.whl') != '' }}
+        # `success() &&` so a test failure blocks publish — without it, a
+        # passing build with failing tests would still ship the wheel.
+        if: ${{ success() && inputs.publish && hashFiles('dist/*.whl') != '' }}
         shell: bash
         env:
           GEMFURY_TOKEN: ${{ secrets.GEMFURY_TOKEN }}
