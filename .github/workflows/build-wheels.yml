@@ -248,12 +248,16 @@ jobs:
           PIP_FIND_LINKS="$GITHUB_WORKSPACE/dist" \
             uv run --no-sync flet build apk --arch x86_64 --yes
 
-      - name: Test on Android emulator (API 24, x86_64)
+      - name: Test on Android emulator (API 28, x86_64)
         if: steps.detect-tests.outputs.has_tests == 'true'
         uses: reactivecircus/android-emulator-runner@v2
         timeout-minutes: 20
         with:
-          api-level: 24
+          # API 28 minimum, NOT 24. mobile-forge wheels target API 24, but
+          # Flet's Android app shell uses ImageDecoder.OnHeaderDecodedListener
+          # (added in API 28) — on a 24 AVD the recipe-tester APK crashes at
+          # launch with ClassNotFoundException before Python ever starts.
+          api-level: 28
           arch: x86_64
           target: default
           disable-animations: true
