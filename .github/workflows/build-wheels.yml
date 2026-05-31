@@ -97,10 +97,6 @@ jobs:
                 platform="android"
                 rust_targets="aarch64-linux-android,arm-linux-androideabi,x86_64-linux-android,i686-linux-android"
               else
-                # Pin macos-26 (Tahoe) — the image CPython migrated to in March
-                # 2026 to escape the macos-15 1-in-11 iOS simulator hang
-                # documented in actions/runner-images#12777. NOT `macos-latest`
-                # (still resolves to macos-15 for now). Plan §5 Q5.
                 runner="macos-26"
                 platform="ios"
                 rust_targets="aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios"
@@ -248,9 +244,7 @@ jobs:
           # Android deps: bzip2, libffi, openssl, sqlite, xz
           rm -f dist/bzip2-* dist/libffi-* dist/mpdecimal-* dist/openssl-* dist/sqlite-* dist/xz-*
 
-      # --- Mobile test lane (Phase 1 — Android x86_64 only) -----------------
-      # See test-recipes-on-mobile-PLAN.md §2a. iOS testing is
-      # deferred to Phase 3.
+      # --- Mobile test lane ---------------------------------------------------
 
       - name: Detect test files for this recipe
         id: detect-tests
@@ -339,15 +333,11 @@ jobs:
           # instead, which has its own bash shebang.
           script: .ci/run_android_test.sh
 
-      # --- iOS lane (Phase 3 — non-blocking initially) -----------------------
-      # `continue-on-error: true` is in effect during the stabilization
-      # window. Plan §3 Phase 3 says: flip to blocking once 14-day flake
-      # rate stays under 5%. Pinned to macos-26 to avoid the macos-15
-      # simulator hang documented in actions/runner-images#12777.
+      # --- iOS lane ----------------------------------------------------------
 
       - name: Stage tests + build recipe-tester iOS sim app
         if: matrix.platform == 'ios' && steps.detect-tests.outputs.has_tests == 'true'
-        continue-on-error: true
+        continue-on-error: true  # True while iOS test reliability stabilises — flip to blocking once the flake rate stays low.
         shell: bash
         env:
           PKG_NAME: ${{ steps.detect-tests.outputs.pkg_name }}

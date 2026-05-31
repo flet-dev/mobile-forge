@@ -20,12 +20,9 @@ How this works on a CI runner:
 Local dev usage:
   cd tests/recipe-tester
   ./stage_recipe.sh <recipe-name> [<version>]
-  uv sync --dev
-  PIP_FIND_LINKS=$(pwd)/../../dist uv run --no-sync flet build apk --arch arm64-v8a
+  PIP_FIND_LINKS=$(pwd)/../../dist uvx --with flet-cli flet build apk --arch arm64-v8a --yes
   adb install -r build/apk/recipe-tester.apk
   adb shell monkey -p com.flet.recipe_tester -c android.intent.category.LAUNCHER 1
-
-See `playground/test-recipes-on-mobile-PLAN.md` (§2c) for the full design.
 """
 
 import threading
@@ -39,10 +36,10 @@ DONE = False
 
 
 def _run_pytest() -> None:
-    """Run bundled tests in a background thread; emit Toga-shaped EXIT sentinel.
+    """Run bundled tests in a background thread; emit EXIT sentinel.
 
     Runs OFF the GUI thread so Flet's event loop keeps turning and the
-    line-buffered console.log writes flush within ~1ms. If we ran pytest
+    line-buffered `console.log` writes flush within ~1ms. If we ran pytest
     synchronously in `main()`, the event loop wouldn't yield until after
     pytest returned, and the sentinel might sit in a Python-level buffer
     until the next loop iteration.
@@ -50,30 +47,22 @@ def _run_pytest() -> None:
     global EXIT_CODE, DONE
     import pytest
 
-    # Defensive flags rationale (plan §5 Q8):
-    #   --rootdir recipe_tests : don't walk the bundled stdlib zip looking
-    #                            for conftest.py
-    #   -p no:cacheprovider    : don't try to write .pytest_cache/ on a
-    #                            potentially read-only mobile FS
-    #   --capture=no           : let test prints reach console.log too
-    #                            (default pytest capture hides stdout)
-    #   --no-header --tb=short : compact output for console.log
     EXIT_CODE = pytest.main(
         [
             "-v",
-            "--rootdir", "recipe_tests",
-            "-p", "no:cacheprovider",
-            "--capture=no",
+            "--rootdir",
+            "recipe_tests",  # don't walk the bundled stdlib zip looking for conftest.py
+            "-p",
+            "no:cacheprovider",  # don't try to write .pytest_cache/ on a potentially read-only mobile FS
+            "--capture=no",  # let test prints reach console.log too (default pytest capture hides stdout)
             "--no-header",
-            "--tb=short",
+            "--tb=short",  # compact output for console.log
             "recipe_tests/",
         ]
     )
 
     # Repeat the sentinel six times with 0.5s sleeps to defeat any buffering
-    # in the host log-tailer's catch-up window. Pattern matches BeeWare
-    # Briefcase's default `exit_regex` so the same shape works if we ever
-    # want to slot this app under Briefcase.
+    # in the host log-tailer's catch-up window.
     for _ in range(6):
         print(f">>>>>>>>>> EXIT {EXIT_CODE} <<<<<<<<<<", flush=True)
         time.sleep(0.5)
@@ -81,24 +70,22 @@ def _run_pytest() -> None:
 
 
 def main(page: ft.Page) -> None:
-    page.appbar = ft.AppBar(title=ft.Text("recipe-tester"))
+    page.appbar = ft.AppBar(title=ft.Text("Mobile-Forge Recipe Tester"))
     page.add(
         ft.Text(
             "Running pytest on bundled recipe tests…",
             size=14,
             weight=ft.FontWeight.BOLD,
-        )
-    )
-    page.add(
+        ),
         ft.Text(
-            "This screen is informational only. CI reads console.log "
-            "directly; the GUI is just the substrate Flet needs to keep the "
-            "event loop alive.",
+            "This screen is informational only. CI reads console.log directly; "
+            "the GUI is just the substrate Flet needs to keep the event loop alive.",
             size=11,
             color=ft.Colors.GREY,
-        )
+        ),
     )
 
+    # Run pytest in a background thread
     threading.Thread(target=_run_pytest, daemon=True).start()
 
 
