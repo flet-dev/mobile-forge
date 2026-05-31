@@ -1,7 +1,9 @@
 package:
   name: pyobjus
   version: 1.2.3
-  
+  platforms: [ios]
+
+
 patches:
   - mobile.patch
 

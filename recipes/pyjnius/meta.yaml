@@ -1,6 +1,7 @@
 package:
   name: pyjnius
   version: 1.6.1
+  platforms: [android]
 
 patches:
   - mobile.patch
