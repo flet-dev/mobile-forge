@@ -270,23 +270,15 @@ jobs:
         run: |
           set -euo pipefail
           pkg_name="${FORGE_PACKAGES%%:*}"
-          # A test file's mere existence isn't enough — several recipes ship
-          # a `test_<pkg>.py` with only `# TBD` as a placeholder. pytest then
-          # collects 0 items and exits 5 ("no tests collected"), which the
-          # lane treats as failure. Skip the lane when no actual test_
-          # function exists anywhere under recipes/<pkg>/.
-          if compgen -G "recipes/$pkg_name/test_*.py" > /dev/null \
-              || compgen -G "recipes/$pkg_name/test/test_*.py" > /dev/null; then
-            if find "recipes/$pkg_name" -maxdepth 3 \( -name 'test_*.py' -o -name 'test.py' \) -print 2>/dev/null \
-                 | xargs grep -lE '^[[:space:]]*def[[:space:]]+test_' 2>/dev/null \
-                 | grep -q .; then
-              echo "Found tests for $pkg_name"
-              echo "has_tests=true" >> "$GITHUB_OUTPUT"
-              echo "pkg_name=$pkg_name" >> "$GITHUB_OUTPUT"
-            else
-              echo "::notice::test_*.py present but no `def test_` functions — skipping mobile lane"
-              echo "has_tests=false" >> "$GITHUB_OUTPUT"
-            fi
+          # Detect a test file. We DO NOT additionally check that the file
+          # contains a `def test_` function — recipes that ship a stub like
+          # `# TBD` should fail the lane (pytest exits 5, "no tests
+          # collected"), not silently skip. That failure is the signal that
+          # the recipe still needs real tests written.
+          if [[ -d "recipes/$pkg_name/test" ]] || compgen -G "recipes/$pkg_name/test_*.py" > /dev/null; then
+            echo "Found tests for $pkg_name"
+            echo "has_tests=true" >> "$GITHUB_OUTPUT"
+            echo "pkg_name=$pkg_name" >> "$GITHUB_OUTPUT"
           else
             echo "::notice::Skipping mobile test — no test_*.py in recipes/$pkg_name/"
             echo "has_tests=false" >> "$GITHUB_OUTPUT"
