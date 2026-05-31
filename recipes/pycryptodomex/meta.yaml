@@ -2,5 +2,17 @@ package:
   name: pycryptodomex
   version: 3.21.0
 
+# Same fix rationale as recipes/pycryptodome/meta.yaml — pycryptodomex is
+# the sister package (same code under `Cryptodome.*` namespace). Without
+# cffi installed, Crypto/Util/_raw_api.py falls back to
+# ctypes.pythonapi.PyObject_GetBuffer which fails on Android with
+# `AttributeError: undefined symbol: PyObject_GetBuffer` (Flet's
+# bootstrap loads libpython.so with RTLD_LOCAL, so its symbols aren't
+# visible to dlsym(RTLD_DEFAULT)). Declaring cffi here forces pip to
+# install it alongside pycryptodomex so the cffi fast path is used.
+requirements:
+  host:
+    - cffi >=1.0.0
+
 patches:
   - mobile.patch

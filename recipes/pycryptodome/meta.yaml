@@ -2,5 +2,22 @@ package:
   name: pycryptodome
   version: 3.21.0
 
+# pycryptodome's internal Crypto/Util/_raw_api.py tries a cffi-based
+# fast path first, and only falls back to ctypes.pythonapi.PyObject_GetBuffer
+# if cffi can't be imported. That ctypes fallback dies on Android with
+# `AttributeError: undefined symbol: PyObject_GetBuffer` because Flet's
+# bootstrap loads libpython.so with RTLD_LOCAL (Dart's DynamicLibrary.open
+# default), so libpython symbols aren't visible to
+# `dlsym(RTLD_DEFAULT, "PyObject_GetBuffer")`.
+#
+# Upstream pycryptodome's setup.py declares NO install_requires, so pip
+# doesn't pull cffi by default and the broken ctypes path is what runs.
+# Declaring cffi here makes forge inject `Requires-Dist: cffi` into the
+# wheel metadata; pip then installs cffi (+ pycparser) alongside, the
+# cffi path takes over, and pycryptodome works on device.
+requirements:
+  host:
+    - cffi >=1.0.0
+
 patches:
   - mobile.patch
