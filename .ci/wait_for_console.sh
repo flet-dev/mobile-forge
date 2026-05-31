@@ -26,8 +26,8 @@
 #
 # Why a file and not log stream / logcat? Flet's launcher redirects Python
 # stdout/stderr to $FLET_APP_CONSOLE = <app temp>/console.log in production
-# builds. Raw print() output never reaches `adb logcat` or `xcrun simctl log
-# stream` — see playground/stdout-probe/FINDINGS.md.
+# builds, so raw print() output never reaches `adb logcat` or
+# `xcrun simctl log stream` — the file is the only place it lands.
 
 set -euo pipefail
 
