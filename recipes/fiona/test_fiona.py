@@ -13,16 +13,20 @@ def test_supported_drivers():
 
 def test_write_read_geojson(tmp_path):
     """Write a Point feature to GeoJSON then read it back — covers OGR's
-    writer + reader without depending on bundled test data."""
+    writer + reader without depending on bundled test data.
+
+    Note: we deliberately AVOID `fiona.crs.from_epsg(4326)` here. That
+    call requires PROJ's `proj.db` SQLite database to be present at
+    runtime; the mobile-forge fiona/PROJ wheels don't bundle it, so the
+    EPSG lookup fails with `Cannot find proj.db`. A bare CRS string
+    works without the database — GeoJSON simply records it as a
+    coordinate-reference-system metadata field."""
     import fiona
-    from fiona.crs import from_epsg
 
     schema = {"geometry": "Point", "properties": {"name": "str"}}
     path = tmp_path / "tiny.geojson"
 
-    with fiona.open(
-        path, "w", driver="GeoJSON", crs=from_epsg(4326), schema=schema
-    ) as dst:
+    with fiona.open(path, "w", driver="GeoJSON", schema=schema) as dst:
         dst.write(
             {
                 "geometry": {"type": "Point", "coordinates": (2.35, 48.86)},

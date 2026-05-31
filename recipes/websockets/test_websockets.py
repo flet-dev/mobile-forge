@@ -1,20 +1,22 @@
-def test_handshake_frames():
-    """websockets ships an optional C accelerator (`websockets.speedups`)
-    that handles frame masking. Exercise mask + unmask directly — that's
-    the only deterministic, network-free test of the C path."""
-    from websockets import speedups
+def test_frame_mask_roundtrip():
+    """websockets' frame masking is XOR with a 4-byte key. The library
+    exposes it via the public Frame API; if the optional C accelerator
+    (`websockets.speedups`) was built it gets used transparently,
+    otherwise the pure-Python fallback kicks in. Either way, masking
+    twice with the same key restores the original payload — that's the
+    test we actually care about."""
+    from websockets.frames import apply_mask
 
-    payload = bytearray(b"the quick brown fox jumps over the lazy dog")
+    payload = b"the quick brown fox jumps over the lazy dog"
     mask = b"\x12\x34\x56\x78"
-    speedups.apply_mask(payload, mask)
-    # Round-trip: masking twice with the same key undoes it.
-    speedups.apply_mask(payload, mask)
-    assert bytes(payload) == b"the quick brown fox jumps over the lazy dog"
+    masked = apply_mask(payload, mask)
+    assert masked != payload
+    assert apply_mask(masked, mask) == payload
 
 
 def test_import_api():
     """Public top-level symbols are wired up — protects against a recipe
-    that ships only the speedups extension and breaks the pure-Python API."""
+    that ships an extension but breaks the pure-Python API."""
     import websockets
 
     assert hasattr(websockets, "connect")

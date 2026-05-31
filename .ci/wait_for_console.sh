@@ -50,8 +50,21 @@ if [[ "$PLATFORM" == "android" ]]; then
     # sandbox. Reading it requires either `adb root` (works on userdebug
     # AVDs — the standard ReactiveCircus/android-emulator-runner default)
     # or the app being marked debuggable. We assume userdebug AVD.
-    if ! adb root >/dev/null 2>&1; then
-        echo "::error::adb root failed — AVD must be userdebug (or the app debuggable)"
+    #
+    # Retry: under high CI parallelism (~20 emulators sharing the runner
+    # pool) `adb root` occasionally fires before adbd is fully ready and
+    # reports "permission denied — must be userdebug" even on a userdebug
+    # AVD. A short retry loop eats the race.
+    adb_root_ok=0
+    for attempt in 1 2 3 4 5 6; do
+        if adb root >/dev/null 2>&1; then
+            adb_root_ok=1
+            break
+        fi
+        sleep 5
+    done
+    if [[ "$adb_root_ok" != "1" ]]; then
+        echo "::error::adb root failed after 6 retries — AVD must be userdebug (or the app debuggable)"
         exit 3
     fi
     # adbd restarts after `adb root`; wait for it to come back.
