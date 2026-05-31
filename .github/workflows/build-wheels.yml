@@ -40,6 +40,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup uv
+        # Used by set-matrix to drive .ci/read_platforms.py via
+        # `uv run --script` (PEP 723 single-file script with its own
+        # pyyaml dep). Matches the rest of the workflow's tool stack.
+        uses: astral-sh/setup-uv@v6
+
       - name: Get changed recipes
         id: changed-recipes
         uses: tj-actions/changed-files@v45
@@ -113,37 +119,6 @@ jobs:
           PACKAGES="${{ steps.detect-packages.outputs.packages }}"
           BUILD_NUMBER="${{ inputs.build_number || '1' }}"
 
-          # PyYAML is preinstalled on current ubuntu-latest runners, but
-          # this guards against runner-image updates that drop it.
-          python3 -c "import yaml" 2>/dev/null \
-            || python3 -m pip install --quiet --user pyyaml
-
-          # Helper: read `package.platforms` from a recipe's meta.yaml.
-          # Some meta.yamls (numpy, etc.) carry bare Jinja blocks that
-          # don't parse as YAML directly, so we strip Jinja delimiters
-          # first. `platforms` is platform-independent metadata so it
-          # must live outside any Jinja conditional; this stripped view
-          # is enough to read it. Returns the space-joined list, or
-          # empty string if absent / on any parse error (defaults to
-          # "runs everywhere" — preserves prior behavior).
-          read_platforms() {
-            local recipe_path="$1"
-            python3 - <<PYEOF
-          import re, yaml
-          try:
-              with open("$recipe_path") as f:
-                  text = f.read()
-              text = re.sub(r'\{%.*?%\}', '', text, flags=re.DOTALL)
-              text = re.sub(r'\{\{.*?\}\}', '""', text)
-              m = yaml.safe_load(text) or {}
-              p = (m.get('package') or {}).get('platforms')
-              if p:
-                  print(' '.join(p))
-          except Exception:
-              pass
-          PYEOF
-          }
-
           matrix='{"include":['
           first=true
           for arch in $(echo "$ARCHS" | tr ',' ' '); do
@@ -163,10 +138,10 @@ jobs:
                 rust_targets="aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios"
               fi
 
-              # Honor the recipe's `package.platforms` if declared.
+              # if recipe declare's `package.platforms`, honor it on matrix
               declared=""
               if [[ -f "recipes/$pkg_name/meta.yaml" ]]; then
-                declared=$(read_platforms "recipes/$pkg_name/meta.yaml")
+                declared=$(uv run --script .ci/read_platforms.py "recipes/$pkg_name/meta.yaml")
               fi
               if [[ -n "$declared" && ! " $declared " == *" $platform "* ]]; then
                 echo "::notice::Skip ${platform}: ${pkg_name} — recipe declares platforms=[$declared]"
