@@ -10,7 +10,7 @@ on:
         required: false
         default: "android,iOS"
       packages:
-        description: "Packages (comma-separated, e.g. pillow:11.1.0,pydantic-core:2.33.2)"
+        description: "Packages (comma-separated, e.g. pillow:11.1.0,pydantic-core:2.33.2) — or 'ALL' to build/test every recipe"
         required: false
         default: "pydantic-core:2.33.2"
       build_number:
@@ -19,10 +19,6 @@ on:
         default: "1"
       publish:
         description: "Publish to PyPI"
-        type: boolean
-        default: false
-      rerun_all_tests:
-        description: "Re-run mobile tests for every recipe that has a test file"
         type: boolean
         default: false
 
@@ -79,14 +75,27 @@ jobs:
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           INPUT_PACKAGES: ${{ inputs.packages }}
-          INPUT_RERUN_ALL_TESTS: ${{ inputs.rerun_all_tests }}
           CHANGED_DIRS: ${{ steps.changed-recipes.outputs.all_changed_files }}
           SHARED_RUNNER_CHANGED: ${{ steps.shared-runner.outputs.any_changed }}
         run: |
           SMOKE_TEST="pydantic-core:2.33.2"
           SMOKE_SET="numpy: pillow: lxml: bcrypt: cryptography: bitarray:"
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-            pkgs="${INPUT_PACKAGES:-$SMOKE_TEST}"
+            # The literal value "ALL" (case-SENSITIVE — must be exactly
+            # uppercase) expands to every recipe with a meta.yaml under
+            # recipes/. Per-recipe `package.platforms` filtering is
+            # applied later in set-matrix, so iOS-only or Android-only
+            # recipes are still dropped from the wrong lane.
+            if [[ "$INPUT_PACKAGES" == "ALL" ]]; then
+              pkgs=""
+              for dir in recipes/*/; do
+                [[ -f "$dir/meta.yaml" ]] || continue
+                pkg=$(basename "$dir")
+                pkgs="${pkgs:+$pkgs,}${pkg}:"
+              done
+            else
+              pkgs="${INPUT_PACKAGES:-$SMOKE_TEST}"
+            fi
           else
             pkgs=""
             for dir in $CHANGED_DIRS; do
@@ -96,10 +105,12 @@ jobs:
             pkgs="${pkgs:-$SMOKE_TEST}"
           fi
 
-          # Append the smoke set if the shared runner changed (push/PR) or
-          # the workflow_dispatch rerun_all_tests flag is true. Dedup so a
-          # PR touching both numpy AND main.py doesn't run numpy twice.
-          if [[ "$SHARED_RUNNER_CHANGED" == "true" || "$INPUT_RERUN_ALL_TESTS" == "true" ]]; then
+          # When the shared test runner itself changes, widen the matrix
+          # with the 6-recipe smoke set so regressions in the runner
+          # can't slip through on PRs that touch only the runner. Dedup
+          # so a PR touching both numpy AND main.py doesn't run numpy
+          # twice.
+          if [[ "$SHARED_RUNNER_CHANGED" == "true" ]]; then
             for s in $SMOKE_SET; do
               s_name="${s%%:*}"
               # match either at start-of-string or after a comma
