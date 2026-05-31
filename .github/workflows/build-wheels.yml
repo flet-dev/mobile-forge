@@ -49,10 +49,18 @@ jobs:
           dir_names_max_depth: 2
 
       # Detect changes to the shared test runner — when this changes we widen
-      # the matrix with a 5-recipe smoke set so regressions in the runner
+      # the matrix with a 6-recipe smoke set so regressions in the runner
       # itself can't slip through on PRs that touch only the runner.
-      # Plan §5 Q3 picks numpy/pillow/lxml/pandas/bcrypt as representative
-      # patterns (BLAS, assets, native-lib linkage, numpy interop, simple cffi).
+      # Each smoke entry exercises a different recipe-pattern so a single
+      # green run covers a meaningful slice of the recipes/ ecosystem:
+      #   - numpy        : BLAS-free Meson build + Android libcpp host dep
+      #   - pillow       : assets-directory test shape + image C-ext (libpng/freetype)
+      #   - lxml         : libxml2 native-lib linkage + unittest.TestCase style
+      #   - bcrypt       : minimal cffi
+      #   - cryptography : OpenSSL host dep (different from libcpp)
+      #   - bitarray     : pure C-ext, no host deps (vanilla-C-ext canary)
+      # (pandas was in the original §5 Q3 list; dropped while pandas 2.2.3's
+      # meson+cython cross-compile probe failure is investigated separately.)
       - name: Check if shared test runner changed
         id: shared-runner
         uses: tj-actions/changed-files@v45
@@ -72,7 +80,7 @@ jobs:
           SHARED_RUNNER_CHANGED: ${{ steps.shared-runner.outputs.any_changed }}
         run: |
           SMOKE_TEST="pydantic-core:2.33.2"
-          SMOKE_SET="numpy: pillow: lxml: bcrypt:"
+          SMOKE_SET="numpy: pillow: lxml: bcrypt: cryptography: bitarray:"
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             pkgs="${INPUT_PACKAGES:-$SMOKE_TEST}"
           else
