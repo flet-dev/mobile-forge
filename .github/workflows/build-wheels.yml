@@ -37,9 +37,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup uv
-        # Used by set-matrix to drive .ci/read_platforms.py via
-        # `uv run --script` (PEP 723 single-file script with its own
-        # pyyaml dep). Matches the rest of the workflow's tool stack.
         uses: astral-sh/setup-uv@v6
 
       - name: Get changed recipes
@@ -50,42 +47,16 @@ jobs:
           dir_names: true
           dir_names_max_depth: 2
 
-      # Detect changes to the shared test runner — when this changes we widen
-      # the matrix with a 6-recipe smoke set so regressions in the runner
-      # itself can't slip through on PRs that touch only the runner.
-      # Each smoke entry exercises a different recipe-pattern so a single
-      # green run covers a meaningful slice of the recipes/ ecosystem:
-      #   - numpy        : BLAS-free Meson build + Android libcpp host dep
-      #   - pillow       : assets-directory test shape + image C-ext (libpng/freetype)
-      #   - lxml         : libxml2 native-lib linkage + unittest.TestCase style
-      #   - bcrypt       : minimal cffi
-      #   - cryptography : OpenSSL host dep (different from libcpp)
-      #   - bitarray     : pure C-ext, no host deps (vanilla-C-ext canary)
-      - name: Check if shared test runner changed
-        id: shared-runner
-        uses: tj-actions/changed-files@v45
-        with:
-          files: |
-            tests/recipe-tester/**
-            .ci/wait_for_console.sh
-            .github/workflows/build-wheels.yml
-
       - id: detect-packages
         shell: bash
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           INPUT_PACKAGES: ${{ inputs.packages }}
           CHANGED_DIRS: ${{ steps.changed-recipes.outputs.all_changed_files }}
-          SHARED_RUNNER_CHANGED: ${{ steps.shared-runner.outputs.any_changed }}
         run: |
           SMOKE_TEST="pydantic-core:2.33.2"
-          SMOKE_SET="numpy: pillow: lxml: bcrypt: cryptography: bitarray:"
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-            # The literal value "ALL" (case-SENSITIVE — must be exactly
-            # uppercase) expands to every recipe with a meta.yaml under
-            # recipes/. Per-recipe `package.platforms` filtering is
-            # applied later in set-matrix, so iOS-only or Android-only
-            # recipes are still dropped from the wrong lane.
+            # The literal value "ALL" expands to every recipe with a meta.yaml under recipes/.
             if [[ "$INPUT_PACKAGES" == "ALL" ]]; then
               pkgs=""
               for dir in recipes/*/; do
@@ -103,21 +74,6 @@ jobs:
               pkgs="${pkgs:+$pkgs,}${dir#recipes/}:"
             done
             pkgs="${pkgs:-$SMOKE_TEST}"
-          fi
-
-          # When the shared test runner itself changes, widen the matrix
-          # with the 6-recipe smoke set so regressions in the runner
-          # can't slip through on PRs that touch only the runner. Dedup
-          # so a PR touching both numpy AND main.py doesn't run numpy
-          # twice.
-          if [[ "$SHARED_RUNNER_CHANGED" == "true" ]]; then
-            for s in $SMOKE_SET; do
-              s_name="${s%%:*}"
-              # match either at start-of-string or after a comma
-              if ! echo ",$pkgs," | grep -q ",${s_name}:"; then
-                pkgs="${pkgs:+$pkgs,}$s"
-              fi
-            done
           fi
 
           echo "Detected packages: $pkgs"
@@ -179,14 +135,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Free disk space (Ubuntu runners only)
-        # Ubuntu runners ship with ~14 GB free disk; that's tight once we
-        # add the NDK r27d (~3 GB), python-build support tree, Flutter SDK,
-        # Gradle cache, and dist/ + dist-test/ wheels. The test lane's
-        # Gradle assembleRelease step blew past the limit on pillow's job
-        # in run 26702042450 with "No space left on device" during
-        # :app:mergeReleaseNativeDebugMetadata. The standard fix is the
-        # jlumbroso/free-disk-space action — Toga uses it, ~30+ GB freed.
-        # Only runs on Ubuntu (macOS runners have ample disk).
         if: runner.os == 'Linux'
         uses: jlumbroso/free-disk-space@main
         with:
