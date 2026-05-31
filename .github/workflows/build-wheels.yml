@@ -55,7 +55,7 @@ jobs:
           INPUT_PACKAGES: ${{ inputs.packages }}
           CHANGED_DIRS: ${{ steps.changed-recipes.outputs.all_changed_files }}
         run: |
-          SMOKE_TEST="pydantic-core:2.33.2"
+          SMOKE_TEST="pyjnius"
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             # The literal value "ALL" expands to every recipe with a meta.yaml under recipes/.
             if [[ "$INPUT_PACKAGES" == "ALL" ]]; then
@@ -276,6 +276,41 @@ jobs:
             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+
+      - name: Pre-install Flutter's pinned NDK
+        # `flet build apk` shells out to Flutter, whose generated Gradle says
+        # `ndkVersion = flutter.ndkVersion`. In Flutter 3.41.x that resolves
+        # to NDK 28.2.13676358 (hardcoded in flutter_tools'
+        # FlutterExtension.kt:42). The Ubuntu runner ships Android SDK but
+        # NOT this NDK — Gradle then triggers an auto-install via
+        # sdkmanager mid-build, which fails intermittently with either
+        # `InstallFailedException` (CDN hiccup) or `ZipException: Archive
+        # is not a ZIP archive` (partial download served as HTML). Both
+        # surface the same root flake.
+        #
+        # Pre-installing here is deterministic and removes that race.
+        # `link-to-sdk: true` symlinks the cached NDK into
+        # `$ANDROID_HOME/ndk/<resolved-version>/` — Gradle scans every
+        # entry there, reads source.properties, and matches by
+        # Pkg.Revision = 28.2.13676358 regardless of directory name.
+        #
+        # mobile-forge's own NDK (r27d, used for wheel cross-compile)
+        # still lives at $HOME/ndk/r27d via .ci/install_ndk.sh — separate
+        # install, no conflict.
+        #
+        # Version mapping when Flutter bumps:
+        #   grep `val ndkVersion: String` in the Flutter SDK's
+        #   flutter_tools/gradle/src/main/kotlin/FlutterExtension.kt to
+        #   find the current component version, then look it up against
+        #   https://dl.google.com/android/repository/repository2-3.xml
+        #   (search for that ndk;<version> path → the .zip filename gives
+        #   you the release letter). Today: 28.2.13676358 → r28c.
+        if: matrix.platform == 'android' && steps.detect-tests.outputs.has_tests == 'true'
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r28c
+          link-to-sdk: true
+          local-cache: true
 
       - name: Stage tests + build recipe-tester APK
         if: matrix.platform == 'android' && steps.detect-tests.outputs.has_tests == 'true'
