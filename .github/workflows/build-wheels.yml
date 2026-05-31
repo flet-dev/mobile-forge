@@ -337,7 +337,6 @@ jobs:
 
       - name: Stage tests + build recipe-tester iOS sim app
         if: matrix.platform == 'ios' && steps.detect-tests.outputs.has_tests == 'true'
-        continue-on-error: true  # True while iOS test reliability stabilises — flip to blocking once the flake rate stays low.
         shell: bash
         env:
           PKG_NAME: ${{ steps.detect-tests.outputs.pkg_name }}
@@ -363,7 +362,6 @@ jobs:
 
       - name: Test on iOS Simulator
         if: matrix.platform == 'ios' && steps.detect-tests.outputs.has_tests == 'true'
-        continue-on-error: true
         timeout-minutes: 25
         shell: bash
         # iOS sim cold-boot can take 1-4 min on the macos-26 image.
