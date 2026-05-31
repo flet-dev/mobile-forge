@@ -152,6 +152,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Free disk space (Ubuntu runners only)
+        # Ubuntu runners ship with ~14 GB free disk; that's tight once we
+        # add the NDK r27d (~3 GB), python-build support tree, Flutter SDK,
+        # Gradle cache, and dist/ + dist-test/ wheels. The test lane's
+        # Gradle assembleRelease step blew past the limit on pillow's job
+        # in run 26702042450 with "No space left on device" during
+        # :app:mergeReleaseNativeDebugMetadata. The standard fix is the
+        # jlumbroso/free-disk-space action — Toga uses it, ~30+ GB freed.
+        # Only runs on Ubuntu (macOS runners have ample disk).
+        if: runner.os == 'Linux'
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false      # KEEP — we need android sdk + python tooling
+          android: false         # KEEP — Android SDK is used by Build wheels (NDK) + Test
+          dotnet: true
+          haskell: true
+          large-packages: false  # SKIP — sudo apt remove takes minutes; reaping above is enough
+          docker-images: true
+          swap-storage: true
+
       - name: Setup uv
         uses: astral-sh/setup-uv@v6
 
