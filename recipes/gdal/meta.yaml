@@ -7,8 +7,7 @@ requirements:
     - flet-libgdal 3.10.0
 # {% if sdk == 'android' %}
     # libgdal links C++; the SWIG-generated _gdal.so loads via dlopen which
-    # needs libc++_shared.so on Android. Without this dep the wheel loads
-    # with `dlopen failed: library "libc++_shared.so" not found`.
+    # needs libc++_shared.so on Android.
     - flet-libcpp-shared >=27.2.12479018
 # {% endif %}
 
