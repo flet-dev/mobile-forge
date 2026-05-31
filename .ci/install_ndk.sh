@@ -36,7 +36,7 @@ if [[ "$version" =~ ^r[0-9]+[a-z]*$ ]]; then
                     match($0, /path="ndk;[0-9.]+"/) {
                         current = substr($0, RSTART+10, RLENGTH-11)
                     }
-                    index($0, zip) { print current; exit }
+                    !found && index($0, zip) { print current; found=1 }
                   ')
     if [ -z "$version" ]; then
         echo "Could not resolve NDK release letter '$letter' to a component version." >&2
@@ -67,3 +67,10 @@ fi
 
 echo "NDK $version installed at $install_dir"
 export NDK_HOME="$install_dir"
+
+# When run as a GH Actions step (not sourced — the export above doesn't
+# persist across steps), write NDK_HOME to $GITHUB_ENV so downstream
+# steps inherit it. Harmless to no-op when $GITHUB_ENV is unset (local).
+if [ -n "${GITHUB_ENV:-}" ]; then
+    echo "NDK_HOME=$install_dir" >> "$GITHUB_ENV"
+fi

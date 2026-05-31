@@ -160,6 +160,14 @@ jobs:
         with:
           targets: ${{ matrix.rust_targets }}
 
+      - name: Install NDK ${{ env.FORGE_NDK_VERSION }} for forge on Android
+        # forge cross-compiles Android wheels with this NDK. The install
+        # script writes NDK_HOME to $GITHUB_ENV so the Build wheels step
+        # (and forge subprocesses) pick it up.
+        if: matrix.platform == 'android'
+        shell: bash
+        run: .ci/install_ndk.sh "$FORGE_NDK_VERSION"
+
       - name: Build wheels
         shell: bash
         env:
@@ -223,8 +231,6 @@ jobs:
               # its SONAME in DT_NEEDED.
               printf 'INPUT ( -l%s )\n' "$libstem" > "$libdir/libpython3.so"
             done
-
-            . .ci/install_ndk.sh "$FORGE_NDK_VERSION"
           else
             python_ios_dir="$HOME/projects/python-build/darwin/Python-Apple-support"
             curl -#OL "https://github.com/flet-dev/python-build/releases/download/v${PYTHON_SHORT_VERSION}/python-ios-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz"
@@ -278,7 +284,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Install NDK ${{ env.FLUTTER_NDK_VERSION }} for Flutter
+      - name: Install NDK ${{ env.FLUTTER_NDK_VERSION }} for Flutter Android build
         # `flet build apk` shells out to Flutter, whose generated Gradle
         # uses `ndkVersion = flutter.ndkVersion`. Without this NDK
         # pre-installed at $ANDROID_HOME/ndk/<version>/, Gradle triggers
