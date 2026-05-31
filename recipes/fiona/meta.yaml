@@ -11,8 +11,16 @@ build:
     GDAL_VERSION: 3.10.0
     GDAL_LIB_PATH: '{platlib}/opt/lib'
     GDAL_INCLUDE_PATH: '{platlib}/opt/include'
+# {% if sdk == 'android' %}
     GDAL_LIBS: gdal
-# {% if sdk != 'android' %}
+# {% else %}
+    # On iOS libgdal is built static (`-DBUILD_SHARED_LIBS=OFF`) and so is
+    # libproj. GDAL's link only pulled in PROJ objects it referenced
+    # itself, so the geodesic objects (`geod_init`, …) — which fiona's
+    # `_env.pyx` calls directly — were dropped. Adding `proj` makes
+    # fiona's extension link command pull `geodesic.o` straight out of
+    # libproj.a.
+    GDAL_LIBS: gdal,proj
     LDFLAGS: '-undefined dynamic_lookup'
 # {% endif %}
 
