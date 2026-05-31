@@ -194,6 +194,14 @@ jobs:
             tar -xzf "python-android-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz" -C "$python_android_dir"
             export MOBILE_FORGE_ANDROID_SUPPORT_PATH="$python_android_dir"
 
+            # ──────────────────────────────────────────────────────────
+            # CLEANUP-AFTER: flet-dev/python-build#5
+            # PR #5 adds `replace_libpython_stub` to the tarball-assembly
+            # step, which writes this exact linker script in-place. Once
+            # that PR ships in a new tarball, this whole loop becomes a
+            # no-op (the libpython3.so files are already linker scripts)
+            # and can be deleted.
+            # ──────────────────────────────────────────────────────────
             # Replace the python-build tarball's libpython3.so forwarding
             # shim with a GNU ld linker script that resolves -lpython3 to
             # libpython3.12.so directly. Why this matters:

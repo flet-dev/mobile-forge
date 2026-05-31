@@ -68,6 +68,25 @@ fi
 echo "NDK $version installed at $install_dir"
 export NDK_HOME="$install_dir"
 
+# ──────────────────────────────────────────────────────────────────────
+# CLEANUP-AFTER: flet-dev/python-build#5
+# Compat symlink at $HOME/ndk/<letter>/. The currently-published
+# python-android-mobile-forge-*.tar.gz bakes absolute paths of the
+# shape `/home/runner/ndk/<letter>/toolchains/...` into sysconfigdata,
+# so crossenv looks for the compiler there. PR #5 adds a relocation
+# block to the tarball that auto-rewrites those paths at runtime
+# (consults $NDK_HOME first). Once that PR ships in a new tarball,
+# this symlink stops doing anything useful — delete this block.
+if [ -n "${letter:-}" ]; then
+    legacy="$HOME/ndk/$letter"
+    if [ ! -e "$legacy" ]; then
+        mkdir -p "$HOME/ndk"
+        ln -sfn "$install_dir" "$legacy"
+        echo "Created legacy compat symlink: $legacy → $install_dir"
+    fi
+fi
+# ──────────────────────────────────────────────────────────────────────
+
 # When run as a GH Actions step (not sourced — the export above doesn't
 # persist across steps), write NDK_HOME to $GITHUB_ENV so downstream
 # steps inherit it. Harmless to no-op when $GITHUB_ENV is unset (local).
