@@ -1,15 +1,46 @@
-diff --git a/pyproject.toml b/pyproject.toml
-index 238abd8..37de5c7 100644
---- a/pyproject.toml
-+++ b/pyproject.toml
-@@ -2,8 +2,8 @@
+--- a/pyproject.toml	2026-05-31 23:37:15
++++ b/pyproject.toml	2026-05-31 23:37:15
+@@ -2,8 +2,10 @@
  # Minimum requirements for the build system to execute.
  # See https://github.com/scipy/scipy/pull/12940 for the AIX issue.
  requires = [
 -    "meson-python==0.13.1",
 -    "meson==1.2.1",
-+    "meson-python==0.15.0",
-+    #"meson==1.2.1",
++    # Upstream pinned 0.13.1 + 1.2.1 — bump to a recent meson-python so the
++    # mobile-forge meson-wrapper.py below works (older mesonpy ignored the
++    # tool.meson-python.meson setting).
++    "meson-python>=0.16.0",
      "wheel",
      "Cython~=3.0.5",  # Note: sync with setup.py, environment.yml and asv.conf.json
      # Force numpy higher than 2.0, so that built wheels are compatible
+@@ -809,3 +811,15 @@
+ [tool.codespell]
+ ignore-words-list = "blocs, coo, hist, nd, sav, ser, recuse, nin, timere, expec, expecs"
+ ignore-regex = 'https://([\w/\.])+'
++
++# Added by mobile-forge mobile.patch — see meson-wrapper.py.
++# Pointing `meson` at a Python script forces meson-python to invoke meson
++# through sys.executable, which under forge's cross-build is the
++# cross-Python wrapper. Without this, meson-python uses the bare `meson`
++# CLI from PATH, which resolves to a shebang under the BUILD Python — and
++# meson then queries the BUILD Python's sysconfig, leaking the host
++# Python's Python.h include path into the cython sanity check. On 32-bit
++# Android targets this surfaces as
++# `pyport.h: LONG_BIT definition appears wrong for platform`.
++[tool.meson-python]
++meson = "meson-wrapper.py"
+--- /dev/null	2026-05-31 12:00:00
++++ b/meson-wrapper.py	2026-05-31 12:00:00
+@@ -0,0 +1,12 @@
++"""Forwards to the meson CLI through `sys.executable` so meson-python
++invokes meson under the same Python interpreter the build is running
++under. For forge's cross-build that's the cross-Python wrapper, which
++sets _PYTHON_SYSCONFIGDATA_NAME so meson queries the TARGET sysconfig
++rather than the BUILD/host one. Without this the cython sanity check
++sees the host Python.h's SIZEOF_VOID_P=8 on 32-bit Android targets
++(armeabi-v7a, x86) and explodes."""
++
++import sys
++from mesonbuild.mesonmain import main
++
++sys.exit(main())
