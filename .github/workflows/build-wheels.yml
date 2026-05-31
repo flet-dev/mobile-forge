@@ -26,6 +26,7 @@ env:
   UV_PYTHON: "3.12.12"
   MOBILE_FORGE_CACHE_DOWNLOADS_OFF: "1"
   NDK_VERSION: r27d
+  FLET_CLI_NO_RICH_OUTPUT: 1
 
 jobs:
   setup:
@@ -287,7 +288,6 @@ jobs:
         shell: bash
         env:
           PKG_NAME: ${{ steps.detect-tests.outputs.pkg_name }}
-          FLET_CLI_NO_RICH_OUTPUT: 1
         run: |
           set -euxo pipefail
 
@@ -317,13 +317,8 @@ jobs:
 
           ./tests/recipe-tester/stage_recipe.sh "$PKG_NAME"
           cd tests/recipe-tester
-          # `--no-install-package` because the recipe is mobile-only — host
-          # venv just needs flet + pytest. Without the flag uv tries to
-          # build the recipe sdist for the host, which fails for any recipe
-          # that doesn't ship a host-compatible wheel.
-          uv sync --dev --no-install-package "$PKG_NAME"
           PIP_FIND_LINKS="$GITHUB_WORKSPACE/dist-test" \
-            uv run --no-sync flet build apk --arch x86_64 --yes
+            uvx --with flet-cli flet build apk --arch x86_64 -v --yes
 
       - name: Test on Android emulator (API 28, x86_64)
         if: matrix.platform == 'android' && steps.detect-tests.outputs.has_tests == 'true'
@@ -356,7 +351,6 @@ jobs:
         shell: bash
         env:
           PKG_NAME: ${{ steps.detect-tests.outputs.pkg_name }}
-          FLET_CLI_NO_RICH_OUTPUT: 1
         run: |
           set -euxo pipefail
 
@@ -374,9 +368,8 @@ jobs:
 
           ./tests/recipe-tester/stage_recipe.sh "$PKG_NAME"
           cd tests/recipe-tester
-          uv sync --dev --no-install-package "$PKG_NAME"
           PIP_FIND_LINKS="$GITHUB_WORKSPACE/dist-test" \
-            uv run --no-sync flet build ios-simulator --yes
+            uvx --with flet-cli flet build ios-simulator -v --yes
 
       - name: Test on iOS Simulator
         if: matrix.platform == 'ios' && steps.detect-tests.outputs.has_tests == 'true'
