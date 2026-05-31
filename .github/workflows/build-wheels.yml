@@ -159,6 +159,15 @@ jobs:
         with:
           targets: ${{ matrix.rust_targets }}
 
+      - name: Install forge NDK (${{ env.NDK_VERSION }})
+        if: matrix.platform == 'android'
+        uses: nttld/setup-ndk@v1
+        id: forge-ndk
+        with:
+          ndk-version: ${{ env.NDK_VERSION }}
+          local-cache: true
+          link-to-sdk: 'false'  # to avoid collision with Flutter's r28c
+
       - name: Build wheels
         shell: bash
         env:
@@ -166,6 +175,7 @@ jobs:
           FORGE_PACKAGES: ${{ matrix.forge_packages }}
           BUILD_NUMBER: ${{ matrix.build_number }}
           PLATFORM: ${{ matrix.platform }}
+          NDK_HOME: ${{ steps.forge-ndk.outputs.ndk-path }}  # Android only — empty on iOS jobs
         run: |
           set -euxo pipefail
 
@@ -222,8 +232,6 @@ jobs:
               # its SONAME in DT_NEEDED.
               printf 'INPUT ( -l%s )\n' "$libstem" > "$libdir/libpython3.so"
             done
-
-            . .ci/install_ndk.sh
           else
             python_ios_dir="$HOME/projects/python-build/darwin/Python-Apple-support"
             curl -#OL "https://github.com/flet-dev/python-build/releases/download/v${PYTHON_SHORT_VERSION}/python-ios-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz"
@@ -293,10 +301,6 @@ jobs:
         # `$ANDROID_HOME/ndk/<resolved-version>/` — Gradle scans every
         # entry there, reads source.properties, and matches by
         # Pkg.Revision = 28.2.13676358 regardless of directory name.
-        #
-        # mobile-forge's own NDK (r27d, used for wheel cross-compile)
-        # still lives at $HOME/ndk/r27d via .ci/install_ndk.sh — separate
-        # install, no conflict.
         #
         # Version mapping when Flutter bumps:
         #   grep `val ndkVersion: String` in the Flutter SDK's
