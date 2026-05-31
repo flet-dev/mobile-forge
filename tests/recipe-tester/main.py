@@ -9,7 +9,7 @@ How this works on a CI runner:
   2. `flet build apk` / `flet build ios-simulator` bundles this app + the
      staged tests + the recipe wheel into a deployable.
   3. The CI installs and launches the app on an emulator/simulator. The
-     `_run_pytest()` thread runs pytest, prints a Toga-shaped EXIT sentinel
+     `_run_pytest()` thread runs pytest, then prints the EXIT sentinel
      to stdout. Flet's launcher has rebound `sys.stdout`/`sys.stderr` to a
      line-buffered file at $FLET_APP_CONSOLE, so the sentinel and any
      pytest output land in that file within ~1ms of being written.
@@ -26,7 +26,6 @@ Local dev usage:
 """
 
 import threading
-import time
 
 import flet as ft
 
@@ -61,11 +60,14 @@ def _run_pytest() -> None:
         ]
     )
 
-    # Repeat the sentinel six times with 0.5s sleeps to defeat any buffering
-    # in the host log-tailer's catch-up window.
-    for _ in range(6):
-        print(f">>>>>>>>>> EXIT {EXIT_CODE} <<<<<<<<<<", flush=True)
-        time.sleep(0.5)
+    # Single emit is enough: stdout is rebound to $FLET_APP_CONSOLE opened
+    # with `buffering=1`, so the line is in the kernel page cache as soon
+    # as `print(..., flush=True)` returns; the host's wait_for_console.sh
+    # polls the file every 2s and grep-matches on a complete line. The
+    # 6×0.5s loop this replaces was a cargo-culted Toga pattern that
+    # defended against logcat/NSLog stream buffering — neither of which
+    # is in our IO path.
+    print(f">>>>>>>>>> EXIT {EXIT_CODE} <<<<<<<<<<", flush=True)
     DONE = True
 
 

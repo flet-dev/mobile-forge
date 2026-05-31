@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Poll the recipe-tester's console.log on a mobile device/simulator, parse
-# the Toga-shaped EXIT sentinel, write a GitHub Step Summary, and exit with
-# the sentinel's code.
+# the EXIT sentinel, write a GitHub Step Summary, and exit with the
+# sentinel's code.
 #
 # Usage:
 #   wait_for_console.sh android
@@ -119,10 +119,11 @@ if [[ ! -s "$OUT" ]] || ! grep -qE '^>>>>>>>>>> EXIT [0-9-]+ <<<<<<<<<<$' "$OUT"
     exit 2
 fi
 
-# Sentinel is repeated 6× to defeat buffering — take the LAST one (most
-# likely to be fully flushed by the time we read it). Format:
+# Format:
 #   >>>>>>>>>> EXIT 0 <<<<<<<<<<
 #   ↑ $1       ↑ $2 ↑ $3 ↑ $4
+# `tail -1` defensively picks the last match in case the runner ever
+# emits multiple — today it prints exactly once.
 EXIT_CODE=$(grep -oE '^>>>>>>>>>> EXIT [0-9-]+ <<<<<<<<<<$' "$OUT" \
             | tail -1 \
             | awk '{print $3}')
