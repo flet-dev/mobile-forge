@@ -105,18 +105,26 @@ jobs:
                 rust_targets="aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios"
               fi
 
-              # if recipe declare's `package.platforms`, honor it on matrix
-              declared=""
+              # Read recipe meta (version + build_number + platforms)
+              recipe_version=""; recipe_build=""; declared=""
               if [[ -f "recipes/$pkg_name/meta.yaml" ]]; then
-                declared=$(uv run --script .ci/read_platforms.py "recipes/$pkg_name/meta.yaml")
+                IFS=$'\t' read -r recipe_version recipe_build declared \
+                  <<< "$(uv run --script .ci/read_meta.py "recipes/$pkg_name/meta.yaml")"
               fi
+
+              # Honor recipe's `package.platforms` on the matrix.
               if [[ -n "$declared" && ! " $declared " == *" $platform "* ]]; then
                 echo "::notice::Skip ${platform}: ${pkg_name} — recipe declares platforms=[$declared]"
                 continue
               fi
 
+              # Compose the job display name.
+              pkg_ver_override="${pkg#*:}"
+              display_version="${pkg_ver_override:-$recipe_version}"
+              job_name="${platform}: ${pkg_name} ${display_version} #${BUILD_NUMBER}"
+
               if [ "$first" = true ]; then first=false; else matrix+=','; fi
-              matrix+="{\"job_name\":\"${platform}: ${pkg_name}\",\"artifact_name\":\"${platform}-${pkg_name}\",\"runner\":\"$runner\",\"platform\":\"$platform\",\"forge_arch\":\"$arch\",\"forge_packages\":\"$pkg\",\"build_number\":\"$BUILD_NUMBER\",\"rust_targets\":\"$rust_targets\"}"
+              matrix+="{\"job_name\":\"$job_name\",\"artifact_name\":\"${platform}-${pkg_name}\",\"runner\":\"$runner\",\"platform\":\"$platform\",\"forge_arch\":\"$arch\",\"forge_packages\":\"$pkg\",\"build_number\":\"$BUILD_NUMBER\",\"rust_targets\":\"$rust_targets\"}"
             done
           done
           matrix+=']}'
