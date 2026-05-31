@@ -5,6 +5,14 @@ package:
 requirements:
   host:
     - numpy ^2.0.0
+# {% if sdk == 'android' %}
+    # OpenCV is heavy C++; its own .so files plus numpy's
+    # _multiarray_umath.so on x86_64 + armeabi-v7a depend on
+    # libc++_shared.so. Declaring libcpp here ensures pip installs it
+    # even when numpy comes from a published wheel whose Requires-Dist
+    # doesn't (yet) declare libcpp.
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
 
 patches:
   - mobile.patch

@@ -10,6 +10,14 @@ requirements:
     - numpy ^2.0.0
     - pybind11
     - flet-libjpeg 3.0.90
+# {% if sdk == 'android' %}
+    # matplotlib uses pybind11 (= C++) and imports numpy at startup; on
+    # x86_64 + armeabi-v7a numpy's _multiarray_umath.so has
+    # DT_NEEDED=libc++_shared.so. Same workaround as shapely — declare
+    # libcpp on the matplotlib wheel so pip pulls it even when numpy
+    # comes from a published wheel that's missing its own Requires-Dist.
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
 
 build:
 # {% if sdk == 'android' and arch in ['armeabi-v7a', 'x86'] %}
