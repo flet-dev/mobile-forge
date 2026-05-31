@@ -11,9 +11,8 @@ def test_in_memory_raster():
 
     band = ds.GetRasterBand(1)
     band.Fill(7)
-    arr = band.ReadAsArray()
-    assert arr.shape == (3, 4)
-    assert (arr == 7).all()
+    raw = band.ReadRaster(0, 0, 4, 3)  # 4*3*1 byte = 12 bytes
+    assert raw == bytes([7] * 12)
 
 
 def test_version_loaded():

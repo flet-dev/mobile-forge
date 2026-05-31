@@ -1,7 +1,7 @@
 """opaque is a ctypes wrapper around libopaque (the OPAQUE asymmetric
 PAKE protocol). The C lib is supplied as a host dep (`flet-libopaque`)
-in the mobile-forge recipe, so the test runs end-to-end on Android/iOS
-but cannot be exercised locally without installing libopaque separately."""
+in the mobile-forge recipe; the wheel needs pysodium too at runtime
+(handled via mobile.patch adding `install_requires=['pysodium']`)."""
 
 
 def test_registration_and_credential_roundtrip():
@@ -12,7 +12,7 @@ def test_registration_and_credential_roundtrip():
     import opaque
 
     pwd = b"correct horse battery staple"
-    ids = opaque.Ids(idU=b"user", idS=b"server")
+    ids = opaque.Ids(idu=b"user", ids=b"server")
 
     # --- Registration ---
     secret_client, request = opaque.CreateRegistrationRequest(pwd)
@@ -24,9 +24,7 @@ def test_registration_and_credential_roundtrip():
 
     # --- Credential exchange (login) ---
     client_state, ke1 = opaque.CreateCredentialRequest(pwd)
-    sk_server, ke2, _auth_req = opaque.CreateCredentialResponse(
-        ke1, record, ids, b""
-    )
+    sk_server, ke2, _auth_req = opaque.CreateCredentialResponse(ke1, record, ids, b"")
     sk_client, _auth_resp, export_key_login = opaque.RecoverCredentials(
         ke2, client_state, b"", ids
     )

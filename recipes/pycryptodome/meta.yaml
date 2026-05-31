@@ -12,12 +12,8 @@ package:
 #
 # Upstream pycryptodome's setup.py declares NO install_requires, so pip
 # doesn't pull cffi by default and the broken ctypes path is what runs.
-# Declaring cffi here makes forge inject `Requires-Dist: cffi` into the
-# wheel metadata; pip then installs cffi (+ pycparser) alongside, the
-# cffi path takes over, and pycryptodome works on device.
-requirements:
-  host:
-    - cffi >=1.0.0
-
+# mobile.patch adds `install_requires=['cffi']` to setup.py directly —
+# forge's METADATA injection only touches `flet-*` host deps, so a
+# `requirements: host: - cffi` here would silently no-op.
 patches:
   - mobile.patch
