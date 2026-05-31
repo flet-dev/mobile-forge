@@ -5,6 +5,14 @@ package:
 requirements:
   host:
     - numpy ^2.0.0
+# {% if sdk == 'android' %}
+    # blis compiles its native kernels with libstdc++, which on Android
+    # is libc++_shared.so. The runtime needs the matching DT_NEEDED entry,
+    # provided by the flet-libcpp-shared meta-package (mirrors numpy's
+    # Android wiring). Without this the `.so` loads with
+    # `dlopen failed: library "libc++_shared.so" not found`.
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
 
 patches:
   - mobile.patch

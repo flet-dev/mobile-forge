@@ -206,22 +206,33 @@ jobs:
             tar -xzf "python-android-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz" -C "$python_android_dir"
             export MOBILE_FORGE_ANDROID_SUPPORT_PATH="$python_android_dir"
 
-            # Restore libpython3.so symlink missing from the python-build
-            # tarballs. pyo3-build-config (used by maturin 1.13+) emits a
-            # `-lpython3` link directive for abi3 builds — the linker
-            # resolves it via this symlink, and because libpython3.12.so's
-            # SONAME is libpython3.12.so, the resulting .so still ends up
-            # with libpython3.12.so in DT_NEEDED. Without it, maturin's
-            # build silently produces a .so missing libpython.so from
-            # DT_NEEDED, and Android dlopen later fails with
-            # `cannot locate symbol "PyType_IsSubtype"` because Dart's
-            # DynamicLibrary.open uses RTLD_LOCAL (so libpython symbols
-            # aren't in the global scope when the extension is loaded).
+            # Replace the python-build tarball's libpython3.so forwarding
+            # shim with a GNU ld linker script that resolves -lpython3 to
+            # libpython3.12.so directly. Why this matters:
+            #
+            # pyo3-build-config (used by maturin 1.13+) emits `-lpython3`
+            # for abi3 builds. The upstream tarball ships libpython3.so as
+            # a real ELF stub with SONAME=libpython3.so (forwards via its
+            # own DT_NEEDED to libpython3.12.so). Left alone, our wheel's
+            # `_rust.abi3.so` ends up with DT_NEEDED=[libpython3.so], and
+            # at runtime Android dlopen fails with
+            # `library "libpython3.so" not found` because the Flet app
+            # only ships libpython3.12.so. Replacing the shim with a
+            # script `INPUT ( libpython3.12.so )` makes ld follow the
+            # directive into libpython3.12.so directly and record
+            # libpython3.12.so (its SONAME) in DT_NEEDED — independent of
+            # how the host's lld interprets symlinks (a plain `ln -sf`
+            # worked on macOS NDK but Linux NDK still wrote
+            # libpython3.so in DT_NEEDED).
+            #
             # iOS doesn't need this because Python.framework is linked
-            # statically into the binary.
+            # statically into the app binary.
             for libpy in "$python_android_dir"/install/android/*/python-3.*/lib/libpython3.[0-9]*.so; do
               [[ -e "$libpy" ]] || continue
-              ln -sf "$(basename "$libpy")" "$(dirname "$libpy")/libpython3.so"
+              libpy_name=$(basename "$libpy")
+              libdir=$(dirname "$libpy")
+              rm -f "$libdir/libpython3.so"
+              printf 'INPUT ( %s )\n' "$libpy_name" > "$libdir/libpython3.so"
             done
 
             . .ci/install_ndk.sh
@@ -259,10 +270,23 @@ jobs:
         run: |
           set -euo pipefail
           pkg_name="${FORGE_PACKAGES%%:*}"
-          if [[ -d "recipes/$pkg_name/test" ]] || compgen -G "recipes/$pkg_name/test_*.py" > /dev/null; then
-            echo "Found tests for $pkg_name"
-            echo "has_tests=true" >> "$GITHUB_OUTPUT"
-            echo "pkg_name=$pkg_name" >> "$GITHUB_OUTPUT"
+          # A test file's mere existence isn't enough — several recipes ship
+          # a `test_<pkg>.py` with only `# TBD` as a placeholder. pytest then
+          # collects 0 items and exits 5 ("no tests collected"), which the
+          # lane treats as failure. Skip the lane when no actual test_
+          # function exists anywhere under recipes/<pkg>/.
+          if compgen -G "recipes/$pkg_name/test_*.py" > /dev/null \
+              || compgen -G "recipes/$pkg_name/test/test_*.py" > /dev/null; then
+            if find "recipes/$pkg_name" -maxdepth 3 \( -name 'test_*.py' -o -name 'test.py' \) -print 2>/dev/null \
+                 | xargs grep -lE '^[[:space:]]*def[[:space:]]+test_' 2>/dev/null \
+                 | grep -q .; then
+              echo "Found tests for $pkg_name"
+              echo "has_tests=true" >> "$GITHUB_OUTPUT"
+              echo "pkg_name=$pkg_name" >> "$GITHUB_OUTPUT"
+            else
+              echo "::notice::test_*.py present but no `def test_` functions — skipping mobile lane"
+              echo "has_tests=false" >> "$GITHUB_OUTPUT"
+            fi
           else
             echo "::notice::Skipping mobile test — no test_*.py in recipes/$pkg_name/"
             echo "has_tests=false" >> "$GITHUB_OUTPUT"
