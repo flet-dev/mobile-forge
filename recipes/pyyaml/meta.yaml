@@ -1,3 +1,10 @@
 package:
   name: PyYAML
   version: 6.0.2
+
+requirements:
+  host:
+    # Without libyaml's headers + shared library on the build root, PyYAML's
+    # setup.py silently skips the `_yaml` C extension (`DistutilsPlatformError`
+    # → `log.warn("skipping build_ext")`) and ships a pure-Python wheel.
+    - flet-libyaml 0.2.5
