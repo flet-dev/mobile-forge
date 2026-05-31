@@ -59,8 +59,6 @@ jobs:
       #   - bcrypt       : minimal cffi
       #   - cryptography : OpenSSL host dep (different from libcpp)
       #   - bitarray     : pure C-ext, no host deps (vanilla-C-ext canary)
-      # (pandas was in the original §5 Q3 list; dropped while pandas 2.2.3's
-      # meson+cython cross-compile probe failure is investigated separately.)
       - name: Check if shared test runner changed
         id: shared-runner
         uses: tj-actions/changed-files@v45
@@ -279,11 +277,8 @@ jobs:
         run: |
           set -euo pipefail
           pkg_name="${FORGE_PACKAGES%%:*}"
-          # Detect a test file. We DO NOT additionally check that the file
-          # contains a `def test_` function — recipes that ship a stub like
-          # `# TBD` should fail the lane (pytest exits 5, "no tests
-          # collected"), not silently skip. That failure is the signal that
-          # the recipe still needs real tests written.
+          
+          # Recipe-level test files can be either a test/ subdir or test_*.py files in the recipe root.
           if [[ -d "recipes/$pkg_name/test" ]] || compgen -G "recipes/$pkg_name/test_*.py" > /dev/null; then
             echo "Found tests for $pkg_name"
             echo "has_tests=true" >> "$GITHUB_OUTPUT"
@@ -294,9 +289,8 @@ jobs:
           fi
 
       - name: Enable KVM
-        # GA'd April 2024 on standard Linux runners; needs a udev rule to
-        # grant the runner user rw on /dev/kvm. Pattern from beeware/toga.
-        # Android-only — macOS uses Hypervisor.Framework on its own.
+        # GA'd April 2024 on standard Linux runners; needs a udev rule to grant the runner
+        # user rw on /dev/kvm. Android-only — macOS uses Hypervisor.Framework on its own.
         if: matrix.platform == 'android' && steps.detect-tests.outputs.has_tests == 'true'
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
@@ -344,9 +338,6 @@ jobs:
           # build the recipe sdist for the host, which fails for any recipe
           # that doesn't ship a host-compatible wheel.
           uv sync --dev --no-install-package "$PKG_NAME"
-          # `--yes` auto-accepts the interactive Flutter-SDK-install prompt
-          # that flet-cli/flutter_base.py:_prompt_input raises on first run.
-          # Without it, stdin is empty on CI and Confirm.ask hits EOFError.
           PIP_FIND_LINKS="$GITHUB_WORKSPACE/dist-test" \
             uv run --no-sync flet build apk --arch x86_64 --yes
 
@@ -408,9 +399,7 @@ jobs:
         continue-on-error: true
         timeout-minutes: 25
         shell: bash
-        # iOS sim cold-boot can take 1-4 min on the macos-26 image. Same
-        # logic-in-a-file convention as the Android lane; see
-        # .ci/run_ios_test.sh.
+        # iOS sim cold-boot can take 1-4 min on the macos-26 image.
         run: .ci/run_ios_test.sh
 
       # --- /iOS lane ---------------------------------------------------------
