@@ -13,11 +13,18 @@ def test_basic():
 
 
 def test_c_extension():
-    """The C accelerator (_yaml) is the whole reason this is a forge recipe."""
-    from yaml import CSafeDumper, CSafeLoader
+    """The C accelerator (_yaml) is what this recipe primarily exists for.
 
-    text = CSafeDumper(None).represent_data({"k": [1, 2, 3]})
-    # Loader/Dumper classes carry the C-backed scanner — instantiating them
-    # without raising imports the _yaml extension successfully.
-    assert CSafeLoader is not None
-    assert text is not None
+    PyYAML exposes `CSafeDumper`/`CSafeLoader` only when the `_yaml` C
+    extension successfully imports — otherwise they're simply absent
+    from the `yaml` package namespace (no exception, no None — just
+    missing names). Probe by importing `_yaml` and checking it carries
+    the Cython-emitted `CParser` class. That assertion fires both when
+    the .so was never shipped AND when libyaml fails to load at import
+    time on the device."""
+    import _yaml
+
+    assert hasattr(_yaml, "CParser"), (
+        "PyYAML's _yaml C extension loaded but is missing CParser — "
+        "libyaml probably failed to load at import time"
+    )
