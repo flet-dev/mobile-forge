@@ -55,7 +55,7 @@ jobs:
           INPUT_PACKAGES: ${{ inputs.packages }}
           CHANGED_DIRS: ${{ steps.changed-recipes.outputs.all_changed_files }}
         run: |
-          SMOKE_TEST="pyjnius"
+          SMOKE_TEST="pyjnius:"
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             # The literal value "ALL" expands to every recipe with a meta.yaml under recipes/.
             if [[ "$INPUT_PACKAGES" == "ALL" ]]; then
