@@ -8,24 +8,39 @@ def test_registration_and_credential_roundtrip():
     """Run one full OPAQUE round: client → registration → server stores
     record; client → login → server verifies; both sides derive a session
     key. The roundtrip touches every libopaque C entry point pyopaque
-    wraps."""
+    wraps.
+
+    Tuple-unpack order is per the upstream `opaque/__init__.py`:
+      CreateRegistrationRequest  → (sec, request)
+      CreateRegistrationResponse → (sec, pub)
+      FinalizeRequest            → (rec, export_key)
+      CreateCredentialRequest    → (pub, sec)   ← NB: pub first
+      CreateCredentialResponse   → (resp, sk, sec)
+      RecoverCredentials         → (sk, authU, export_key)
+    """
     import opaque
 
     pwd = b"correct horse battery staple"
     ids = opaque.Ids(idu=b"user", ids=b"server")
 
     # --- Registration ---
-    secret_client, request = opaque.CreateRegistrationRequest(pwd)
-    secret_server, response = opaque.CreateRegistrationResponse(request)
-    record, export_key_reg = opaque.FinalizeRequest(secret_client, response, ids)
+    secret_client_reg, request = opaque.CreateRegistrationRequest(pwd)
+    _secret_server_reg, response = opaque.CreateRegistrationResponse(request)
+    record, export_key_reg = opaque.FinalizeRequest(
+        secret_client_reg, response, ids
+    )
     assert isinstance(record, bytes)
     assert isinstance(export_key_reg, bytes)
     assert len(export_key_reg) > 0
 
     # --- Credential exchange (login) ---
-    client_state, ke1 = opaque.CreateCredentialRequest(pwd)
-    sk_server, ke2, _auth_req = opaque.CreateCredentialResponse(ke1, record, ids, b"")
-    sk_client, _auth_resp, export_key_login = opaque.RecoverCredentials(
+    # NB: CreateCredentialRequest returns (pub, sec) — pub first.
+    ke1, client_state = opaque.CreateCredentialRequest(pwd)
+    # CreateCredentialResponse returns (resp, sk, sec).
+    ke2, sk_server, _sec = opaque.CreateCredentialResponse(
+        ke1, record, ids, b""
+    )
+    sk_client, _auth, export_key_login = opaque.RecoverCredentials(
         ke2, client_state, b"", ids
     )
 
