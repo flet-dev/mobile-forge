@@ -133,13 +133,25 @@ EXIT_CODE=$(grep -oE '^>>>>>>>>>> EXIT [0-9-]+ <<<<<<<<<<$' "$OUT" \
 PYTEST_SUMMARY=$(grep -E '^=+ .* (passed|failed|error|skipped).* =+$' "$OUT" | tail -1 || true)
 
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+    # Annotate non-zero codes with a one-liner so the GH summary is
+    # self-explanatory at a glance. EXIT_CODE here is pytest's exit
+    # code (carried through the sentinel) — pytest exit codes per
+    # https://docs.pytest.org/en/stable/reference/exit-codes.html.
+    case "$EXIT_CODE" in
+        1) meaning=" (tests failed)" ;;
+        2) meaning=" (test execution interrupted)" ;;
+        3) meaning=" (internal pytest error)" ;;
+        4) meaning=" (pytest usage error)" ;;
+        5) meaning=" (no tests collected)" ;;
+        *) meaning="" ;;
+    esac
     {
         echo "## recipe-tester — ${PLATFORM}"
         echo
         if [[ "$EXIT_CODE" == "0" ]]; then
             echo "**Result:** ✅ exit 0"
         else
-            echo "**Result:** ❌ exit ${EXIT_CODE}"
+            echo "**Result:** ❌ exit ${EXIT_CODE}${meaning}"
         fi
         if [[ -n "$PYTEST_SUMMARY" ]]; then
             echo
