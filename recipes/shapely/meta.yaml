@@ -7,14 +7,6 @@ requirements:
     - flet-libgeos 3.13.0
     - numpy ^2.0.0
 # {% if sdk == 'android' %}
-    # shapely's lib.so imports numpy at module init, and on x86_64 +
-    # armeabi-v7a numpy's _multiarray_umath.so has DT_NEEDED=libc++_shared.so.
-    # Declaring libcpp here makes the *shapely* wheel pull it (forge
-    # injects host deps as Requires-Dist), which is the workaround for the
-    # currently-published numpy wheel on pypi.flet.dev whose METADATA has
-    # NO Requires-Dist at all. Without this, shapely + published-numpy
-    # installs without libcpp and numpy import dies with
-    # `numpy._core.multiarray failed to import` at app startup.
     - flet-libcpp-shared >=27.2.12479018
 # {% endif %}
 
