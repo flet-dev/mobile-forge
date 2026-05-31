@@ -229,10 +229,19 @@ jobs:
             # statically into the app binary.
             for libpy in "$python_android_dir"/install/android/*/python-3.*/lib/libpython3.[0-9]*.so; do
               [[ -e "$libpy" ]] || continue
-              libpy_name=$(basename "$libpy")
+              libpy_name=$(basename "$libpy")  # e.g. libpython3.12.so
               libdir=$(dirname "$libpy")
+              # Strip "lib" prefix + ".so" suffix → just "python3.12"
+              libstem="${libpy_name#lib}"; libstem="${libstem%.so}"
               rm -f "$libdir/libpython3.so"
-              printf 'INPUT ( %s )\n' "$libpy_name" > "$libdir/libpython3.so"
+              # `INPUT ( -lpython3.12 )` not `INPUT ( libpython3.12.so )` —
+              # the latter makes lld on Linux record the resolved ABSOLUTE
+              # host path in DT_NEEDED (e.g. `/home/runner/.../libpython3.12.so`),
+              # which obviously doesn't exist on the Android device. The `-l`
+              # form is processed exactly like a `-lpython3.12` flag would
+              # be: search the linker's `-L` paths, find the lib, and emit
+              # its SONAME in DT_NEEDED.
+              printf 'INPUT ( -l%s )\n' "$libstem" > "$libdir/libpython3.so"
             done
 
             . .ci/install_ndk.sh
