@@ -2,6 +2,13 @@ package:
   name: greenlet
   version: 3.1.1
 
+# {% if sdk == 'android' %}
+requirements:
+  host:
+    # greenlet's _greenlet.so is C++; on Android this links libstdc++ which is libc++_shared.so.
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
+
 # {% if sdk != 'android' %}
 build:
   script_env:

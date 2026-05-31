@@ -6,17 +6,23 @@ in the mobile-forge recipe; the wheel needs pysodium too at runtime
 
 def test_registration_and_credential_roundtrip():
     """Run one full OPAQUE round: client → registration → server stores
-    record; client → login → server verifies; both sides derive a session
-    key. The roundtrip touches every libopaque C entry point pyopaque
-    wraps.
+    user record; client → login → server verifies; both sides derive a
+    session key. The roundtrip touches every libopaque C entry point
+    pyopaque wraps.
 
-    Tuple-unpack order is per the upstream `opaque/__init__.py`:
-      CreateRegistrationRequest  → (sec, request)
-      CreateRegistrationResponse → (sec, pub)
-      FinalizeRequest            → (rec, export_key)
-      CreateCredentialRequest    → (pub, sec)   ← NB: pub first
-      CreateCredentialResponse   → (resp, sk, sec)
-      RecoverCredentials         → (sk, authU, export_key)
+    Function-by-function this is the API per `opaque/__init__.py`:
+      CreateRegistrationRequest(pwd)        → (sec, request)
+      CreateRegistrationResponse(request)   → (sec, pub)
+      FinalizeRequest(sec, pub, ids)        → (registration_record, export_key)
+      StoreUserRecord(sec, registration_record) → user_record
+        — combines the server's REGISTER_SECRET (skS+kU) with the
+          client's REGISTRATION_RECORD into the USER_RECORD that
+          CreateCredentialResponse expects. The byte layout differs
+          between sec and user_record, so we MUST use this helper
+          rather than naive concatenation.
+      CreateCredentialRequest(pwd)          → (pub, sec)   ← NB: pub first
+      CreateCredentialResponse(pub, rec, ids, ctx) → (resp, sk, sec)
+      RecoverCredentials(resp, sec, ctx, ids) → (sk, authU, export_key)
     """
     import opaque
 
@@ -25,22 +31,24 @@ def test_registration_and_credential_roundtrip():
 
     # --- Registration ---
     secret_client_reg, request = opaque.CreateRegistrationRequest(pwd)
-    _secret_server_reg, response = opaque.CreateRegistrationResponse(request)
-    record, export_key_reg = opaque.FinalizeRequest(
+    secret_server_reg, response = opaque.CreateRegistrationResponse(request)
+    registration_record, export_key_reg = opaque.FinalizeRequest(
         secret_client_reg, response, ids
     )
-    assert isinstance(record, bytes)
+    assert isinstance(registration_record, bytes)
     assert isinstance(export_key_reg, bytes)
     assert len(export_key_reg) > 0
 
+    # Server stores the long-lived user record (server's sec + client's
+    # registration_record, properly rearranged by libopaque).
+    user_record = opaque.StoreUserRecord(secret_server_reg, registration_record)
+
     # --- Credential exchange (login) ---
-    # NB: CreateCredentialRequest returns (pub, sec) — pub first.
     ke1, client_state = opaque.CreateCredentialRequest(pwd)
-    # CreateCredentialResponse returns (resp, sk, sec).
-    ke2, sk_server, _sec = opaque.CreateCredentialResponse(
-        ke1, record, ids, b""
+    ke2, sk_server, _server_session_sec = opaque.CreateCredentialResponse(
+        ke1, user_record, ids, b""
     )
-    sk_client, _auth, export_key_login = opaque.RecoverCredentials(
+    sk_client, _authU, export_key_login = opaque.RecoverCredentials(
         ke2, client_state, b"", ids
     )
 

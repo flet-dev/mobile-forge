@@ -7,9 +7,7 @@ requires-python = ">=3.10"
 dependencies = [
     "flet",
     "pytest",
-    # `stage_recipe.sh` rewrites the line below to pin the recipe under test
-    # (e.g. `"numpy==2.2.2"`). This template is committed; the generated
-    # `pyproject.toml` is gitignored.
+    # `stage_recipe.sh` rewrites the line below to pin the recipe under test (e.g. `"numpy==2.2.2"`).
     "__RECIPE_DEP__",
 ]
 
