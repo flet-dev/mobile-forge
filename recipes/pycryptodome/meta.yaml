@@ -3,7 +3,7 @@ package:
   version: 3.21.0
 
 build:
-  number: 4
+  number: 5
 
 # pycryptodome's internal Crypto/Util/_raw_api.py tries a cffi-based
 # fast path first, and only falls back to ctypes.pythonapi.PyObject_GetBuffer

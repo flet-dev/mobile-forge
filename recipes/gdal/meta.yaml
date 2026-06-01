@@ -16,7 +16,7 @@ requirements:
 # {% endif %}
 
 build:
-  number: 4
+  number: 5
   script_env:
     GDAL_VERSION: 3.10.0
     GDAL_PREFIX: '{platlib}/opt'
