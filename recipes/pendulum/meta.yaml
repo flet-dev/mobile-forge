@@ -3,6 +3,7 @@ package:
   version: 3.0.0
 
 build:
+  number: 4
   script_env:
     _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
 # {% if sdk == 'iphonesimulator' %}

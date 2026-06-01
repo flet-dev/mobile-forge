@@ -9,6 +9,9 @@ package:
   name: flet-libxml2
   version: '{{ version }}'
 
+build:
+  number: 1
+
 source:
   url: https://download.gnome.org/sources/libxml2/{{ version.rsplit('.', 1)[0] }}/libxml2-{{ version }}.tar.xz
 
