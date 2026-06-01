@@ -6,9 +6,22 @@ requirements:
   host:
     - flet-libgdal 3.10.0
 # {% if sdk == 'android' %}
-    # pyogrio's Cython extension links libgdal which pulls in libstdc++
-    # → libc++_shared.so on Android. Without this dep the wheel loads with
-    # `dlopen failed: library "libc++_shared.so" not found`.
+    # CLEANUP-AFTER: flet-dev/mobile-forge#58
+    #
+    # Defensive. Neither pyogrio's own .so files (_io, _vsi,
+    # _geometry, _ogr, _err) NOR the libgdal.so they link against
+    # carry DT_NEEDED on libc++_shared — verified via
+    # `llvm-readobj --needed-libs` against the published android arm64
+    # wheels. libgdal is built with libstdc++ statically linked, so
+    # pyogrio's own code path doesn't need libcpp at runtime. The dep
+    # belongs to numpy: pyogrio's upstream `Requires-Dist: numpy>=1.21`
+    # pulls numpy into every pyogrio-using app, and numpy's
+    # _multiarray_umath / _pocketfft_umath need libc++_shared at
+    # dlopen. The numpy wheel on pypi.flet.dev today carries no
+    # Requires-Dist entries at all, so libcpp never reaches the flet
+    # bundler unless someone in the install graph declares it
+    # explicitly. Drop this line after #58 merges and a numpy rebuild
+    # lands on pypi.flet.dev with libcpp surfaced in METADATA.
     - flet-libcpp-shared >=27.2.12479018
 # {% else %}
     # iOS-only — see GDAL_LIBS comment below for the rationale.

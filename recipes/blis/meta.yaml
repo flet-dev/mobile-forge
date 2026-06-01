@@ -6,11 +6,19 @@ requirements:
   host:
     - numpy ^2.0.0
 # {% if sdk == 'android' %}
-    # blis compiles its native kernels with libstdc++, which on Android
-    # is libc++_shared.so. The runtime needs the matching DT_NEEDED entry,
-    # provided by the flet-libcpp-shared meta-package (mirrors numpy's
-    # Android wiring). Without this the `.so` loads with
-    # `dlopen failed: library "libc++_shared.so" not found`.
+    # CLEANUP-AFTER: flet-dev/mobile-forge#58
+    #
+    # Defensive. blis's own .so files carry no DT_NEEDED on
+    # libc++_shared — verified via `llvm-readobj --needed-libs` against
+    # the published android arm64 wheel; any C++ stdlib references in
+    # blis are statically linked into the .so. The dep belongs to
+    # numpy: blis host-deps `numpy ^2.0.0`, and numpy's
+    # _multiarray_umath / _pocketfft_umath need libc++_shared at dlopen.
+    # The numpy wheel on pypi.flet.dev today carries no Requires-Dist
+    # entries at all, so libcpp never reaches the flet bundler unless
+    # someone in the install graph declares it explicitly. Drop this
+    # line after #58 merges and a numpy rebuild lands on pypi.flet.dev
+    # with libcpp surfaced in METADATA.
     - flet-libcpp-shared >=27.2.12479018
 # {% endif %}
 
