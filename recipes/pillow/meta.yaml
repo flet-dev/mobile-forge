@@ -22,8 +22,9 @@ patches:
 
 # {% endif %}
 
-# {% if sdk != 'android' %}
 build:
+  number: 4
+# {% if sdk != 'android' %}
   script_env:
     # libfreetype references both libz and libbz2
     # but doesn't link them into the static library

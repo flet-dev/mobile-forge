@@ -17,6 +17,7 @@ patches:
 {% endif %}
 
 build:
+  number: 4
   script_env:
     NPY_DISABLE_SVML: 1
 

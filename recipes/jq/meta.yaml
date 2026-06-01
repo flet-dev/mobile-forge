@@ -7,5 +7,6 @@ requirements:
     - flet-libjq 1.7.1
 
 build:
+  number: 4
   script_env:
     JQPY_USE_SYSTEM_LIBS: 1

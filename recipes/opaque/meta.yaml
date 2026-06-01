@@ -2,6 +2,9 @@ package:
   name: opaque
   version: 0.2.0
 
+build:
+  number: 4
+
 requirements:
   host:
     - flet-libopaque 0.99.8

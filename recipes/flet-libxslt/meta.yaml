@@ -11,6 +11,9 @@ package:
   name: flet-libxslt
   version: '{{ version }}'
 
+build:
+  number: 1
+
 source:
   url: https://download.gnome.org/sources/libxslt/{{ version.rsplit('.', 1)[0] }}/libxslt-{{ version }}.tar.xz
 

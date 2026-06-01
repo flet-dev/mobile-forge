@@ -6,8 +6,9 @@ requirements:
   host:
     - flet-libcrc32c 1.1.2
 
-# {% if sdk != 'android' %}
 build:
+  number: 4
+# {% if sdk != 'android' %}
   script_env:
     LDFLAGS: '-lc++'
 # {% endif %}

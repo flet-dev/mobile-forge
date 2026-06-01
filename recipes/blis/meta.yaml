@@ -2,6 +2,9 @@ package:
   name: blis
   version: 1.0.0
 
+build:
+  number: 4
+
 requirements:
   host:
     - numpy ^2.0.0

@@ -4,5 +4,8 @@ package:
   name: flet-libsodium
   version: '{{ version }}'
 
+build:
+  number: 4
+
 source:
   url: https://github.com/jedisct1/libsodium/releases/download/{{ version }}-RELEASE/libsodium-{{ version }}.tar.gz

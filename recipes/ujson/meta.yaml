@@ -2,6 +2,9 @@ package:
   name: ujson
   version: 5.12.1
 
+build:
+  number: 1
+
 # {% if sdk == 'android' %}
 # ujson links its bundled double-conversion C++ code against NDK's libc++.
 # NDK r27 defaults to libc++_shared, so the .so has a runtime dlopen() on

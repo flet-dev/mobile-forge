@@ -3,6 +3,7 @@ package:
   version: 1.67.1
 
 build:
+  number: 5
   script_env:
 # {% if sdk == 'android' %}
     GRPC_PYTHON_BUILD_SYSTEM_OPENSSL: '1'
