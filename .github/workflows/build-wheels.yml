@@ -193,52 +193,6 @@ jobs:
             mkdir -p "$python_android_dir"
             tar -xzf "python-android-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz" -C "$python_android_dir"
             export MOBILE_FORGE_ANDROID_SUPPORT_PATH="$python_android_dir"
-
-            # ──────────────────────────────────────────────────────────
-            # CLEANUP-AFTER: flet-dev/python-build#5
-            # PR #5 adds `replace_libpython_stub` to the tarball-assembly
-            # step, which writes this exact linker script in-place. Once
-            # that PR ships in a new tarball, this whole loop becomes a
-            # no-op (the libpython3.so files are already linker scripts)
-            # and can be deleted.
-            # ──────────────────────────────────────────────────────────
-            # Replace the python-build tarball's libpython3.so forwarding
-            # shim with a GNU ld linker script that resolves -lpython3 to
-            # libpython3.12.so directly. Why this matters:
-            #
-            # pyo3-build-config (used by maturin 1.13+) emits `-lpython3`
-            # for abi3 builds. The upstream tarball ships libpython3.so as
-            # a real ELF stub with SONAME=libpython3.so (forwards via its
-            # own DT_NEEDED to libpython3.12.so). Left alone, our wheel's
-            # `_rust.abi3.so` ends up with DT_NEEDED=[libpython3.so], and
-            # at runtime Android dlopen fails with
-            # `library "libpython3.so" not found` because the Flet app
-            # only ships libpython3.12.so. Replacing the shim with a
-            # script `INPUT ( libpython3.12.so )` makes ld follow the
-            # directive into libpython3.12.so directly and record
-            # libpython3.12.so (its SONAME) in DT_NEEDED — independent of
-            # how the host's lld interprets symlinks (a plain `ln -sf`
-            # worked on macOS NDK but Linux NDK still wrote
-            # libpython3.so in DT_NEEDED).
-            #
-            # iOS doesn't need this because Python.framework is linked
-            # statically into the app binary.
-            for libpy in "$python_android_dir"/install/android/*/python-3.*/lib/libpython3.[0-9]*.so; do
-              [[ -e "$libpy" ]] || continue
-              libpy_name=$(basename "$libpy")  # e.g. libpython3.12.so
-              libdir=$(dirname "$libpy")
-              # Strip "lib" prefix + ".so" suffix → just "python3.12"
-              libstem="${libpy_name#lib}"; libstem="${libstem%.so}"
-              rm -f "$libdir/libpython3.so"
-              # `INPUT ( -lpython3.12 )` not `INPUT ( libpython3.12.so )` —
-              # the latter makes lld on Linux record the resolved ABSOLUTE
-              # host path in DT_NEEDED (e.g. `/home/runner/.../libpython3.12.so`),
-              # which obviously doesn't exist on the Android device. The `-l`
-              # form is processed exactly like a `-lpython3.12` flag would
-              # be: search the linker's `-L` paths, find the lib, and emit
-              # its SONAME in DT_NEEDED.
-              printf 'INPUT ( -l%s )\n' "$libstem" > "$libdir/libpython3.so"
-            done
           else
             python_ios_dir="$HOME/projects/python-build/darwin/Python-Apple-support"
             curl -#OL "https://github.com/flet-dev/python-build/releases/download/v${PYTHON_SHORT_VERSION}/python-ios-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz"
