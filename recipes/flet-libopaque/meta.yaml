@@ -4,6 +4,9 @@ package:
   name: flet-libopaque
   version: '{{ version }}'
 
+build:
+  number: 4
+
 source:
   url: https://github.com/stef/libopaque/archive/refs/tags/v{{ version }}.tar.gz
 

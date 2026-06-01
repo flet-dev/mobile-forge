@@ -3,7 +3,7 @@ package:
   version: 1.1.2
 
 build:
-  number: 1
+  number: 4
 
 source:
   url: https://github.com/google/crc32c/archive/refs/tags/1.1.2.tar.gz

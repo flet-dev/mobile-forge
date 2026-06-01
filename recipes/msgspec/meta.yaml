@@ -2,6 +2,9 @@ package:
   name: msgspec
   version: 0.18.6
 
+build:
+  number: 4
+
 requirements:
   build:
     - setuptools ^69.5.1

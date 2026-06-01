@@ -3,7 +3,7 @@ package:
   version: 1.6.43
 
 build:
-  number: 1
+  number: 4
 
 source:
   url: https://github.com/pnggroup/libpng/archive/refs/tags/v1.6.43.tar.gz
