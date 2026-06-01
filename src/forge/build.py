@@ -649,11 +649,21 @@ class Builder(ABC):
 
         # Normalize wheel tags to forge platform tags so repacked wheels use
         # android_24_arm64_v8a / ios_13_0_arm64_iphoneos style platform tags.
+        # Preserve the Python/ABI part the upstream build wrote (e.g. maturin
+        # emits `cp37-abi3-*` for cryptography); only the platform component
+        # is swapped. Falls back to self.wheel_tag when no Tag was written.
         wheel_metadata_path = next(wheel_dir.glob("*.dist-info")) / "WHEEL"
         wheel_metadata = self.read_message_file(wheel_metadata_path)
-        if "Tag" in wheel_metadata:
-            del wheel_metadata["Tag"]
-        wheel_metadata["Tag"] = self.wheel_tag
+        upstream_tags = wheel_metadata.get_all("Tag", [])
+        del wheel_metadata["Tag"]
+        new_tags = []
+        for tag in upstream_tags:
+            py, abi, _platform = tag.rsplit("-", 2)
+            new_tags.append(f"{py}-{abi}-{self.cross_venv.tag}")
+        if not new_tags:
+            new_tags = [self.wheel_tag]
+        for tag in new_tags:
+            wheel_metadata["Tag"] = tag
         self.write_message_file(wheel_metadata_path, wheel_metadata)
 
         if self.cross_venv.sdk == "android":
