@@ -4,6 +4,20 @@ in the mobile-forge recipe; the wheel needs pysodium too at runtime
 (handled via mobile.patch adding `install_requires=['pysodium']`)."""
 
 
+def test_import_opaque():
+    """`import opaque` requires pysodium at import time — opaque/__init__.py
+    does `import pysodium`. Upstream opaque-0.2.0's setup.py only declares
+    `requires=["libsodium"]` (metadata-only, not a real pip dep), so the
+    published wheel has no `Requires-Dist: pysodium`. Without the recipe's
+    mobile.patch (`install_requires=['pysodium']`), pip never installs
+    pysodium and import fails with
+    `ModuleNotFoundError: No module named 'pysodium'`."""
+    import opaque
+
+    assert hasattr(opaque, "Ids")
+    assert hasattr(opaque, "CreateRegistrationRequest")
+
+
 def test_registration_and_credential_roundtrip():
     """Run one full OPAQUE round: client → registration → server stores
     user record; client → login → server verifies; both sides derive a
