@@ -223,13 +223,15 @@ jobs:
           set -euo pipefail
           pkg_name="${FORGE_PACKAGES%%:*}"
           
-          # Recipe-level test files can be either a test/ subdir or test_*.py files in the recipe root.
-          if [[ -d "recipes/$pkg_name/test" ]] || compgen -G "recipes/$pkg_name/test_*.py" > /dev/null; then
+          # Check for the presence of any test files at known locations.
+          if [[ -d "recipes/$pkg_name/tests" ]] \
+              || [[ -d "recipes/$pkg_name/test" ]] \
+              || compgen -G "recipes/$pkg_name/test_*.py" > /dev/null; then
             echo "Found tests for $pkg_name"
             echo "has_tests=true" >> "$GITHUB_OUTPUT"
             echo "pkg_name=$pkg_name" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice::Skipping mobile test — no test_*.py in recipes/$pkg_name/"
+            echo "::notice::Skipping mobile test — no tests/, test/ or test_*.py under recipes/$pkg_name/"
             echo "has_tests=false" >> "$GITHUB_OUTPUT"
           fi
 

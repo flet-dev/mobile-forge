@@ -37,14 +37,15 @@ fi
 rm -rf "$TEST_DIR"
 mkdir -p "$TEST_DIR"
 
-if [ -d "$RECIPE_DIR/test" ]; then
-    # Directory shape (pillow): test/test_<name>.py + adjacent assets
+# Look for test files at known locations.
+if [ -d "$RECIPE_DIR/tests" ]; then
+    cp -r "$RECIPE_DIR/tests/." "$TEST_DIR/"
+elif [ -d "$RECIPE_DIR/test" ]; then
     cp -r "$RECIPE_DIR/test/." "$TEST_DIR/"
 elif compgen -G "$RECIPE_DIR/test_*.py" > /dev/null; then
-    # Flat shape (numpy, lxml, pandas, …): test_<name>.py
     cp "$RECIPE_DIR"/test_*.py "$TEST_DIR/"
 else
-    echo "::error::No test file(s) found at $RECIPE_DIR/test_*.py or $RECIPE_DIR/test/" >&2
+    echo "::error::No test file(s) found at $RECIPE_DIR/tests/, $RECIPE_DIR/test/ or $RECIPE_DIR/test_*.py" >&2
     exit 1
 fi
 
