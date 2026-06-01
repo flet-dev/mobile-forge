@@ -41,7 +41,7 @@ build:
     # `-DGDAL_USE_TIFF_INTERNAL=ON`, … — so libgdal.a doesn't leak
     # external refs in the first place. Then every consumer of GDAL on
     # iOS works with just `-lgdal -lproj`. Tracked for a future bump.
-    GDAL_LIBS: gdal,proj,tiff,curl,sqlite3,jpeg,ssl,crypto,z
+    GDAL_LIBS: gdal,proj,tiff,curl,psl,sqlite3,jpeg,ssl,crypto,z
     LDFLAGS: '-undefined dynamic_lookup'
 # {% endif %}
 
