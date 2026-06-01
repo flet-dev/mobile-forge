@@ -1,0 +1,9 @@
+package:
+  name: flet-libyaml
+  version: 0.2.5
+
+build:
+  number: 1
+
+source:
+  url: https://github.com/yaml/libyaml/releases/download/0.2.5/yaml-0.2.5.tar.gz
