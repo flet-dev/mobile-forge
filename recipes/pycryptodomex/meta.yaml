@@ -2,6 +2,9 @@ package:
   name: pycryptodomex
   version: 3.21.0
 
+build:
+  number: 4
+
 # Same fix rationale as recipes/pycryptodome/meta.yaml — pycryptodomex is
 # the sister package (same code under `Cryptodome.*` namespace). Without
 # cffi installed, Cryptodome/Util/_raw_api.py falls back to

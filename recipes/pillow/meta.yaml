@@ -23,6 +23,8 @@ patches:
 # {% endif %}
 
 build:
+  number: 4
+# {% if sdk != 'android' %}
   script_env:
 # {% if sdk == 'android' %}
     # pillow's setup.py manually probes `self.compiler.{include,library}_dirs`
@@ -47,4 +49,5 @@ build:
     # libfreetype references both libz and libbz2
     # but doesn't link them into the static library
     LDFLAGS: -lz -lbz2
+# {% endif %}
 # {% endif %}

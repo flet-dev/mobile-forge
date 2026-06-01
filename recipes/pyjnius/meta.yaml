@@ -3,6 +3,9 @@ package:
   version: 1.6.1
   platforms: [android]
 
+build:
+  number: 4
+
 patches:
   - mobile.patch
 

@@ -6,5 +6,8 @@ package:
   # libc++ statically linked into apps via the Apple toolchain).
   platforms: [android]
 
+build:
+  number: 4
+
 source:
   url: https://github.com/flet-dev/awesome-flet/archive/refs/heads/main.zip

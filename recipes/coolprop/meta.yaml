@@ -13,9 +13,10 @@ requirements:
 patches:
   - mkdir-cython-output.patch
 
-# {% if sdk == 'android' %}
 build:
+  number: 1
   script_env:
+# {% if sdk == 'android' %}
     CMAKE_ARGS: >-
       -DCMAKE_TOOLCHAIN_FILE={NDK_ROOT}/build/cmake/android.toolchain.cmake
       -DANDROID_ABI={ANDROID_ABI}
@@ -28,8 +29,6 @@ build:
       -DPython3_LIBRARY={prefix}/lib/libpython{py_version_short}.so
       -DPython3_INCLUDE_DIR={prefix}/include/python{py_version_short}
 # {% else %}
-build:
-  script_env:
     CMAKE_ARGS: >-
       -DCMAKE_SYSTEM_NAME=iOS
       -DCMAKE_OSX_SYSROOT={{ sdk }}

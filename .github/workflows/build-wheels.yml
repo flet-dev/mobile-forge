@@ -13,10 +13,6 @@ on:
         description: "Packages (comma-separated, e.g. pillow:11.1.0,pydantic-core:2.33.2) — or 'ALL' to build/test every recipe"
         required: false
         default: "pydantic-core:2.33.2"
-      build_number:
-        description: "Build number"
-        required: false
-        default: "1"
       publish:
         description: "Publish to PyPI"
         type: boolean
@@ -86,7 +82,6 @@ jobs:
         run: |
           ARCHS="${{ inputs.archs || 'android,iOS' }}"
           PACKAGES="${{ steps.detect-packages.outputs.packages }}"
-          BUILD_NUMBER="${{ inputs.build_number || '1' }}"
 
           matrix='{"include":['
           first=true
@@ -102,7 +97,6 @@ jobs:
                 platform="ios"
                 rust_targets="aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios"
               fi
-
               # Read recipe meta (version + build_number + platforms)
               recipe_version=""; recipe_build=""; declared=""
               if [[ -f "recipes/$pkg_name/meta.yaml" ]]; then
@@ -116,13 +110,17 @@ jobs:
                 continue
               fi
 
-              # Compose the job display name.
+              # Compose the job display name. The build number comes from
+              # the recipe's meta.yaml (read above): #59 dropped the
+              # build_number workflow input, so meta.yaml is the source of
+              # truth.
               pkg_ver_override="${pkg#*:}"
               display_version="${pkg_ver_override:-$recipe_version}"
-              job_name="${platform}: ${pkg_name} ${display_version} #${BUILD_NUMBER}"
+              display_build="${recipe_build:-0}"
+              job_name="${platform}: ${pkg_name} ${display_version} #${display_build}"
 
               if [ "$first" = true ]; then first=false; else matrix+=','; fi
-              matrix+="{\"job_name\":\"$job_name\",\"artifact_name\":\"${platform}-${pkg_name}\",\"runner\":\"$runner\",\"platform\":\"$platform\",\"forge_arch\":\"$arch\",\"forge_packages\":\"$pkg\",\"build_number\":\"$BUILD_NUMBER\",\"rust_targets\":\"$rust_targets\"}"
+              matrix+="{\"job_name\":\"$job_name\",\"artifact_name\":\"${platform}-${pkg_name}\",\"runner\":\"$runner\",\"platform\":\"$platform\",\"forge_arch\":\"$arch\",\"forge_packages\":\"$pkg\",\"rust_targets\":\"$rust_targets\"}"
             done
           done
           matrix+=']}'
@@ -173,7 +171,6 @@ jobs:
         env:
           FORGE_ARCH: ${{ matrix.forge_arch }}
           FORGE_PACKAGES: ${{ matrix.forge_packages }}
-          BUILD_NUMBER: ${{ matrix.build_number }}
           PLATFORM: ${{ matrix.platform }}
         run: |
           set -euxo pipefail
@@ -205,7 +202,7 @@ jobs:
 
           IFS=' ' read -r -a packages <<< "$FORGE_PACKAGES"
           for package in "${packages[@]}"; do
-            forge "$FORGE_ARCH" "$package:$BUILD_NUMBER"
+            forge "$FORGE_ARCH" "$package"
           done
 
           # Drop the support-tree dep wheels produced by make_dep_wheels.py

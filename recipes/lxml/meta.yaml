@@ -12,6 +12,7 @@ package:
   version: '{{ version }}'
 
 build:
+  number: 1
   script_env:
     WITH_XML2_CONFIG: '{platlib}/opt/bin/xml2-config'
     WITH_XSLT_CONFIG: '{platlib}/opt/bin/xslt-config'

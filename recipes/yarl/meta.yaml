@@ -2,6 +2,9 @@ package:
   name: yarl
   version: 1.11.1
 
+build:
+  number: 4
+
 requirements:
   build:
     - cython
