@@ -1,3 +1,15 @@
+def test_import_tokenizers():
+    """Forces `tokenizers.abi3.so` to load. On Android this is the
+    libc++_shared.so canary — tokenizers' Rust core links libstdc++, so
+    the .so has DT_NEEDED=[libc++_shared.so]. If `flet-libcpp-shared`
+    isn't in the wheel's Requires-Dist, libc++_shared.so won't be in
+    jniLibs/<abi>/ and import fails with
+    `dlopen failed: library "libc++_shared.so" not found`."""
+    import tokenizers
+
+    assert hasattr(tokenizers, "Tokenizer")
+
+
 def test_byte_level_bpe_roundtrip():
     """Hugging Face `tokenizers` is a PyO3 wrapper around a Rust core.
     Train + tokenize + detokenize without any pretrained model — keeps
