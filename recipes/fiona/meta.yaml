@@ -5,6 +5,11 @@ package:
 requirements:
   host:
     - flet-libgdal 3.10.0
+# {% if sdk != 'android' %}
+    # iOS-only — see GDAL_LIBS comment below for the rationale.
+    - openssl >=3.0.15
+    - flet-libjpeg 3.0.90
+# {% endif %}
 
 build:
   script_env:
@@ -14,13 +19,29 @@ build:
 # {% if sdk == 'android' %}
     GDAL_LIBS: gdal
 # {% else %}
-    # On iOS libgdal is built static (`-DBUILD_SHARED_LIBS=OFF`) and so is
-    # libproj. GDAL's link only pulled in PROJ objects it referenced
-    # itself, so the geodesic objects (`geod_init`, …) — which fiona's
-    # `_env.pyx` calls directly — were dropped. Adding `proj` makes
-    # fiona's extension link command pull `geodesic.o` straight out of
-    # libproj.a.
-    GDAL_LIBS: gdal,proj
+    # On iOS every native dep is a static archive (libgdal, libproj,
+    # libtiff, libcurl are all `-DBUILD_SHARED_LIBS=OFF`). When GDAL
+    # was linked at *its* build time the linker only kept object files
+    # for symbols GDAL itself referenced — and GDAL's GTiff/HTTP/proj
+    # code paths reference `TIFFClientOpen`, `curl_easy_init`,
+    # `geod_init` and friends, all of which were left undefined in
+    # libgdal.a. When fiona's `_env.so` links against libgdal it
+    # inherits those undefined references; with `-undefined
+    # dynamic_lookup` they're deferred to dlopen, where iOS dyld
+    # eagerly resolves the flat namespace and aborts the load.
+    #
+    # Adding the dep libs to GDAL_LIBS makes fiona's extension link
+    # command pull the missing object files straight out of libproj.a,
+    # libtiff.a, libcurl.a (and its OpenSSL/zlib backends), libjpeg.a
+    # (libtiff's JPEG-in-TIFF support), and the iOS system stubs for
+    # libsqlite3 / libz.
+    #
+    # The right long-term fix lives in `flet-libgdal`: align the iOS
+    # cmake invocation with the Android one — `-DGDAL_USE_CURL=OFF`,
+    # `-DGDAL_USE_TIFF_INTERNAL=ON`, … — so libgdal.a doesn't leak
+    # external refs in the first place. Then every consumer of GDAL on
+    # iOS works with just `-lgdal -lproj`. Tracked for a future bump.
+    GDAL_LIBS: gdal,proj,tiff,curl,sqlite3,jpeg,ssl,crypto,z
     LDFLAGS: '-undefined dynamic_lookup'
 # {% endif %}
 
