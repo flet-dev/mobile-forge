@@ -9,22 +9,6 @@ requirements:
   host:
     - flet-libgeos 3.13.0
     - numpy ^2.0.0
-# {% if sdk == 'android' %}
-    # CLEANUP-AFTER: flet-dev/mobile-forge#58
-    #
-    # Defensive. shapely's own .so files (lib, _geometry_helpers, _geos)
-    # carry no DT_NEEDED on libc++_shared — verified via
-    # `llvm-readobj --needed-libs` against the published android arm64
-    # wheel. The dep belongs to numpy: shapely's upstream
-    # `Requires-Dist: numpy<3,…` pulls numpy into every shapely-using
-    # app, and numpy's _multiarray_umath / _pocketfft_umath need
-    # libc++_shared at dlopen. The numpy wheel on pypi.flet.dev today
-    # carries no Requires-Dist entries at all, so libcpp never reaches
-    # the flet bundler unless someone in the install graph declares it
-    # explicitly. Drop this line after #58 merges and a numpy rebuild
-    # lands on pypi.flet.dev with libcpp surfaced in METADATA.
-    - flet-libcpp-shared >=27.2.12479018
-# {% endif %}
 
 patches:
   - mobile.patch
