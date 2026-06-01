@@ -22,9 +22,28 @@ patches:
 
 # {% endif %}
 
-# {% if sdk != 'android' %}
 build:
   script_env:
+# {% if sdk == 'android' %}
+    # pillow's setup.py manually probes `self.compiler.{include,library}_dirs`
+    # for zlib.h / libz / libjpeg / libfreetype rather than relying on the
+    # compiler's own --sysroot search. Our mobile.patch sets
+    # `disable_platform_guessing=True` to keep host-Linux paths out of the
+    # cross-build — which also drops the NDK sysroot from those lists.
+    # iOS gets away with it because Python-Apple-support's sysconfig
+    # populates `compiler.include_dirs` with the SDK include path; the
+    # Android cross-venv doesn't surface NDK paths the same way (they're
+    # in CFLAGS/LDFLAGS but distutils never reflects those into the dir
+    # lists). Pillow natively honors CPATH / LIBRARY_PATH (lines 538–548
+    # of its setup.py), so we feed the cross-compile paths back in that
+    # way — covering both the NDK sysroot (zlib, system headers) and the
+    # cross-venv's opt/ tree (libjpeg, libfreetype host wheels).
+    CPATH: '{NDK_SYSROOT}/usr/include:{platlib}/opt/include'
+    LIBRARY_PATH: '{NDK_SYSROOT}/usr/lib/{HOST_TRIPLET}/{ANDROID_API_LEVEL}:{platlib}/opt/lib'
+    # libfreetype links against libz internally; -lz needs to appear on
+    # pillow's link cmd so the resulting _imagingft.so resolves it.
+    LDFLAGS: -lz
+# {% else %}
     # libfreetype references both libz and libbz2
     # but doesn't link them into the static library
     LDFLAGS: -lz -lbz2
