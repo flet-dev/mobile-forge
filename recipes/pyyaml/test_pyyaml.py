@@ -28,3 +28,15 @@ def test_c_extension():
         "PyYAML's _yaml C extension loaded but is missing CParser — "
         "libyaml probably failed to load at import time"
     )
+
+
+def test_csafedumper_binding():
+    """The user-facing surface: `from yaml import CSafeDumper, CSafeLoader`.
+
+    Functionally subsumed by test_c_extension (cyaml.py exposes these
+    classes iff `_yaml.CParser` exists), but kept as a separate test
+    because (a) this is the import shape real apps break on and (b) a
+    clean ImportError here points a future debugger straight at the
+    `_yaml`/libyaml chain instead of an obscure attribute-missing
+    surprise downstream."""
+    from yaml import CSafeDumper, CSafeLoader  # noqa: F401
