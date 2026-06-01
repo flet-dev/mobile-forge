@@ -32,14 +32,14 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
 
       - name: Get changed recipes
         id: changed-recipes
-        uses: tj-actions/changed-files@v45
+        uses: tj-actions/changed-files@v47
         with:
           files: recipes/**
           dir_names: true
@@ -136,7 +136,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Free disk space (Ubuntu runners only)
         if: runner.os == 'Linux'
@@ -151,7 +151,7 @@ jobs:
           swap-storage: true
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -348,7 +348,7 @@ jobs:
 
       - name: Upload test artifacts
         if: always() && steps.detect-tests.outputs.has_tests == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-${{ matrix.artifact_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -375,14 +375,14 @@ jobs:
 
       - name: Upload logs on success
         if: ${{ success() && hashFiles('logs/*.log') != '' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: logs-${{ matrix.artifact_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: logs/*.log
 
       - name: Upload errors on failure
         if: ${{ failure() && hashFiles('errors/*.log') != '' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: errors-${{ matrix.artifact_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: errors/*.log
