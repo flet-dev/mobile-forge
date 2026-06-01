@@ -1,3 +1,19 @@
+def test_import_fiona():
+    """`import fiona` triggers `fiona._env.so`'s dlopen. On iOS, the
+    published wheel's _env.so was linked against `libgdal.a` only — GDAL's
+    static archive leaks undefined references for symbols GDAL itself uses
+    from libproj/libtiff/libcurl/libpsl/openssl. iOS dyld eagerly resolves
+    the flat namespace at dlopen and aborts with
+    `symbol not found in flat namespace '_geod_init'` (or _TIFFClientOpen
+    / _curl_easy_init / _psl_builtin, depending on which gap is hit
+    first). Android isn't affected — libproj/libtiff/libcurl/etc. are
+    shared libraries there, so their symbols resolve via DT_NEEDED."""
+    import fiona
+
+    assert hasattr(fiona, "supported_drivers")
+    assert hasattr(fiona, "open")
+
+
 def test_supported_drivers():
     """fiona binds GDAL's vector I/O (OGR). Listing supported drivers is
     the lightest-weight way to confirm the C lib loaded without needing

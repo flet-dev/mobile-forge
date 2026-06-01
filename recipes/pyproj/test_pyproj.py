@@ -1,3 +1,19 @@
+def test_import_pyproj():
+    """`import pyproj` triggers `_geod`/`_crs`/`_context` etc.'s dlopen.
+    On iOS, the published wheel's extensions were linked against
+    `libproj.a` only — and libproj's static archive has internal
+    references to libtiff (grid file support) and libcurl + libpsl
+    (network grid fetcher) that are left undefined. iOS dyld eagerly
+    resolves the flat namespace at dlopen and aborts with
+    `symbol not found in flat namespace '_TIFFClientOpen'` (or
+    _curl_easy_init / _psl_builtin). Android isn't affected — libproj
+    is shared there, its deps resolve transparently via DT_NEEDED."""
+    import pyproj
+
+    assert hasattr(pyproj, "Geod")
+    assert hasattr(pyproj, "CRS")
+
+
 def test_geod_distance():
     """pyproj wraps PROJ (the C cartographic projection library). The
     Geod (geodesic) API operates directly on the WGS-84 ellipsoid and
