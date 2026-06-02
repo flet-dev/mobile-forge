@@ -366,7 +366,7 @@ jobs:
       - name: Publish wheels
         # `success() &&` so a test failure blocks publish — without it, a
         # passing build with failing tests would still ship the wheel.
-        if: ${{ success() && inputs.publish && hashFiles('dist/*.whl') != '' }}
+        if: ${{ success() && hashFiles('dist/*.whl') != '' && (inputs.publish || (github.event_name == 'push' && github.ref == 'refs/heads/python3.12')) }}
         shell: bash
         env:
           GEMFURY_TOKEN: ${{ secrets.GEMFURY_TOKEN }}
