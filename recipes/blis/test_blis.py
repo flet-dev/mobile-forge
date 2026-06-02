@@ -1,13 +1,12 @@
 def test_import_blis():
-    """Forces `blis/cy.cpython-*.so` + `blis/py.cpython-*.so` to load, and
-    transitively `import numpy`. The published `numpy-2.2.2-4` wheel on
-    pypi.flet.dev has NO `Requires-Dist: flet-libcpp-shared` in METADATA,
-    so a blis-only Flet app doesn't ship libc++_shared.so. On x86_64,
-    numpy's `_multiarray_umath.so` then fails to dlopen — `import numpy`
-    bubbles up an ImportError to the blis side. arm64 multiarray happens
-    not to need libcpp, so the basic `import blis` survives there."""
+    """Forces both compiled bindings to load: `blis/cy.cpython-*.so`
+    (loaded by `__init__.py`'s `from .cy import init`) and
+    `blis/py.cpython-*.so` (a sibling submodule — Python does NOT
+    auto-import it, so we have to ask for it explicitly)."""
     import blis
+    from blis import py  # noqa: F401  — forces blis/py.cpython-*.so to dlopen
 
+    assert hasattr(blis, "cy")
     assert hasattr(blis, "py")
 
 
