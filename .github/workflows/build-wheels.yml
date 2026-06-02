@@ -291,7 +291,7 @@ jobs:
           ./tests/recipe-tester/stage_recipe.sh "$PKG_NAME"
           cd tests/recipe-tester
           PIP_FIND_LINKS="$GITHUB_WORKSPACE/dist-test" \
-            uvx --with flet-cli flet build apk --arch x86_64 -v --yes
+            uvx --with flet-cli flet build apk --arch x86_64 -vv --yes
 
       - name: Test on Android emulator (API 28, x86_64)
         if: matrix.platform == 'android' && steps.detect-tests.outputs.has_tests == 'true'
