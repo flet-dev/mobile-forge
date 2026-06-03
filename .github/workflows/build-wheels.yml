@@ -17,6 +17,12 @@ on:
         description: "Publish to PyPI"
         type: boolean
         default: false
+      python_build_run_id:
+        description: |
+          flet-dev/python-build Actions run-id whose artifacts to use as the
+          python-build support tree, instead of the v<version> release tarball.
+        required: false
+        default: ""
 
 env:
   UV_PYTHON: "3.12.12"
@@ -172,6 +178,8 @@ jobs:
           FORGE_ARCH: ${{ matrix.forge_arch }}
           FORGE_PACKAGES: ${{ matrix.forge_packages }}
           PLATFORM: ${{ matrix.platform }}
+          PYTHON_BUILD_RUN_ID: ${{ inputs.python_build_run_id }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # used by `gh run download`
         run: |
           set -euxo pipefail
 
@@ -186,15 +194,17 @@ jobs:
             sudo apt-get install -y sqlite3
 
             python_android_dir="$HOME/projects/python-build/android"
-            curl -#OL "https://github.com/flet-dev/python-build/releases/download/v${PYTHON_SHORT_VERSION}/python-android-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz"
             mkdir -p "$python_android_dir"
-            tar -xzf "python-android-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz" -C "$python_android_dir"
+            fetch_python_build_tarball "android" \
+              "python-android-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz" \
+              "$python_android_dir"
             export MOBILE_FORGE_ANDROID_SUPPORT_PATH="$python_android_dir"
           else
             python_ios_dir="$HOME/projects/python-build/darwin/Python-Apple-support"
-            curl -#OL "https://github.com/flet-dev/python-build/releases/download/v${PYTHON_SHORT_VERSION}/python-ios-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz"
             mkdir -p "$python_ios_dir"
-            tar -xzf "python-ios-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz" -C "$python_ios_dir"
+            fetch_python_build_tarball "darwin" \
+              "python-ios-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz" \
+              "$python_ios_dir"
             export MOBILE_FORGE_IOS_SUPPORT_PATH="$python_ios_dir"
           fi
 
