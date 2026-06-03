@@ -29,7 +29,9 @@ classifiers = [
 dependencies = [
     # Currently using a fork of crossenv to get iOS fixes.
     # Replace when/if these are merged and released.
-    "crossenv @ git+https://github.com/flet-dev/crossenv@flet",
+    # Pinning the open fix branch (PR flet-dev/crossenv#1) so Python 3.14
+    # cross-envs bootstrap cleanly. Flip back to @flet once the PR is merged.
+    "crossenv @ git+https://github.com/flet-dev/crossenv@fix/python-3.14-sysconfig-lazy-init",
     #"crossenv @ git+https://github.com/freakboy3742/crossenv@f0f07129eb06ea16d180650a26a02df2b948b888",
     #"crossenv @ git+https://github.com/benfogle/crossenv",
     "httpx == 0.27.0",
