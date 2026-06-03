@@ -19,7 +19,7 @@ on:
         default: false
 
 env:
-  UV_PYTHON: "3.13.12"
+  UV_PYTHON: "3.12.13"
   MOBILE_FORGE_CACHE_DOWNLOADS_OFF: "1"
   NDK_VERSION: r27d
 
@@ -76,7 +76,7 @@ jobs:
               if [[ "$arch" == "android" ]]; then
                 runner="ubuntu-latest"
                 platform="android"
-                rust_targets="aarch64-linux-android,x86_64-linux-android"
+                rust_targets="aarch64-linux-android,arm-linux-androideabi,x86_64-linux-android,i686-linux-android"
               else
                 runner="macos-latest"
                 platform="ios"
@@ -155,7 +155,7 @@ jobs:
           rm -f dist/bzip2-* dist/libffi-* dist/mpdecimal-* dist/openssl-* dist/sqlite-* dist/xz-*
 
       - name: Publish wheels
-        if: ${{ hashFiles('dist/*.whl') != '' && (inputs.publish || (github.event_name == 'push' && github.ref == 'refs/heads/python3.13')) }}
+        if: ${{ hashFiles('dist/*.whl') != '' && (inputs.publish || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
         shell: bash
         env:
           GEMFURY_TOKEN: ${{ secrets.GEMFURY_TOKEN }}
