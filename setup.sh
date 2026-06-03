@@ -44,11 +44,15 @@ echo "Python short version: $PYTHON_VER"
 versioned_suffix="${PYTHON_VER//./_}"
 ios_versioned_var="MOBILE_FORGE_IOS_SUPPORT_PATH_${versioned_suffix}"
 android_versioned_var="MOBILE_FORGE_ANDROID_SUPPORT_PATH_${versioned_suffix}"
-if [ -n "${!ios_versioned_var}" ]; then
-    export MOBILE_FORGE_IOS_SUPPORT_PATH="${!ios_versioned_var}"
+# Indirect variable expansion: bash uses ${!var}, zsh uses ${(P)var}.
+# `eval` is the portable form that works in both.
+eval "ios_versioned_val=\${$ios_versioned_var:-}"
+eval "android_versioned_val=\${$android_versioned_var:-}"
+if [ -n "$ios_versioned_val" ]; then
+    export MOBILE_FORGE_IOS_SUPPORT_PATH="$ios_versioned_val"
 fi
-if [ -n "${!android_versioned_var}" ]; then
-    export MOBILE_FORGE_ANDROID_SUPPORT_PATH="${!android_versioned_var}"
+if [ -n "$android_versioned_val" ]; then
+    export MOBILE_FORGE_ANDROID_SUPPORT_PATH="$android_versioned_val"
 fi
 
 if [[ -z "$MOBILE_FORGE_IOS_SUPPORT_PATH" && -z "$MOBILE_FORGE_ANDROID_SUPPORT_PATH" ]]; then
