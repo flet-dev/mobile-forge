@@ -1,0 +1,15 @@
+package:
+  name: pyjnius
+  version: 1.6.1
+
+build:
+  number: 4
+
+patches:
+  - mobile.patch
+
+requirements:
+  build:
+    - Cython <3.1
+  host:
+    - flet-libpyjni 1.0.1

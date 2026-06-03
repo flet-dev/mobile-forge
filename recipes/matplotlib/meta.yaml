@@ -1,14 +1,25 @@
 package:
   name: matplotlib
-  version: 3.9.0
+  version: 3.10.0
 
 requirements:
-  host:
-    - meson
+  build:
     - ninja
-    - numpy 2.0.0
+    - meson
+  host:
+    - numpy ^2.0.0
+    - pybind11
+    - flet-libjpeg 3.0.90
 
 build:
+  number: 4
+# {% if sdk == 'android' and arch in ['armeabi-v7a', 'x86'] %}
+  script_env:
+    CPPFLAGS: -Wno-c++11-narrowing
+# {% endif %}
   backend-args:
     - -Csetup-args=--cross-file
     - -Csetup-args={MESON_CROSS_FILE}
+
+# potential issues:
+# https://github.com/godotengine/godot/pull/101036/files

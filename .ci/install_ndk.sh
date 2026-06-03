@@ -47,3 +47,5 @@ if [[ -z "${NDK_HOME-}" ]]; then
 else
     echo "NDK home: $NDK_HOME"
 fi
+
+export NDK_HOME

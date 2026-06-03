@@ -1,0 +1,21 @@
+{% set version = "8.11.0" %}
+
+package:
+  name: flet-libcurl
+  version: '{{ version }}'
+
+source:
+  url: https://curl.se/download/curl-{{ version }}.tar.gz
+
+build:
+  number: 4
+
+requirements:
+  host:
+    # {% if sdk in ['iphoneos', 'iphonesimulator'] %}
+    - openssl >=3.0.15
+    # {% endif %}
+    - flet-libpsl 0.21.5
+
+patches:
+  - config.patch

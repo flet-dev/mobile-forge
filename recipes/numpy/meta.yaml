@@ -3,15 +3,25 @@
 
 package:
   name: numpy
-  version: 1.26.4
+  version: 2.2.2
 
 requirements:
- host:
-#     - chaquopy-openblas 0.2.20
+ build:
   - ninja
-  - meson
+{% if sdk == 'android' %}
+ host:
+  - flet-libcpp-shared >=27.2.12479018
+{% endif %}
+
+patches:
+{% if version and version < (2, 0) %}
+  - mobile-1.26.4.patch
+{% else %}
+  - mobile-2.2.2.patch
+{% endif %}
 
 build:
+  number: 5
   script_env:
     NPY_DISABLE_SVML: 1
 
@@ -23,7 +33,7 @@ build:
 
   meson:
     properties:
-# {% if sdk == 'android' and arch in ['arm64-v8a', 'x86_64'] %}
+# {% if sdk == 'iOS' or (sdk == 'android' and arch in ['arm64-v8a', 'x86_64']) %}
       longdouble_format: IEEE_QUAD_LE
 # {% else %}
       longdouble_format: IEEE_DOUBLE_LE

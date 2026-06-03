@@ -1,0 +1,86 @@
+diff --git a/pyobjus/_runtime.h b/pyobjus/_runtime.h
+index c31b7ba..6d0cf85 100644
+--- a/pyobjus/_runtime.h
++++ b/pyobjus/_runtime.h
+@@ -1,6 +1,6 @@
+ #include <objc/runtime.h>
+ #include <objc/message.h>
+-#include <ffi/ffi.h>
++#include <ffi.h>
+ #include <stdio.h>
+ #include <dlfcn.h>
+ #include <string.h>
+diff --git a/pyobjus/common.pxi b/pyobjus/common.pxi
+index 3a17bbb..4f43c6a 100644
+--- a/pyobjus/common.pxi
++++ b/pyobjus/common.pxi
+@@ -109,7 +109,7 @@ cdef extern from "objc/runtime.h":
+     objc_method_description* protocol_copyMethodDescriptionList(Protocol *p, BOOL isRequiredMethod, BOOL isInstanceMethod, unsigned int *outCount)
+ 
+ 
+-cdef extern from "ffi/ffi.h":
++cdef extern from "ffi.h":
+     ctypedef unsigned long  ffi_arg
+     ctypedef signed long    ffi_sarg
+     ctypedef enum: FFI_TYPE_STRUCT
+diff --git a/setup.py b/setup.py
+index 0de7708..c8deb36 100644
+--- a/setup.py
++++ b/setup.py
+@@ -20,13 +20,7 @@ if kivy_ios_root is not None:
+ print("Pyobjus platform is {}".format(dev_platform))
+ 
+ # OSX
+-files = []
+-if dev_platform == 'darwin':
+-    files = ['pyobjus.pyx']
+-# iOS
+-elif dev_platform == 'ios':
+-    files = ['pyobjus.c']
+-
++files = ['pyobjus.pyx']
+ 
+ class PyObjusBuildExt(build_ext, object):
+ 
+@@ -43,13 +37,10 @@ class PyObjusBuildExt(build_ext, object):
+         # The following essentially supply a dynamically generated subclass
+         # that mix in the cython version of build_ext so that the
+         # functionality provided will also be executed.
+-        if dev_platform != 'ios':
+-            from Cython.Distutils import build_ext as cython_build_ext
+-            build_ext_cls = type(
+-                'PyObjusBuildExt', (PyObjusBuildExt, cython_build_ext), {})
+-            return super(PyObjusBuildExt, cls).__new__(build_ext_cls)
+-        else:
+-            return super(PyObjusBuildExt, cls).__new__(cls)
++        from Cython.Distutils import build_ext as cython_build_ext
++        build_ext_cls = type(
++            'PyObjusBuildExt', (PyObjusBuildExt, cython_build_ext), {})
++        return super(PyObjusBuildExt, cls).__new__(build_ext_cls)
+ 
+     def build_extensions(self):
+         # create a configuration file for pyobjus (export the platform)
+@@ -57,11 +48,9 @@ class PyObjusBuildExt(build_ext, object):
+         config_pxi_need_update = True
+         config_pxi = 'DEF PLATFORM = "{}"\n'.format(dev_platform)
+         config_pxi += 'DEF ARCH = "{}"\n'.format(arch)
+-        if dev_platform == 'ios':
+-            cython3 = False # Assume Cython 0.29, which is what we use for kivy-ios (ATM)
+-        else:
+-            import Cython
+-            cython3 = Cython.__version__.startswith('3.')
++
++        import Cython
++        cython3 = Cython.__version__.startswith('3.')
+         config_pxi += f"DEF PYOBJUS_CYTHON_3 = {cython3}"
+         if exists(config_pxi_fn):
+             with open(config_pxi_fn) as fd:
+@@ -73,7 +62,7 @@ class PyObjusBuildExt(build_ext, object):
+         super().build_extensions()
+ 
+ 
+-libraries = ['ffi']
++libraries = ['ffi', 'objc']
+ library_dirs = []
+ extra_compile_args = []
+ extra_link_args = []

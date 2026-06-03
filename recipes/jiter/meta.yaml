@@ -1,0 +1,8 @@
+package:
+  name: jiter
+  version: 0.8.2
+
+build:
+  number: 4
+  script_env:
+    _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'

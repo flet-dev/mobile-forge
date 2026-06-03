@@ -99,83 +99,7 @@ def main():
             print()
             sys.exit(1)
 
-    # Targets that generate py3-none-any wheels only need to be built on a single
-    # platform.
-    py_any_targets = [
-        "oldest-supported-numpy",
-    ]
-
-    if not args.build_targets:
-        build_targets = []
-
-        if args.subset in {"all", "py-any", "smoke"}:
-            build_targets.extend(py_any_targets)
-
-        if args.subset in {"all", "non-py", "smoke", "smoke-non-py"}:
-            build_targets.extend(
-                [
-                    "libjpeg",
-                    "freetype",
-                ]
-            )
-
-        if args.subset in {"all", "non-py", "non-smoke"}:
-            build_targets.extend(
-                [
-                    "libpng",
-                ]
-            )
-
-        # Pandas uses a meta-package called "oldest-supported-numpy" which installs,
-        # predictably, the oldest version of numpy known to work on a given Python
-        # version. This is done for Python ABI compatibility.
-        oldest_supported_numpy = {
-            8: "numpy:1.17.3",
-            9: "numpy:1.19.3",
-            10: "numpy:1.21.6",
-            11: "numpy:1.23.2",
-            12: "numpy:1.26.0",
-            13: "numpy:1.26.0",
-        }[sys.version_info.minor]
-
-        if args.subset in {"all", "py", "smoke", "smoke-py"}:
-            build_targets.extend(
-                [
-                    "lru-dict",
-                    "pillow",
-                    "numpy",
-                ]
-                # On Python 3.12 and 3.13, the oldest supported numpy *is* the only version of
-                # numpy that is supported.
-                + (
-                    [
-                        oldest_supported_numpy,
-                    ]
-                    if sys.version_info.minor in {12, 13}
-                    else []
-                )
-                + [
-                    "pandas",
-                    "cffi",
-                    "cryptography",
-                ]
-            )
-
-        if args.subset in {"all", "py", "non-smoke"}:
-            build_targets.extend(
-                [
-                    "aiohttp",
-                    "argon2-cffi",
-                    "bcrypt",
-                    "bitarray",
-                    "blis",
-                    "brotli",
-                    "typed-ast",
-                    "yarl",
-                ]
-            )
-    else:
-        build_targets = args.build_targets
+    build_targets = args.build_targets or []
 
     successes = []
     failures = []
@@ -218,11 +142,7 @@ def main():
             # subsequent builds will be isolated by
 
             first = True
-            # Packages that generate -py3-none-any wheels only need to be built on a single platform.
-            if package_name_or_recipe in py_any_targets:
-                build_platforms = platforms[:1]
-            else:
-                build_platforms = platforms
+            build_platforms = platforms
 
             # Build the package for each required platform.
             for sdk, sdk_version, arch in build_platforms:

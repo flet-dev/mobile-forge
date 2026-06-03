@@ -1,7 +1,10 @@
 package:
   name: yarl
-  version: 1.9.4
+  version: 1.11.1
+
+build:
+  number: 4
 
 requirements:
   build:
-    - cython 3.0.7
+    - cython

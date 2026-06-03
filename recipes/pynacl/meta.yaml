@@ -1,0 +1,13 @@
+package:
+  name: PyNaCl
+  version: 1.5.0
+
+build:
+  number: 4
+
+requirements:
+  host:
+    - flet-libsodium 1.0.20
+
+patches:
+  - mobile.patch

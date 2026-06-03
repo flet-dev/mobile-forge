@@ -1,0 +1,55 @@
+diff --git a/config.sub b/config.sub
+index 7b334f9..cdb35e9 100755
+--- a/config.sub
++++ b/config.sub
+@@ -355,6 +355,10 @@ case $basic_machine in
+ 	xscaleel)
+ 		basic_machine=armel-unknown
+ 		;;
++	arm64-apple | *-ios)
++		basic_machine=$basic_machine-unknown
++		os=-none
++		;;
+ 
+ 	# We use `pc' rather than `unknown'
+ 	# because (1) that's what they normally are, and
+diff --git a/libxml2.syms b/libxml2.syms
+index 370dcf1..3c4a3dc 100644
+--- a/libxml2.syms
++++ b/libxml2.syms
+@@ -453,16 +453,16 @@ LIBXML2_2.4.30 {
+   xmlNanoFTPUpdateURL;
+ 
+ # DOCBparser
+-  docbCreateFileParserCtxt;
+-  docbCreatePushParserCtxt;
+-  docbEncodeEntities;
+-  docbFreeParserCtxt;
+-  docbParseChunk;
+-  docbParseDoc;
+-  docbParseDocument;
+-  docbParseFile;
+-  docbSAXParseDoc;
+-  docbSAXParseFile;
++# docbCreateFileParserCtxt;
++# docbCreatePushParserCtxt;
++# docbEncodeEntities;
++# docbFreeParserCtxt;
++# docbParseChunk;
++# docbParseDoc;
++# docbParseDocument;
++# docbParseFile;
++# docbSAXParseDoc;
++# docbSAXParseFile;
+ 
+ # xpath
+   xmlXPathCastBooleanToNumber;
+@@ -2187,7 +2187,7 @@ LIBXML2_2.6.29 {
+     global:
+ 
+ # threads
+-  xmlDllMain;
++  # xmlDllMain;
+ } LIBXML2_2.6.28;
+ 
+ LIBXML2_2.6.32 {

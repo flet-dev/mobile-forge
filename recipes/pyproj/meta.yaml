@@ -1,0 +1,19 @@
+package:
+  name: pyproj
+  version: 3.7.0
+
+build:
+  number: 4
+  script_env:
+    PROJ_VERSION: 9.5.0
+    PROJ_DIR: '{platlib}/opt'
+# {% if sdk != 'android' %}
+    LDFLAGS: '-undefined dynamic_lookup'
+# {% endif %}
+
+requirements:
+  host:
+    - flet-libproj 9.5.0
+
+patches:
+  - mobile.patch

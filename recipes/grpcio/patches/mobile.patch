@@ -1,0 +1,49 @@
+--- a/setup.py	2026-03-31 12:55:12
++++ b/setup.py	2026-03-31 12:56:03
+@@ -58,12 +58,14 @@
+     os.path.join("third_party", "cares"),
+     os.path.join("third_party", "cares", "cares"),
+ )
+-if "darwin" in sys.platform:
++if "darwin" in sys.platform or "ios" in sys.platform:
+     CARES_INCLUDE += (os.path.join("third_party", "cares", "config_darwin"),)
+ if "freebsd" in sys.platform:
+     CARES_INCLUDE += (os.path.join("third_party", "cares", "config_freebsd"),)
+ if "linux" in sys.platform:
+     CARES_INCLUDE += (os.path.join("third_party", "cares", "config_linux"),)
++if "android" in sys.platform:
++    CARES_INCLUDE += (os.path.join("third_party", "cares", "config_android"),)
+ if "openbsd" in sys.platform:
+     CARES_INCLUDE += (os.path.join("third_party", "cares", "config_openbsd"),)
+ RE2_INCLUDE = (os.path.join("third_party", "re2"),)
+@@ -302,7 +304,9 @@
+         lambda x: "third_party/boringssl" not in x, CORE_C_FILES
+     )
+     CORE_C_FILES = filter(lambda x: "src/boringssl" not in x, CORE_C_FILES)
+-    SSL_INCLUDE = (os.path.join("/usr", "include", "openssl"),)
++    # Use cross-compiled OpenSSL headers when OPENSSL_ROOT_DIR is set
++    _ssl_prefix = os.environ.get("OPENSSL_ROOT_DIR", "/usr")
++    SSL_INCLUDE = (os.path.join(_ssl_prefix, "include"),)
+ 
+ if BUILD_WITH_SYSTEM_ZLIB:
+     CORE_C_FILES = filter(lambda x: "third_party/zlib" not in x, CORE_C_FILES)
+@@ -329,14 +333,17 @@
+     + ADDRESS_SORTING_INCLUDE
+     + CARES_INCLUDE
+     + RE2_INCLUDE
+-    + SSL_INCLUDE
+     + UPB_INCLUDE
+     + UPB_GRPC_GENERATED_INCLUDE
+     + UPBDEFS_GRPC_GENERATED_INCLUDE
+     + UTF8_RANGE_INCLUDE
+     + XXHASH_INCLUDE
+-    + ZLIB_INCLUDE
+ )
++
++# On Android, SSL_INCLUDE uses OPENSSL_ROOT_DIR; skip ZLIB_INCLUDE to avoid /usr/include
++EXTENSION_INCLUDE_DIRECTORIES += SSL_INCLUDE
++if "android" not in sys.platform:
++    EXTENSION_INCLUDE_DIRECTORIES += ZLIB_INCLUDE
+ 
+ EXTENSION_LIBRARIES = ()
+ if "linux" in sys.platform:

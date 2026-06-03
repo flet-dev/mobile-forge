@@ -1,15 +1,34 @@
 package:
   name: pandas
-  version: 2.2.2
+  version: 2.2.3
+
+# {% if not version or version >= (2,1) %}
+# pandas >= 2.1.0
 
 requirements:
   build:
-    - numpy 2.0.0
-  host:
-    - meson
     - ninja
+    - meson
+  host:
+    - numpy ^2.0.0
+# {% if sdk == 'android' %}
+    - flet-libcpp-shared 27.2.12479018
+# {% endif %}
+
+patches:
+  - mobile.patch
 
 build:
+  number: 4
   backend-args:
     - -Csetup-args=--cross-file
     - -Csetup-args={MESON_CROSS_FILE}
+
+# {% else %}
+# pandas < 2.1.0
+
+requirements:
+  host:
+    - numpy 1.26.4
+
+# {% endif %}

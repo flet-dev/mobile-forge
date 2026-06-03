@@ -1,7 +1,9 @@
+diff --git a/blis/_src/frame/thread/bli_pthread.c b/blis/_src/frame/thread/bli_pthread.c
+index a099356..6d5fe03 100644
 --- a/blis/_src/frame/thread/bli_pthread.c
 +++ b/blis/_src/frame/thread/bli_pthread.c
 @@ -594,7 +594,7 @@ int bli_pthread_barrier_wait
-        return 0;
+ 	return 0;
  }
  
 -#elif defined(__APPLE__) || defined(_MSC_VER) // !defined(BLIS_DISABLE_SYSTEM)
@@ -23,10 +25,18 @@ index d5158ff..bf3fbe5 100644
  // For OS X, we must define the barrier types ourselves since Apple does
  // not implement barriers in their variant of pthreads.
 diff --git a/setup.py b/setup.py
-index 332cab3..bdd673e 100644
+index d0944c9..6b3c19e 100644
 --- a/setup.py
 +++ b/setup.py
-@@ -37,6 +37,10 @@ PLATFORM_TO_ARCH = {
+@@ -21,6 +21,7 @@ import subprocess
+ import sys
+ import platform
+ import numpy
++import sysconfig
+ 
+ 
+ PLATFORM_TO_ARCH = {
+@@ -36,6 +37,10 @@ PLATFORM_TO_ARCH = {
  
  MOD_NAMES = ["blis.cy", "blis.py"]
  
@@ -35,3 +45,24 @@ index 332cab3..bdd673e 100644
 +os.environ["BLIS_COMPILER"] = os.environ["CC"]
 +
  print("BLIS_COMPILER?", os.environ.get("BLIS_COMPILER", "None"))
+ 
+ 
+@@ -220,6 +225,9 @@ class ExtensionBuilder(build_ext, build_ext_options):
+         objects = []
+         platform_arch = platform + "-" + py_arch
+         compiler = self.get_compiler_name()
++        host_triplet = sysconfig.get_platform().split("-")
++        print("Host triplet:", host_triplet)
++
+         with open(os.path.join(BLIS_DIR, "make", "%s.jsonl" % platform_arch)) as file_:
+             env = {}
+             for line in file_:
+@@ -255,6 +263,8 @@ class ExtensionBuilder(build_ext, build_ext_options):
+                 spec["flags"] = [
+                     f for f in spec["flags"] if "visibility=hidden" not in f
+                 ]
++                if len(host_triplet) == 4 and host_triplet[0] == "ios":
++                    spec["flags"].append(f"-mios-version-min={host_triplet[1]}")
+                 objects.append(self.build_object(env=env, **spec))
+         return objects
+ 

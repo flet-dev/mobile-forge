@@ -1,0 +1,20 @@
+{% set version = "0.5.0" %}
+
+package:
+  name: flet-liboprf
+  version: '{{ version }}'
+
+source:
+  url: https://github.com/stef/liboprf/archive/refs/tags/v{{ version }}.tar.gz
+
+requirements:
+  host:
+    - flet-libsodium 1.0.20
+
+build:
+  number: 4
+  script_env:
+    CFLAGS: '-Qunused-arguments -Wno-unreachable-code'
+
+patches:
+  - mobile.patch

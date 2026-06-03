@@ -1,0 +1,14 @@
+package:
+  name: shapely
+  version: 2.0.6
+
+build:
+  number: 4
+
+requirements:
+  host:
+    - flet-libgeos 3.13.0
+    - numpy ^2.0.0
+
+patches:
+  - mobile.patch

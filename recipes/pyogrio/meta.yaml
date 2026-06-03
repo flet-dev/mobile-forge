@@ -1,0 +1,17 @@
+package:
+  name: pyogrio
+  version: 0.10.0
+
+requirements:
+  host:
+    - flet-libgdal 3.10.0
+
+build:
+  number: 4
+  script_env:
+    GDAL_VERSION: 3.10.0
+    GDAL_LIBRARY_PATH: '{platlib}/opt/lib'
+    GDAL_INCLUDE_PATH: '{platlib}/opt/include'
+# {% if sdk != 'android' %}
+    LDFLAGS: '-undefined dynamic_lookup'
+# {% endif %}

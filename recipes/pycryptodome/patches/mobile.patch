@@ -1,0 +1,31 @@
+diff --git a/lib/Crypto/Util/_raw_api.py b/lib/Crypto/Util/_raw_api.py
+index e0065c3..3b14e00 100644
+--- a/lib/Crypto/Util/_raw_api.py
++++ b/lib/Crypto/Util/_raw_api.py
+@@ -30,6 +30,7 @@
+ 
+ import os
+ import abc
++import pathlib
+ import sys
+ from Crypto.Util.py3compat import byte_string
+ from Crypto.Util._file_system import pycryptodome_filename
+@@ -302,13 +303,17 @@ def load_pycryptodome_raw_lib(name, cdecl):
+     split = name.split(".")
+     dir_comps, basename = split[:-1], split[-1]
+     attempts = []
+-    for ext in extension_suffixes:
++    for ext in extension_suffixes + [".fwork"]:
+         try:
+             filename = basename + ext
+             full_name = pycryptodome_filename(dir_comps, filename)
+             if not os.path.isfile(full_name):
+                 attempts.append("Not found '%s'" % filename)
+                 continue
++            if full_name.endswith(".fwork"):
++                with open(full_name, 'r') as f:
++                    framework_binary = f.read().strip()
++                    full_name = str(pathlib.Path(sys.executable).parent.joinpath(framework_binary))
+             return load_lib(full_name, cdecl)
+         except OSError as exp:
+             attempts.append("Cannot load '%s': %s" % (filename, str(exp)))

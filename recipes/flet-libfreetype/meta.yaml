@@ -1,0 +1,15 @@
+package:
+  name: flet-libfreetype
+  version: 2.13.3
+
+build:
+  number: 2
+
+source:
+  url: https://download.savannah.gnu.org/releases/freetype/freetype-2.13.3.tar.gz
+
+patches:
+  - config.patch
+
+about:
+  license_file: docs/FTL.TXT

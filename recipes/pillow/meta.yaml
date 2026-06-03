@@ -1,12 +1,32 @@
 package:
   name: Pillow
-  version: 10.3.0
-
-patches:
-  - setup.patch
+  version: 11.1.0
 
 requirements:
   host:
     # PNG support is internal: libpng is not used.
-    - libjpeg 3.0.3
-    - freetype 2.13.2
+    - flet-libjpeg 3.0.90
+    - flet-libfreetype 2.13.3
+
+# {% if not version or version >= (11,0,0) %}
+# pillow >= 11.x
+
+patches:
+  - setup-11.x.patch
+
+# {% else %}
+# pillow <= 10.x
+
+patches:
+  - setup-10.x.patch
+
+# {% endif %}
+
+build:
+  number: 4
+# {% if sdk != 'android' %}
+  script_env:
+    # libfreetype references both libz and libbz2
+    # but doesn't link them into the static library
+    LDFLAGS: -lz -lbz2
+# {% endif %}

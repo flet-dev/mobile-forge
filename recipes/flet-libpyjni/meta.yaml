@@ -1,0 +1,13 @@
+package:
+  name: flet-libpyjni
+  version: 1.0.1
+
+build:
+  number: 4
+
+source:
+  url: https://github.com/flet-dev/libpyjni/releases/download/v1.0.1/pyjni-1.0.1.tar.gz
+  
+requirements:
+  build:
+    - cmake

@@ -1,10 +1,13 @@
 package:
   name: cffi
-  version: 1.16.0
+  version: 1.17.1
 
-patches:
-  - mobile.patch
+build:
+  number: 4
 
 requirements:
   host:
-    - libffi 3.4.4
+    - libffi
+
+patches:
+  - mobile.patch
