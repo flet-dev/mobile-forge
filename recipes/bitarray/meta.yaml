@@ -1,3 +1,6 @@
 package:
   name: bitarray
   version: 3.6.1
+
+build:
+  number: 4

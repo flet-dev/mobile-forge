@@ -1,3 +1,6 @@
 package:
   name: zope.interface
   version: '7.2'
+
+build:
+  number: 4

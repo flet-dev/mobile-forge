@@ -8,7 +8,7 @@ if [ ! -f "$OPENSSL_PREFIX/include/openssl/ssl.h" ] || \
     OPENSSL_PREFIX="$PYTHON_PREFIX"
 fi
 
-./configure --host=$HOST_TRIPLET --prefix=$PREFIX --with-openssl="$OPENSSL_PREFIX"
+PKG_CONFIG=false ./configure --host=$HOST_TRIPLET --prefix=$PREFIX --with-openssl="$OPENSSL_PREFIX"
 make -j $CPU_COUNT
 make install
 

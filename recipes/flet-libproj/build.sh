@@ -8,6 +8,7 @@ if [ $CROSS_VENV_SDK == "android" ]; then
         -DANDROID_ABI=$ANDROID_ABI \
         -DCMAKE_TOOLCHAIN_FILE=$NDK_ROOT/build/cmake/android.toolchain.cmake \
         -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_SHARED_LINKER_FLAGS="$LDFLAGS" \
         -DCMAKE_INSTALL_PREFIX="$PREFIX" \
         -DBUILD_TESTING=0 \
         -DTIFF_LIBRARY="$PLATLIB/opt/lib/libtiff.so" \

@@ -4,6 +4,7 @@ import multiprocessing
 import os
 import re
 import shutil
+import struct
 import sys
 import tarfile
 import zipfile
@@ -353,9 +354,16 @@ class Builder(ABC):
             elif ndk_arch_lib.is_dir():
                 ldflags += f" -L{ndk_arch_lib}"
 
+            # 16 KB page alignment required by Google Play (Android 15+)
+            ldflags += " -Wl,-z,max-page-size=16384"
+
         # cargo_ldflags = re.sub(r"-march=[\w-]+", "", ldflags)
         cargo_ldflags = " -L{}/lib".format(self.cross_venv.sysconfig_data["prefix"])
         cargo_ldflags += " -C link-arg=-undefined -C link-arg=dynamic_lookup"
+
+        if self.cross_venv.sdk == "android":
+            # 16 KB page alignment required by Google Play (Android 15+)
+            cargo_ldflags += " -C link-arg=-z -C link-arg=max-page-size=16384"
 
         if self.cross_venv.sdk != "android":
             # Replace any hard-coded reference to -isysroot <sysroot> with the actual reference
@@ -415,6 +423,16 @@ class Builder(ABC):
         }
         env.update(kwargs)
 
+        if self.cross_venv.sdk == "android":
+            cc_parts = cc.split("/")
+            env["NDK_ROOT"] = "/".join(cc_parts[: cc_parts.index("toolchains")])
+            env["NDK_SYSROOT"] = str(
+                ndk_sysroot or (Path(cc).parent.parent / "sysroot")
+            )
+            env["ANDROID_ABI"] = self.cross_venv.arch
+            env["ANDROID_API_LEVEL"] = str(self.cross_venv.sdk_version)
+            env["HOST_TRIPLET"] = self.cross_venv.platform_triplet
+
         script_vars = {
             **env,
             **self.cross_venv.scheme_paths,
@@ -425,18 +443,9 @@ class Builder(ABC):
         # Set up any additional environment variables needed in the script environment.
         for key, value in self.package.meta["build"]["script_env"].items():
             if key in ["LDFLAGS", "CFLAGS", "CPPFLAGS"]:
-                env[key] += " " + value
+                env[key] += " " + str(value).format(**script_vars)
             else:
                 env[key] = str(value).format(**script_vars)
-
-        if self.cross_venv.sdk == "android":
-            cc_parts = cc.split("/")
-            env["NDK_ROOT"] = "/".join(cc_parts[: cc_parts.index("toolchains")])
-            env["NDK_SYSROOT"] = str(
-                ndk_sysroot or (Path(cc).parent.parent / "sysroot")
-            )
-            env["ANDROID_ABI"] = self.cross_venv.arch
-            env["HOST_TRIPLET"] = self.cross_venv.platform_triplet
 
         # Add in some user environment keys that are useful
         for key in [
@@ -509,17 +518,152 @@ class Builder(ABC):
     def wheel_tag(self) -> str:
         return f"py3-none-{self.cross_venv.tag}"
 
+    def _rewrite_absolute_needed(self, so_path: Path):
+        # Some libraries (notably libpython built without DT_SONAME) end up
+        # recorded in DT_NEEDED by their absolute build-host path when linked
+        # via CMake's absolute-path style. That path won't exist on the
+        # target device. Shift each DT_NEEDED d_val past the last '/' in the
+        # existing string — no string rewriting needed because the basename
+        # already lives at the suffix of the absolute path.
+        with open(so_path, "r+b") as f:
+            if f.read(4) != b"\x7fELF":
+                return
+            ei_class = struct.unpack("B", f.read(1))[0]
+            if ei_class == 1:
+                # ELF32: 4-byte fields, 8-byte dyn entries, 40-byte sections.
+                shoff_pos, shoff_fmt = 32, "<I"
+                shnum_pos = 46
+                sh_addr_off, sh_off_off, sh_size_off = 12, 16, 20
+                dyn_entry_size, dyn_fmt = 8, "<iI"
+                word_fmt = "<I"
+            elif ei_class == 2:
+                # ELF64: 8-byte fields, 16-byte dyn entries, 64-byte sections.
+                shoff_pos, shoff_fmt = 40, "<Q"
+                shnum_pos = 58
+                sh_addr_off, sh_off_off, sh_size_off = 16, 24, 32
+                dyn_entry_size, dyn_fmt = 16, "<qQ"
+                word_fmt = "<Q"
+            else:
+                return
+
+            word_size = struct.calcsize(word_fmt)
+            f.seek(shoff_pos)
+            e_shoff = struct.unpack(shoff_fmt, f.read(word_size))[0]
+            f.seek(shnum_pos)
+            e_shentsize, e_shnum = struct.unpack("<HH", f.read(4))
+
+            sections = []
+            dyn_offset = dyn_size = 0
+            for i in range(e_shnum):
+                f.seek(e_shoff + i * e_shentsize)
+                sh = f.read(e_shentsize)
+                sh_type = struct.unpack_from("<I", sh, 4)[0]
+                sh_addr = struct.unpack_from(word_fmt, sh, sh_addr_off)[0]
+                sh_offset = struct.unpack_from(word_fmt, sh, sh_off_off)[0]
+                sections.append((sh_type, sh_addr, sh_offset))
+                if sh_type == 6:  # SHT_DYNAMIC
+                    dyn_offset = sh_offset
+                    dyn_size = struct.unpack_from(word_fmt, sh, sh_size_off)[0]
+
+            if not dyn_offset:
+                return
+
+            strtab_addr = 0
+            needed_entries = []
+            for i in range(dyn_size // dyn_entry_size):
+                f.seek(dyn_offset + i * dyn_entry_size)
+                d_tag, d_val = struct.unpack(dyn_fmt, f.read(dyn_entry_size))
+                if d_tag == 0:  # DT_NULL
+                    break
+                if d_tag == 5:  # DT_STRTAB
+                    strtab_addr = d_val
+                elif d_tag == 1:  # DT_NEEDED
+                    needed_entries.append(
+                        (dyn_offset + i * dyn_entry_size + word_size, d_val)
+                    )
+
+            dynstr_offset = 0
+            for sh_type, sh_addr, sh_offset in sections:
+                if sh_type == 3 and sh_addr == strtab_addr:  # SHT_STRTAB
+                    dynstr_offset = sh_offset
+                    break
+
+            if not dynstr_offset:
+                return
+
+            for entry_offset, d_val in needed_entries:
+                f.seek(dynstr_offset + d_val)
+                chunk = f.read(4096)
+                end = chunk.find(b"\x00")
+                if end < 0:
+                    continue
+                name = chunk[:end]
+                slash = name.rfind(b"/")
+                if slash < 0:
+                    continue
+                f.seek(entry_offset)
+                f.write(struct.pack(word_fmt, d_val + slash + 1))
+                log(
+                    self.log_file,
+                    f"[{self.cross_venv}] {so_path.name}: NEEDED "
+                    f"'{name.decode(errors='replace')}' -> "
+                    f"'{name[slash + 1:].decode(errors='replace')}'",
+                )
+
+    def _check_elf_alignment(self, so_path: Path):
+        """Verify that all PT_LOAD segments are 16KB-aligned."""
+        MIN_ALIGNMENT = 16384
+        with open(so_path, "rb") as f:
+            magic = f.read(4)
+            if magic != b"\x7fELF":
+                return
+            ei_class = struct.unpack("B", f.read(1))[0]
+            if ei_class != 2:  # skip 32-bit ELFs
+                return
+
+            # Read e_phoff, e_phentsize, e_phnum from ELF64 header
+            f.seek(32)
+            e_phoff = struct.unpack("<Q", f.read(8))[0]
+            f.seek(54)
+            e_phentsize, e_phnum = struct.unpack("<HH", f.read(4))
+
+            for i in range(e_phnum):
+                f.seek(e_phoff + i * e_phentsize)
+                p_type = struct.unpack("<I", f.read(4))[0]
+                if p_type != 1:  # PT_LOAD
+                    continue
+                f.seek(e_phoff + i * e_phentsize + 48)
+                p_align = struct.unpack("<Q", f.read(8))[0]
+
+                if p_align < MIN_ALIGNMENT:
+                    raise RuntimeError(
+                        f"{so_path.name}: PT_LOAD alignment is {p_align}, "
+                        f"expected >= {MIN_ALIGNMENT}. "
+                        f"Library is not 16KB page-aligned."
+                    )
+        log(self.log_file, f"[{self.cross_venv}] {so_path.name}: 16KB alignment OK")
+
     def fix_wheel(self, wheel_dir: Path):
 
         log(self.log_file, f"[{self.cross_venv}] Fixing wheel contents")
 
         # Normalize wheel tags to forge platform tags so repacked wheels use
         # android_24_arm64_v8a / ios_13_0_arm64_iphoneos style platform tags.
+        # Preserve the Python/ABI part the upstream build wrote (e.g. maturin
+        # emits `cp37-abi3-*` for cryptography); only the platform component
+        # is swapped. Falls back to self.wheel_tag when no Tag was written.
         wheel_metadata_path = next(wheel_dir.glob("*.dist-info")) / "WHEEL"
         wheel_metadata = self.read_message_file(wheel_metadata_path)
-        if "Tag" in wheel_metadata:
-            del wheel_metadata["Tag"]
-        wheel_metadata["Tag"] = self.wheel_tag
+        upstream_tags = wheel_metadata.get_all("Tag", [])
+        del wheel_metadata["Tag"]
+        new_tags = []
+        for tag in upstream_tags:
+            py, abi, _platform = tag.rsplit("-", 2)
+            new_tags.append(f"{py}-{abi}-{self.cross_venv.tag}")
+        if not new_tags:
+            new_tags = [self.wheel_tag]
+        for tag in new_tags:
+            wheel_metadata["Tag"] = tag
         self.write_message_file(wheel_metadata_path, wheel_metadata)
 
         if self.cross_venv.sdk == "android":
@@ -532,6 +676,15 @@ class Builder(ABC):
                     [env["STRIP"], "--strip-unneeded", str(so)],
                 )
 
+            # Rewrite any absolute-path DT_NEEDED entries to their basename
+            # (e.g. libpython linked by absolute path under CMake builds).
+            for so in wheel_dir.glob("**/*.so"):
+                self._rewrite_absolute_needed(so)
+
+            # Verify 16KB page alignment (required by Google Play)
+            for so in wheel_dir.glob("**/*.so"):
+                self._check_elf_alignment(so)
+
         # add missing requirements from "host"
         if len(self.package.meta["requirements"]["host"]):
             metadata_path = next(wheel_dir.glob("*.dist-info")) / "METADATA"
@@ -542,8 +695,15 @@ class Builder(ABC):
                         self.log_file,
                         f"[{self.cross_venv}] Adding {req} requirement to METADATA",
                     )
-                    req_name, req_ver = req.split(" ")
-                    metadata["Requires-Dist"] = f"{req_name} (>={req_ver})"
+                    parts = req.split(" ", 1)
+                    req_name = parts[0]
+                    if len(parts) > 1:
+                        req_ver = parts[1]
+                        if req_ver[0].isdigit():
+                            req_ver = f"=={req_ver}"
+                        metadata["Requires-Dist"] = f"{req_name} ({req_ver})"
+                    else:
+                        metadata["Requires-Dist"] = req_name
             self.write_message_file(metadata_path, metadata)
 
 

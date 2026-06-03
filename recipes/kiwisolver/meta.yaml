@@ -2,6 +2,9 @@ package:
   name: kiwisolver
   version: 1.4.7
 
+build:
+  number: 4
+
 # {% if sdk == 'android' %}
 requirements:
   host:

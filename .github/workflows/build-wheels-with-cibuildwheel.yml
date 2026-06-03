@@ -1,8 +1,10 @@
 name: wheels-android
 
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
+
+env:
+  UV_PYTHON: "3.12"  # cibuildwheel runner python; not the target
 
 jobs:
   build_android_wheels:
@@ -11,10 +13,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"  # cibuildwheel runner python; not the target
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
 
       - name: Set up JDK
         uses: actions/setup-java@v4
@@ -35,8 +35,7 @@ jobs:
           wget https://files.pythonhosted.org/packages/04/24/4b2031d72e840ce4c1ccb255f693b15c334757fc50023e4db9537080b8c4/websockets-16.0.tar.gz
           tar xf websockets-16.0.tar.gz
           cd websockets-16.0
-          python -m pip install -U pip cibuildwheel
-          cibuildwheel --output-dir wheelhouse
+          uvx cibuildwheel --output-dir wheelhouse
 
       - uses: actions/upload-artifact@v4
         with:

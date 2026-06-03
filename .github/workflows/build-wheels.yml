@@ -4,54 +4,120 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      archs:
+        description: "Architectures (comma-separated, e.g. android,iOS)"
+        required: false
+        default: "android,iOS"
+      packages:
+        description: "Packages (comma-separated, e.g. pillow:11.1.0,pydantic-core:2.33.2)"
+        required: false
+        default: "pydantic-core:2.33.2"
+      publish:
+        description: "Publish to PyPI"
+        type: boolean
+        default: false
 
 env:
-  PYTHON_VERSION: "3.13.12"
-  PYTHON_SHORT_VERSION: "3.13"
+  UV_PYTHON: "3.13.12"
   MOBILE_FORGE_CACHE_DOWNLOADS_OFF: "1"
   NDK_VERSION: r27d
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get changed recipes
+        id: changed-recipes
+        uses: tj-actions/changed-files@v45
+        with:
+          files: recipes/**
+          dir_names: true
+          dir_names_max_depth: 2
+
+      - id: detect-packages
+        shell: bash
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          INPUT_PACKAGES: ${{ inputs.packages }}
+          CHANGED_DIRS: ${{ steps.changed-recipes.outputs.all_changed_files }}
+        run: |
+          SMOKE_TEST="pydantic-core:2.33.2"
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            pkgs="${INPUT_PACKAGES:-$SMOKE_TEST}"
+          else
+            pkgs=""
+            for dir in $CHANGED_DIRS; do
+              [[ -f "$dir/meta.yaml" ]] || continue   # skip deleted recipes
+              pkgs="${pkgs:+$pkgs,}${dir#recipes/}:"
+            done
+            pkgs="${pkgs:-$SMOKE_TEST}"
+          fi
+          echo "Detected packages: $pkgs"
+          echo "packages=$pkgs" >> "$GITHUB_OUTPUT"
+
+      - id: set-matrix
+        shell: bash
+        run: |
+          ARCHS="${{ inputs.archs || 'android,iOS' }}"
+          PACKAGES="${{ steps.detect-packages.outputs.packages }}"
+
+          matrix='{"include":['
+          first=true
+          for arch in $(echo "$ARCHS" | tr ',' ' '); do
+            for pkg in $(echo "$PACKAGES" | tr ',' ' '); do
+              pkg_name="${pkg%%:*}"
+              if [ "$first" = true ]; then first=false; else matrix+=','; fi
+              if [[ "$arch" == "android" ]]; then
+                runner="ubuntu-latest"
+                platform="android"
+                rust_targets="aarch64-linux-android,x86_64-linux-android"
+              else
+                runner="macos-latest"
+                platform="ios"
+                rust_targets="aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios"
+              fi
+              matrix+="{\"job_name\":\"${platform}: ${pkg_name}\",\"artifact_name\":\"${platform}-${pkg_name}\",\"runner\":\"$runner\",\"platform\":\"$platform\",\"forge_arch\":\"$arch\",\"forge_packages\":\"$pkg\",\"rust_targets\":\"$rust_targets\"}"
+            done
+          done
+          matrix+=']}'
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: setup
     name: ${{ matrix.job_name }}
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - job_name: "Android: pydantic-core 2.33.2"
-            runner: ubuntu-latest
-            forge_arch: android
-            forge_packages: "pydantic-core:2.33.2"
-            build_number: "1"
-            platform: android
-          - job_name: "iOS: pydantic-core 2.33.2"
-            runner: macos-latest
-            forge_arch: iOS
-            forge_packages: "pydantic-core:2.33.2"
-            build_number: "1"
-            platform: ios
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_SHORT_VERSION }}
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
 
-      - name: Build and publish wheels
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
+
+      - name: Build wheels
         shell: bash
         env:
-          GEMFURY_TOKEN: ${{ secrets.GEMFURY_TOKEN }}
-          APPVEYOR_PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number || '' }}
           FORGE_ARCH: ${{ matrix.forge_arch }}
           FORGE_PACKAGES: ${{ matrix.forge_packages }}
-          BUILD_NUMBER: ${{ matrix.build_number }}
           PLATFORM: ${{ matrix.platform }}
         run: |
           set -euxo pipefail
+
+          PYTHON_SHORT_VERSION="${UV_PYTHON%.*}"
 
           . .ci/common.sh
           export MOBILE_FORGE_ANDROID_SUPPORT_PATH=""
@@ -65,58 +131,49 @@ jobs:
             curl -#OL "https://github.com/flet-dev/python-build/releases/download/v${PYTHON_SHORT_VERSION}/python-android-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz"
             mkdir -p "$python_android_dir"
             tar -xzf "python-android-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz" -C "$python_android_dir"
+            export MOBILE_FORGE_ANDROID_SUPPORT_PATH="$python_android_dir"
 
             . .ci/install_ndk.sh
-
-            curl https://sh.rustup.rs -sSf | sh -s -- -y
-            . "$HOME/.cargo/env"
-            export PATH="$PATH:$HOME/.cargo/bin"
-            rustup target add aarch64-linux-android
-            rustup target add arm-linux-androideabi
-            rustup target add x86_64-linux-android
-            rustup target add i686-linux-android
-
-            export MOBILE_FORGE_ANDROID_SUPPORT_PATH="$python_android_dir"
           else
             python_ios_dir="$HOME/projects/python-build/darwin/Python-Apple-support"
             curl -#OL "https://github.com/flet-dev/python-build/releases/download/v${PYTHON_SHORT_VERSION}/python-ios-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz"
             mkdir -p "$python_ios_dir"
             tar -xzf "python-ios-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz" -C "$python_ios_dir"
-
-            curl https://sh.rustup.rs -sSf | sh -s -- -y
-            . "$HOME/.cargo/env"
-            export PATH="$PATH:$HOME/.cargo/bin"
-            rustup target add aarch64-apple-ios
-            rustup target add aarch64-apple-ios-sim
-            rustup target add x86_64-apple-ios
-
             export MOBILE_FORGE_IOS_SUPPORT_PATH="$python_ios_dir"
           fi
 
-          source ./setup.sh "$PYTHON_VERSION"
-          export PATH="$PATH:$HOME/.cargo/bin"
+          source ./setup.sh "$UV_PYTHON"
 
           IFS=' ' read -r -a packages <<< "$FORGE_PACKAGES"
           for package in "${packages[@]}"; do
-            forge "$FORGE_ARCH" "$package:$BUILD_NUMBER"
+            forge "$FORGE_ARCH" "$package"
           done
 
-          rm -f dist/bzip2-* dist/xz-* dist/openssl-* dist/libffi-*
+          # Drop the support-tree dep wheels produced by make_dep_wheels.py
+          # iOS deps: bzip2, libffi, mpdecimal, openssl, xz
+          # Android deps: bzip2, libffi, openssl, sqlite, xz
+          rm -f dist/bzip2-* dist/libffi-* dist/mpdecimal-* dist/openssl-* dist/sqlite-* dist/xz-*
 
-          if compgen -G "dist/*.whl" > /dev/null; then
-            publish_to_pypi dist/*.whl
-          fi
+      - name: Publish wheels
+        if: ${{ hashFiles('dist/*.whl') != '' && (inputs.publish || (github.event_name == 'push' && github.ref == 'refs/heads/python3.13')) }}
+        shell: bash
+        env:
+          GEMFURY_TOKEN: ${{ secrets.GEMFURY_TOKEN }}
+        run: |
+          set -euxo pipefail
+          . .ci/common.sh
+          publish_to_pypi dist/*.whl
 
       - name: Upload logs on success
         if: ${{ success() && hashFiles('logs/*.log') != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform }}-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          name: logs-${{ matrix.artifact_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: logs/*.log
 
       - name: Upload errors on failure
         if: ${{ failure() && hashFiles('errors/*.log') != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform }}-errors-${{ github.run_id }}-${{ github.run_attempt }}
+          name: errors-${{ matrix.artifact_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: errors/*.log

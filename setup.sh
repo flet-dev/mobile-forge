@@ -24,11 +24,15 @@ if [ -z "$1" ]; then
     return
 fi
 
-PYTHON_VERSION=$1
-read python_version_major python_version_minor < <(echo $PYTHON_VERSION | sed -E 's/^([0-9]+)\.([0-9]+).*/\1 \2/')
-PYTHON_VER=$python_version_major.$python_version_minor
+if ! command -v uv &> /dev/null; then
+    echo "Error: uv is not installed. Install it with:"
+    echo "    curl -LsSf https://astral.sh/uv/install.sh | sh"
+    return
+fi
 
-PYTHON_URL_PREFIX=https://github.com/indygreg/python-build-standalone/releases/download/20260203/cpython-$PYTHON_VERSION+20260203
+PYTHON_VERSION=$1
+PYTHON_VER="${PYTHON_VERSION%.*}"
+python_version_minor="${PYTHON_VER#*.}"
 
 echo "Python version: $PYTHON_VERSION"
 echo "Python short version: $PYTHON_VER"
@@ -43,58 +47,10 @@ venv_dir="$(pwd)/venv$PYTHON_VER"
 if [ ! -d $venv_dir ]; then
     echo "Creating Python $PYTHON_VER virtual environment for build in $venv_dir..."
 
-    if ! [ -d "tools/python" ]; then
-        if [ $(uname) = "Darwin" ]; then
-            # macOS
-            if [ $(uname -m) = "arm64" ]; then
-                PYTHON_SUFFIX="aarch64-apple-darwin-install_only.tar.gz"
-            else
-                PYTHON_SUFFIX="x86_64-apple-darwin-install_only.tar.gz"
-            fi
-        else
-            # Linux
-            if [ $(uname -m) = "arm64" ]; then
-                PYTHON_SUFFIX="aarch64-unknown-linux-gnu-install_only.tar.gz"
-            else
-                PYTHON_SUFFIX="x86_64_v3-unknown-linux-gnu-install_only.tar.gz"
-            fi
-        fi
-
-        if ! [ -f "downloads/python-${PYTHON_VERSION}-${PYTHON_SUFFIX}" ]; then
-            echo "Downloading Python ${PYTHON_VERSION}"
-            python_dist_filename="downloads/python-${PYTHON_VERSION}-${PYTHON_SUFFIX}"
-            mkdir -p downloads
-            rm -rf $python_dist_filename
-            curl --location --progress-bar --fail "${PYTHON_URL_PREFIX}-${PYTHON_SUFFIX}" --output $python_dist_filename
-            if [ $? -ne 0 ]; then
-                echo "Can't download a Python from ${PYTHON_URL_PREFIX}-${PYTHON_SUFFIX}"
-                return
-            fi
-        fi
-
-        mkdir -p tools
-        tar -xzf "downloads/python-${PYTHON_VERSION}-${PYTHON_SUFFIX}" -C tools
-    fi
-
-    # BUILD_PYTHON=$(which python$PYTHON_VER)
-    # if [ $? -ne 0 ]; then
-    #     echo "Can't find a Python $PYTHON_VER binary on the path."
-    #     return
-    # fi
-
-    BUILD_PYTHON=tools/python/bin/python
-
-    if ! [ -f $BUILD_PYTHON ]; then
-        echo "Can't find a Python $BUILD_PYTHON binary on the path."
-        return
-    fi
-
-    echo "Using $BUILD_PYTHON as the build python"
-    $BUILD_PYTHON -m venv $venv_dir
+    uv venv --seed --python="$PYTHON_VERSION" $venv_dir
     source $venv_dir/bin/activate
 
-    pip install -U pip
-    pip install -e . wheel
+    uv pip install -e .
 
     echo "Building platform dependency wheels..."
     if [ ! -z "$MOBILE_FORGE_IOS_SUPPORT_PATH" ]; then
@@ -151,7 +107,7 @@ if [ ! -z "$MOBILE_FORGE_ANDROID_SUPPORT_PATH" ]; then
         return
     fi
 
-    if [ "$PYTHON_VER" = "3.12" ]; then
+    if [ "$python_version_minor" -lt 13 ]; then
         if [ ! -e $MOBILE_FORGE_ANDROID_SUPPORT_PATH/install/android/armeabi-v7a/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
             echo "MOBILE_FORGE_ANDROID_SUPPORT_PATH does not appear to contain a Python $PYTHON_VERSION Android armeabi-v7a device binary."
             return

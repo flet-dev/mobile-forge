@@ -2,5 +2,8 @@ package:
   name: pycryptodome
   version: 3.21.0
 
+build:
+  number: 4
+
 patches:
   - mobile.patch

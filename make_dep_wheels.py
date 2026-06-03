@@ -84,7 +84,7 @@ def make_wheel(package, os_name, target):
     package_version_build = re.search(
         rf"^{package}: (.*)", versions, re.MULTILINE | re.IGNORECASE
     )[1]
-    min_version = re.search(rf"^Min {os_name} version: (.*)", versions, re.MULTILINE)[1]
+    min_version = re.search(rf"^Min {os_name} version: (.*)", versions, re.MULTILINE | re.IGNORECASE)[1]
 
     package_version, package_build = package_version_build.split("-")
 

@@ -11,6 +11,7 @@ if [ $CROSS_VENV_SDK == "android" ]; then
         -DANDROID_ABI=$ANDROID_ABI \
         -DCMAKE_TOOLCHAIN_FILE=$NDK_ROOT/build/cmake/android.toolchain.cmake \
         -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_SHARED_LINKER_FLAGS="$LDFLAGS" \
         -DCMAKE_INSTALL_PREFIX="$PREFIX" \
         -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=NEVER \
         -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=NEVER \
@@ -26,7 +27,8 @@ if [ $CROSS_VENV_SDK == "android" ]; then
         -DGDAL_USE_CURL=OFF \
         -DGDAL_USE_LIBXML2=OFF \
         -DBUILD_APPS=OFF \
-        -DBUILD_TESTING=OFF
+        -DBUILD_TESTING=OFF \
+        -DBUILD_PYTHON_BINDINGS=OFF
 else
     cmake .. \
         -DCMAKE_SYSTEM_NAME=iOS \
