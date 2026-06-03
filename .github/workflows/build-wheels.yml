@@ -13,10 +13,6 @@ on:
         description: "Packages (comma-separated, e.g. pillow:11.1.0,pydantic-core:2.33.2) — or 'ALL' to build/test every recipe"
         required: false
         default: "pydantic-core:2.33.2"
-      publish:
-        description: "Publish to PyPI"
-        type: boolean
-        default: false
       python_build_run_id:
         description: |
           flet-dev/python-build Actions run-id whose artifacts to use as the
@@ -379,7 +375,7 @@ jobs:
       - name: Publish wheels
         # `success() &&` so a test failure blocks publish — without it, a
         # passing build with failing tests would still ship the wheel.
-        if: ${{ success() && hashFiles('dist/*.whl') != '' && (inputs.publish || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+        if: ${{ success() && hashFiles('dist/*.whl') != '' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         shell: bash
         env:
           GEMFURY_TOKEN: ${{ secrets.GEMFURY_TOKEN }}
