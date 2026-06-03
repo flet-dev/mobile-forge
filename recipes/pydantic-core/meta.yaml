@@ -1,6 +1,6 @@
 package:
   name: pydantic-core
-  version: 2.33.2
+  version: 2.47.0
 
 build:
   number: 4

@@ -359,6 +359,15 @@ class Builder(ABC):
 
         # cargo_ldflags = re.sub(r"-march=[\w-]+", "", ldflags)
         cargo_ldflags = " -L{}/lib".format(self.cross_venv.sysconfig_data["prefix"])
+        # On Android, pyo3-ffi (and similar) link `-lpython3` / `-lpython3.<X>`.
+        # PYO3_CROSS_LIB_DIR points at the host stdlib directory (so maturin can
+        # find _sysconfigdata__*.py and build-details.json there), but the
+        # actual `libpython*.so` files live in the host install's `lib/`
+        # directory (LIBDIR). Add LIBDIR as an extra library search path so the
+        # linker can resolve those `-lpython*` references.
+        host_libdir = self.cross_venv.sysconfig_data.get("LIBDIR")
+        if host_libdir:
+            cargo_ldflags += f" -L{host_libdir}"
         cargo_ldflags += " -C link-arg=-undefined -C link-arg=dynamic_lookup"
 
         if self.cross_venv.sdk == "android":
