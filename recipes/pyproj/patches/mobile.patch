@@ -1,8 +1,16 @@
 diff --git a/setup.py b/setup.py
-index 9987cff..b56a0fc 100644
 --- a/setup.py
 +++ b/setup.py
-@@ -194,7 +194,9 @@ def get_extension_modules():
+@@ -155,6 +155,8 @@
+     This function gets the libraries to cythonize with
+     """
+     libraries = ["proj"]
++    if "PROJ_LIBS" in os.environ:
++        libraries = os.environ["PROJ_LIBS"].split(",")
+     if os.name == "nt":
+         for libdir in libdirs:
+             projlib = list(Path(libdir).glob("proj*.lib"))
+@@ -194,7 +196,9 @@ def get_extension_modules():
          "include_dirs": include_dirs,
          "library_dirs": library_dirs,
          "runtime_library_dirs": (

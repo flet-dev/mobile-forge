@@ -37,13 +37,19 @@ python_version_minor="${PYTHON_VER#*.}"
 echo "Python version: $PYTHON_VERSION"
 echo "Python short version: $PYTHON_VER"
 
-# Download (and cache) a mobile-forge Python support package from the
-# flet-dev/python-build releases, extracting it into $2. The tarball is cached
+# Download (and cache) a mobile-forge Python support package, extracting it
+# into $2. Source is either the canonical v<version> release on
+# flet-dev/python-build, or a specific Actions run's artifacts when
+# $PYTHON_BUILD_RUN_ID is set (used in CI to validate unreleased
+# python-build branches against the recipe matrix). Tarballs are cached
 # under downloads/ (gitignored) and reused on subsequent runs.
+#
+# Reads from caller env:
+#   PYTHON_BUILD_RUN_ID  — empty for release URL; non-empty for `gh run download`
+#                          (requires `gh` installed and a GITHUB_TOKEN / login)
 download_support() {
     local plat="$1" dest="$2"
     local tarball="python-${plat}-mobile-forge-${PYTHON_VER}.tar.gz"
-    local url="https://github.com/flet-dev/python-build/releases/download/v${PYTHON_VER}/${tarball}"
 
     if [ -d "$dest/support" ]; then
         return 0
@@ -51,11 +57,28 @@ download_support() {
 
     mkdir -p downloads
     if [ ! -f "downloads/${tarball}" ]; then
-        echo "Downloading ${tarball}..."
-        if ! curl -fL -o "downloads/${tarball}" "$url"; then
-            echo "Failed to download ${url}"
-            rm -f "downloads/${tarball}"
-            return 1
+        if [ -n "${PYTHON_BUILD_RUN_ID:-}" ]; then
+            echo "Fetching ${tarball} from python-build run ${PYTHON_BUILD_RUN_ID}..."
+            local stage
+            stage="$(mktemp -d)"
+            if ! gh run download "$PYTHON_BUILD_RUN_ID" \
+                    --repo flet-dev/python-build \
+                    --name "python-${plat}-${PYTHON_VER}" \
+                    --dir "$stage"; then
+                echo "Failed to download artifact python-${plat}-${PYTHON_VER} from run ${PYTHON_BUILD_RUN_ID}"
+                rm -rf "$stage"
+                return 1
+            fi
+            mv "$stage/${tarball}" "downloads/${tarball}"
+            rm -rf "$stage"
+        else
+            local url="https://github.com/flet-dev/python-build/releases/download/v${PYTHON_VER}/${tarball}"
+            echo "Downloading ${tarball}..."
+            if ! curl -fL -o "downloads/${tarball}" "$url"; then
+                echo "Failed to download ${url}"
+                rm -f "downloads/${tarball}"
+                return 1
+            fi
         fi
     fi
 

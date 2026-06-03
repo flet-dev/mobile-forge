@@ -47,3 +47,18 @@
  
  EXTENSION_LIBRARIES = ()
  if "linux" in sys.platform:
+--- a/third_party/zlib/zutil.h	2026-05-31 19:02:14
++++ b/third_party/zlib/zutil.h	2026-05-31 19:02:15
+@@ -143,8 +143,10 @@
+ #    if defined(__MWERKS__) && __dest_os != __be_os && __dest_os != __win32_os
+ #      include <unix.h> /* for fdopen */
+ #    else
+-#      ifndef fdopen
+-#        define fdopen(fd,mode) NULL /* No fdopen() */
++#      if !defined(__APPLE__)
++#        ifndef fdopen
++#          define fdopen(fd,mode) NULL /* No fdopen() */
++#        endif
+ #      endif
+ #    endif
+ #  endif

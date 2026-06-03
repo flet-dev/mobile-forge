@@ -417,7 +417,9 @@ class CrossVEnv:
 
     def cross_kwargs(self, kwargs):
         venv_kwargs = kwargs.copy()
-        env = venv_kwargs.get("env", {})
+        env = venv_kwargs.get("env")
+        if env is None:
+            env = os.environ.copy()
 
         # Ensure the path is clean, and doesn't include any non-iOS paths.
         env["PATH"] = os.pathsep.join(
@@ -440,10 +442,7 @@ class CrossVEnv:
         env["VIRTUAL_ENV"] = str(self.venv_path / self.venv_path.name)
 
         # Remove PYTHONHOME if it's set
-        try:
-            del env["PYTHONHOME"]
-        except KeyError:
-            pass
+        env.pop("PYTHONHOME", None)
 
         venv_kwargs["env"] = env
         return venv_kwargs
@@ -465,7 +464,8 @@ class CrossVEnv:
         * Remove the ``PYTHONHOME`` environment variable, if it exists.
 
         If ``env`` is passed in as a keyword argument, the values in that environment
-        will be augmented by the virtualenv changes.
+        will be augmented by the virtualenv changes. If ``env`` is not passed, the
+        parent process's ``os.environ`` is used as the baseline.
 
         For auditing purposes, the final kwargs used at runtime will be output to the
         console.

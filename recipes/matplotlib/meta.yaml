@@ -10,9 +10,12 @@ requirements:
     - numpy ^2.0.0
     - pybind11
     - flet-libjpeg 3.0.90
+# {% if sdk == 'android' %}
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
 
 build:
-  number: 4
+  number: 5
 # {% if sdk == 'android' and arch in ['armeabi-v7a', 'x86'] %}
   script_env:
     CPPFLAGS: -Wno-c++11-narrowing

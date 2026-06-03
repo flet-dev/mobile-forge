@@ -3,17 +3,39 @@ package:
   version: 3.7.0
 
 build:
-  number: 4
+  number: 5
   script_env:
     PROJ_VERSION: 9.5.0
     PROJ_DIR: '{platlib}/opt'
 # {% if sdk != 'android' %}
+    # On iOS libproj is built static (`-DBUILD_SHARED_LIBS=OFF`). It
+    # carries internal references to libtiff (for grid file
+    # support), libcurl + libpsl (for the network grid fetcher),
+    # libsqlite3 (proj.db), and openssl (via libcurl HTTPS) — all
+    # left undefined when proj's own link only kept objects it
+    # itself referenced. iOS dyld eagerly resolves the flat
+    # namespace at dlopen and aborts on the first miss (we saw it
+    # land on `_TIFFClientOpen`). Adding the full dep chain to
+    # PROJ_LIBS makes pyproj's `_geod`/`_crs`/`_context` link
+    # commands pull every missing object straight out of its
+    # archive.
+    #
+    # Same shape of fix as recipes/fiona — see that recipe for
+    # extra context. Long-term fix lives in `flet-libproj`:
+    # `-DENABLE_TIFF=OFF -DENABLE_CURL=OFF` in the iOS cmake call so
+    # libproj.a stops leaking refs at all.
+    PROJ_LIBS: proj,tiff,curl,psl,sqlite3,jpeg,ssl,crypto,z
     LDFLAGS: '-undefined dynamic_lookup'
 # {% endif %}
 
 requirements:
   host:
     - flet-libproj 9.5.0
+# {% if sdk != 'android' %}
+    # iOS-only — see PROJ_LIBS comment above for the rationale.
+    - openssl >=3.0.15
+    - flet-libjpeg 3.0.90
+# {% endif %}
 
 patches:
   - mobile.patch
