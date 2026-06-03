@@ -117,32 +117,18 @@ jobs:
         run: |
           set -euxo pipefail
 
-          PYTHON_SHORT_VERSION="${UV_PYTHON%.*}"
-
           . .ci/common.sh
-          export MOBILE_FORGE_ANDROID_SUPPORT_PATH=""
-          export MOBILE_FORGE_IOS_SUPPORT_PATH=""
 
           if [[ "$PLATFORM" == "android" ]]; then
             sudo apt-get update
             sudo apt-get install -y sqlite3
 
-            python_android_dir="$HOME/projects/python-build/android"
-            curl -#OL "https://github.com/flet-dev/python-build/releases/download/v${PYTHON_SHORT_VERSION}/python-android-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz"
-            mkdir -p "$python_android_dir"
-            tar -xzf "python-android-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz" -C "$python_android_dir"
-            export MOBILE_FORGE_ANDROID_SUPPORT_PATH="$python_android_dir"
-
             . .ci/install_ndk.sh
-          else
-            python_ios_dir="$HOME/projects/python-build/darwin/Python-Apple-support"
-            curl -#OL "https://github.com/flet-dev/python-build/releases/download/v${PYTHON_SHORT_VERSION}/python-ios-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz"
-            mkdir -p "$python_ios_dir"
-            tar -xzf "python-ios-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz" -C "$python_ios_dir"
-            export MOBILE_FORGE_IOS_SUPPORT_PATH="$python_ios_dir"
           fi
 
-          source ./setup.sh "$UV_PYTHON"
+          # setup.sh downloads the matching mobile-forge support package for the
+          # requested platform and sets MOBILE_FORGE_*_SUPPORT_PATH.
+          source ./setup.sh "$UV_PYTHON" "$PLATFORM"
 
           IFS=' ' read -r -a packages <<< "$FORGE_PACKAGES"
           for package in "${packages[@]}"; do
