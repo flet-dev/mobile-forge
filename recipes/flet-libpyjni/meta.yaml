@@ -1,6 +1,9 @@
 package:
   name: flet-libpyjni
   version: 1.0.1
+  # JNI bridge to the Android JVM — no equivalent on iOS, build can't
+  # succeed there. (Mirrors flet-libcpp-shared's platforms gate.)
+  platforms: [android]
 
 build:
   number: 4

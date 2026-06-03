@@ -2,7 +2,17 @@ package:
   name: tokenizers
   version: 0.21.0
 
+# {% if sdk == 'android' %}
+requirements:
+  host:
+    # tokenizers' Rust core links libstdc++, which on Android is
+    # libc++_shared.so. Without this dep the wheel loads with
+    # `dlopen failed: library "libc++_shared.so" not found`
+    # (mirrors the numpy + blis Android wiring).
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
+
 build:
-  number: 4
+  number: 5
   script_env:
     _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'

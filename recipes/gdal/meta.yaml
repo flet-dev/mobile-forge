@@ -5,14 +5,38 @@ package:
 requirements:
   host:
     - flet-libgdal 3.10.0
+# {% if sdk == 'android' %}
+    # libgdal links C++; the SWIG-generated _gdal.so loads via dlopen which
+    # needs libc++_shared.so on Android.
+    - flet-libcpp-shared >=27.2.12479018
+# {% else %}
+    # iOS-only — see GDAL_LIBS comment below for the rationale.
+    - openssl >=3.0.15
+    - flet-libjpeg 3.0.90
+# {% endif %}
 
 build:
-  number: 4
+  number: 5
   script_env:
     GDAL_VERSION: 3.10.0
     GDAL_PREFIX: '{platlib}/opt'
     GDAL_CFLAGS: ''
 # {% if sdk != 'android' %}
+    # On iOS every native dep is a static archive (libgdal, libproj,
+    # libtiff, libcurl, libpsl all `-DBUILD_SHARED_LIBS=OFF`). When
+    # GDAL was linked at its own build time the linker only kept
+    # object files for symbols GDAL itself referenced — anything else
+    # was left undefined in libgdal.a. iOS dyld eagerly resolves the
+    # flat namespace at dlopen and aborts on the first miss
+    # (`_geod_init`, `_TIFFClientOpen`, `_psl_builtin`, …). Adding the
+    # full dep chain to GDAL_LIBS makes the SWIG `_gdal.so` link
+    # command pull every missing object straight out of its archive.
+    #
+    # Identical fix shipped in recipes/fiona, recipes/pyogrio. The
+    # right long-term fix lives in `flet-libgdal`: align iOS cmake
+    # with Android (`-DGDAL_USE_CURL=OFF`, `-DGDAL_USE_TIFF_INTERNAL=ON`,
+    # …) so libgdal.a stops leaking refs at all.
+    GDAL_LIBS: gdal,proj,tiff,curl,psl,sqlite3,jpeg,ssl,crypto,z
     LDFLAGS: '-undefined dynamic_lookup'
 # {% endif %}
 

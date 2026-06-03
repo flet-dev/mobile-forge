@@ -1,6 +1,10 @@
 package:
   name: flet-libcpp-shared
   version: 27.3.13750724
+  # libc++_shared.so is the Android C++ runtime — extracted from the NDK
+  # and repackaged. The whole recipe is meaningless on iOS (which uses
+  # libc++ statically linked into apps via the Apple toolchain).
+  platforms: [android]
 
 build:
   number: 4
