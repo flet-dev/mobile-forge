@@ -37,8 +37,24 @@ python_version_minor="${PYTHON_VER#*.}"
 echo "Python version: $PYTHON_VERSION"
 echo "Python short version: $PYTHON_VER"
 
+# Per-version support-path overrides: MOBILE_FORGE_{IOS,ANDROID}_SUPPORT_PATH_<MAJOR>_<MINOR>
+# (e.g. MOBILE_FORGE_IOS_SUPPORT_PATH_3_13). When set, they take precedence over
+# the unversioned variable for this session, so .envrc can declare paths for
+# 3.12 / 3.13 / 3.14 side-by-side and `source ./setup.sh <ver>` picks the right one.
+versioned_suffix="${PYTHON_VER//./_}"
+ios_versioned_var="MOBILE_FORGE_IOS_SUPPORT_PATH_${versioned_suffix}"
+android_versioned_var="MOBILE_FORGE_ANDROID_SUPPORT_PATH_${versioned_suffix}"
+if [ -n "${!ios_versioned_var}" ]; then
+    export MOBILE_FORGE_IOS_SUPPORT_PATH="${!ios_versioned_var}"
+fi
+if [ -n "${!android_versioned_var}" ]; then
+    export MOBILE_FORGE_ANDROID_SUPPORT_PATH="${!android_versioned_var}"
+fi
+
 if [[ -z "$MOBILE_FORGE_IOS_SUPPORT_PATH" && -z "$MOBILE_FORGE_ANDROID_SUPPORT_PATH" ]]; then
     echo "Neither MOBILE_FORGE_IOS_SUPPORT_PATH nor MOBILE_FORGE_ANDROID_SUPPORT_PATH are defined."
+    echo "Set MOBILE_FORGE_{IOS,ANDROID}_SUPPORT_PATH or per-version overrides"
+    echo "MOBILE_FORGE_{IOS,ANDROID}_SUPPORT_PATH_${versioned_suffix}."
     return
 fi
 
