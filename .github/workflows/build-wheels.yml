@@ -214,15 +214,15 @@ jobs:
 
       - name: Detect test files for this recipe
         id: detect-tests
-        # Platform-agnostic: both android + ios lanes consume has_tests.
-        # Individual lane steps below gate on `matrix.platform == 'android' | 'ios'`.
         shell: bash
         env:
           FORGE_PACKAGES: ${{ matrix.forge_packages }}
         run: |
           set -euo pipefail
           pkg_name="${FORGE_PACKAGES%%:*}"
-          
+          pkg_version="${FORGE_PACKAGES#*:}"
+          [[ "$pkg_version" == "$FORGE_PACKAGES" ]] && pkg_version=""
+
           # Check for the presence of any test files at known locations.
           if [[ -d "recipes/$pkg_name/tests" ]] \
               || [[ -d "recipes/$pkg_name/test" ]] \
@@ -230,6 +230,7 @@ jobs:
             echo "Found tests for $pkg_name"
             echo "has_tests=true" >> "$GITHUB_OUTPUT"
             echo "pkg_name=$pkg_name" >> "$GITHUB_OUTPUT"
+            echo "pkg_version=$pkg_version" >> "$GITHUB_OUTPUT"
           else
             echo "::notice::Skipping mobile test — no tests/, test/ or test_*.py under recipes/$pkg_name/"
             echo "has_tests=false" >> "$GITHUB_OUTPUT"
@@ -261,6 +262,7 @@ jobs:
         shell: bash
         env:
           PKG_NAME: ${{ steps.detect-tests.outputs.pkg_name }}
+          PKG_VERSION: ${{ steps.detect-tests.outputs.pkg_version }}
         run: |
           set -euxo pipefail
 
@@ -288,7 +290,7 @@ jobs:
               cp "$w" "$GITHUB_WORKSPACE/dist-test/$new"
           done
 
-          ./tests/recipe-tester/stage_recipe.sh "$PKG_NAME"
+          ./tests/recipe-tester/stage_recipe.sh "$PKG_NAME" "$PKG_VERSION"
           cd tests/recipe-tester
           PIP_FIND_LINKS="$GITHUB_WORKSPACE/dist-test" \
             uvx --with flet-cli flet build apk --arch x86_64 -vv --yes
@@ -319,6 +321,7 @@ jobs:
         shell: bash
         env:
           PKG_NAME: ${{ steps.detect-tests.outputs.pkg_name }}
+          PKG_VERSION: ${{ steps.detect-tests.outputs.pkg_version }}
         run: |
           set -euxo pipefail
 
@@ -334,7 +337,7 @@ jobs:
               cp "$w" "$GITHUB_WORKSPACE/dist-test/$new"
           done
 
-          ./tests/recipe-tester/stage_recipe.sh "$PKG_NAME"
+          ./tests/recipe-tester/stage_recipe.sh "$PKG_NAME" "$PKG_VERSION"
           cd tests/recipe-tester
           PIP_FIND_LINKS="$GITHUB_WORKSPACE/dist-test" \
             uvx --with flet-cli flet build ios-simulator -v --yes
