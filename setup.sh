@@ -58,14 +58,20 @@ download_support() {
     mkdir -p downloads
     if [ ! -f "downloads/${tarball}" ]; then
         if [ -n "${PYTHON_BUILD_RUN_ID:-}" ]; then
-            echo "Fetching ${tarball} from python-build run ${PYTHON_BUILD_RUN_ID}..."
+            # python-build's CI uploads iOS tarballs under the "darwin" artifact
+            # (it bundles iOS + macOS together). The android lane has a 1:1 artifact name.
+            local artifact_plat="$plat"
+            [ "$plat" = "ios" ] && artifact_plat="darwin"
+            local artifact_name="python-${artifact_plat}-${PYTHON_VER}"
+
+            echo "Fetching ${tarball} from python-build run ${PYTHON_BUILD_RUN_ID} (artifact: ${artifact_name})..."
             local stage
             stage="$(mktemp -d)"
             if ! gh run download "$PYTHON_BUILD_RUN_ID" \
                     --repo flet-dev/python-build \
-                    --name "python-${plat}-${PYTHON_VER}" \
+                    --name "$artifact_name" \
                     --dir "$stage"; then
-                echo "Failed to download artifact python-${plat}-${PYTHON_VER} from run ${PYTHON_BUILD_RUN_ID}"
+                echo "Failed to download artifact ${artifact_name} from run ${PYTHON_BUILD_RUN_ID}"
                 rm -rf "$stage"
                 return 1
             fi
