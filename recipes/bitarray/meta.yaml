@@ -3,4 +3,4 @@ package:
   version: 3.6.1
 
 build:
-  number: 4
+  number: 10

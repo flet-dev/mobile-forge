@@ -14,7 +14,7 @@ requirements:
 # {% endif %}
 
 build:
-  number: 5
+  number: 10
   backend-args:
     - -Csetup-args=--cross-file
     - -Csetup-args={MESON_CROSS_FILE}

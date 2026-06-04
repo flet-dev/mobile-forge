@@ -3,7 +3,7 @@ package:
   version: 2.13.3
 
 build:
-  number: 2
+  number: 10
 
 source:
   url: https://download.savannah.gnu.org/releases/freetype/freetype-2.13.3.tar.gz

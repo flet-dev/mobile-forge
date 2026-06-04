@@ -10,7 +10,7 @@ patches:
   - mobile.patch
 
 build:
-  number: 4
+  number: 10
   script_env:
 # {% if sdk == 'android' %}
     CMAKE_ARGS: >-

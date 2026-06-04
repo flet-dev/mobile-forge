@@ -20,8 +20,13 @@ on:
         required: false
         default: ""
 
+# Cancel in-flight runs when a newer event arrives for the same logical branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 env:
-  UV_PYTHON: "3.12.12"
+  UV_PYTHON: "3.12.13"
   MOBILE_FORGE_CACHE_DOWNLOADS_OFF: "1"
   FORGE_NDK_VERSION: r27d  # used by forge for wheel cross-compile.
   FLUTTER_NDK_VERSION: "28.2.13676358"  # used by flutter for apk build.
@@ -179,32 +184,19 @@ jobs:
         run: |
           set -euxo pipefail
 
-          PYTHON_SHORT_VERSION="${UV_PYTHON%.*}"
-
           . .ci/common.sh
-          export MOBILE_FORGE_ANDROID_SUPPORT_PATH=""
-          export MOBILE_FORGE_IOS_SUPPORT_PATH=""
 
           if [[ "$PLATFORM" == "android" ]]; then
             sudo apt-get update
             sudo apt-get install -y sqlite3
-
-            python_android_dir="$HOME/projects/python-build/android"
-            mkdir -p "$python_android_dir"
-            fetch_python_build_tarball "android" \
-              "python-android-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz" \
-              "$python_android_dir"
-            export MOBILE_FORGE_ANDROID_SUPPORT_PATH="$python_android_dir"
-          else
-            python_ios_dir="$HOME/projects/python-build/darwin/Python-Apple-support"
-            mkdir -p "$python_ios_dir"
-            fetch_python_build_tarball "darwin" \
-              "python-ios-mobile-forge-${PYTHON_SHORT_VERSION}.tar.gz" \
-              "$python_ios_dir"
-            export MOBILE_FORGE_IOS_SUPPORT_PATH="$python_ios_dir"
           fi
 
-          source ./setup.sh "$UV_PYTHON"
+          # setup.sh downloads the matching mobile-forge support package for the
+          # requested platform and sets MOBILE_FORGE_*_SUPPORT_PATH. When the
+          # PYTHON_BUILD_RUN_ID env (from inputs above) is set, setup.sh
+          # fetches from that python-build Actions run's artifacts instead of
+          # the canonical v<version> release.
+          source ./setup.sh "$UV_PYTHON" "$PLATFORM"
 
           IFS=' ' read -r -a packages <<< "$FORGE_PACKAGES"
           for package in "${packages[@]}"; do

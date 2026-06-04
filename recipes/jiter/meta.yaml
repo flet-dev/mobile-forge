@@ -3,6 +3,6 @@ package:
   version: 0.8.2
 
 build:
-  number: 4
+  number: 10
   script_env:
     _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'

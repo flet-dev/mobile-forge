@@ -32,12 +32,141 @@ fi
 
 PYTHON_VERSION=$1
 PYTHON_VER="${PYTHON_VERSION%.*}"
+python_version_minor="${PYTHON_VER#*.}"
 
 echo "Python version: $PYTHON_VERSION"
 echo "Python short version: $PYTHON_VER"
 
+# Download (and cache) a mobile-forge Python support package, extracting it
+# into $2. Source is either the canonical v<version> release on
+# flet-dev/python-build, or a specific Actions run's artifacts when
+# $PYTHON_BUILD_RUN_ID is set (used in CI to validate unreleased
+# python-build branches against the recipe matrix). Tarballs are cached
+# under downloads/ (gitignored) and reused on subsequent runs.
+#
+# Reads from caller env:
+#   PYTHON_BUILD_RUN_ID  — empty for release URL; non-empty for `gh run download`
+#                          (requires `gh` installed and a GITHUB_TOKEN / login)
+download_support() {
+    local plat="$1" dest="$2"
+    local tarball="python-${plat}-mobile-forge-${PYTHON_VER}.tar.gz"
+
+    if [ -d "$dest/support" ]; then
+        return 0
+    fi
+
+    mkdir -p downloads
+    if [ ! -f "downloads/${tarball}" ]; then
+        if [ -n "${PYTHON_BUILD_RUN_ID:-}" ]; then
+            # python-build's CI uploads iOS tarballs under the "darwin" artifact
+            # (it bundles iOS + macOS together). The android lane has a 1:1 artifact name.
+            local artifact_plat="$plat"
+            [ "$plat" = "ios" ] && artifact_plat="darwin"
+            local artifact_name="python-${artifact_plat}-${PYTHON_VER}"
+
+            echo "Fetching ${tarball} from python-build run ${PYTHON_BUILD_RUN_ID} (artifact: ${artifact_name})..."
+            local stage
+            stage="$(mktemp -d)"
+            if ! gh run download "$PYTHON_BUILD_RUN_ID" \
+                    --repo flet-dev/python-build \
+                    --name "$artifact_name" \
+                    --dir "$stage"; then
+                echo "Failed to download artifact ${artifact_name} from run ${PYTHON_BUILD_RUN_ID}"
+                rm -rf "$stage"
+                return 1
+            fi
+            mv "$stage/${tarball}" "downloads/${tarball}"
+            rm -rf "$stage"
+        else
+            local url="https://github.com/flet-dev/python-build/releases/download/v${PYTHON_VER}/${tarball}"
+            echo "Downloading ${tarball}..."
+            if ! curl -fL -o "downloads/${tarball}" "$url"; then
+                echo "Failed to download ${url}"
+                rm -f "downloads/${tarball}"
+                return 1
+            fi
+        fi
+    fi
+
+    echo "Extracting ${tarball} into ${dest}..."
+    mkdir -p "$dest"
+    tar -xzf "downloads/${tarball}" -C "$dest"
+}
+
+# Echo the directory that actually contains the support/ tree: $1 itself, or a
+# single wrapper subdirectory if the tarball ships one.
+resolve_support_root() {
+    local d="$1"
+    if [ -d "$d/support" ]; then
+        echo "$d"
+        return
+    fi
+    local sub
+    for sub in "$d"/*/; do
+        if [ -d "${sub}support" ]; then
+            echo "${sub%/}"
+            return
+        fi
+    done
+    echo "$d"
+}
+
+# Default-initialize so the script is safe under `set -u` even when the caller
+# (e.g. CI) hasn't exported these. Real values are filled in below.
+export MOBILE_FORGE_IOS_SUPPORT_PATH="${MOBILE_FORGE_IOS_SUPPORT_PATH:-}"
+export MOBILE_FORGE_ANDROID_SUPPORT_PATH="${MOBILE_FORGE_ANDROID_SUPPORT_PATH:-}"
+
+# Per-version support-path overrides: MOBILE_FORGE_{IOS,ANDROID}_SUPPORT_PATH_<MAJOR>_<MINOR>
+# (e.g. MOBILE_FORGE_IOS_SUPPORT_PATH_3_13). When set, they take precedence over
+# the unversioned variable for this session, so .envrc can declare paths for
+# 3.12 / 3.13 / 3.14 side-by-side and `source ./setup.sh <ver>` picks the right one.
+versioned_suffix="${PYTHON_VER//./_}"
+ios_versioned_var="MOBILE_FORGE_IOS_SUPPORT_PATH_${versioned_suffix}"
+android_versioned_var="MOBILE_FORGE_ANDROID_SUPPORT_PATH_${versioned_suffix}"
+# Indirect variable expansion: bash uses ${!var}, zsh uses ${(P)var}.
+# `eval` is the portable form that works in both.
+eval "ios_versioned_val=\${$ios_versioned_var:-}"
+eval "android_versioned_val=\${$android_versioned_var:-}"
+if [ -n "$ios_versioned_val" ]; then
+    export MOBILE_FORGE_IOS_SUPPORT_PATH="$ios_versioned_val"
+fi
+if [ -n "$android_versioned_val" ]; then
+    export MOBILE_FORGE_ANDROID_SUPPORT_PATH="$android_versioned_val"
+fi
+
+# Platforms with an explicit (possibly versioned) path are user-managed and
+# authoritative — validate them as-is, never auto-download.
+explicit=""
+[ -n "$MOBILE_FORGE_IOS_SUPPORT_PATH" ]     && explicit="$explicit iOS"
+[ -n "$MOBILE_FORGE_ANDROID_SUPPORT_PATH" ] && explicit="$explicit android"
+
+if [ -z "$explicit" ]; then
+    # Auto-download selection: 2nd arg, then $MOBILE_FORGE_PLATFORMS, then OS default.
+    platforms="${2:-${MOBILE_FORGE_PLATFORMS:-}}"
+    if [ -z "$platforms" ]; then
+        [ "$(uname)" = "Darwin" ] && platforms="iOS android" || platforms="android"
+    fi
+    for p in $(echo "$platforms" | tr ',' ' '); do
+        case "$(echo "$p" | tr '[:upper:]' '[:lower:]')" in
+            ios)
+                dest="$(pwd)/downloads/support/python-ios-mobile-forge-${PYTHON_VER}"
+                download_support ios "$dest" || return
+                export MOBILE_FORGE_IOS_SUPPORT_PATH="$(resolve_support_root "$dest")"
+                ;;
+            android)
+                dest="$(pwd)/downloads/support/python-android-mobile-forge-${PYTHON_VER}"
+                download_support android "$dest" || return
+                export MOBILE_FORGE_ANDROID_SUPPORT_PATH="$(resolve_support_root "$dest")"
+                ;;
+            *) echo "Unknown platform: $p (expected iOS or android)" ;;
+        esac
+    done
+fi
+
 if [[ -z "$MOBILE_FORGE_IOS_SUPPORT_PATH" && -z "$MOBILE_FORGE_ANDROID_SUPPORT_PATH" ]]; then
     echo "Neither MOBILE_FORGE_IOS_SUPPORT_PATH nor MOBILE_FORGE_ANDROID_SUPPORT_PATH are defined."
+    echo "Set MOBILE_FORGE_{IOS,ANDROID}_SUPPORT_PATH or per-version overrides"
+    echo "MOBILE_FORGE_{IOS,ANDROID}_SUPPORT_PATH_${versioned_suffix}."
     return
 fi
 
@@ -106,7 +235,7 @@ if [ ! -z "$MOBILE_FORGE_ANDROID_SUPPORT_PATH" ]; then
         return
     fi
 
-    if [ "$PYTHON_VER" = "3.12" ]; then
+    if [ "$python_version_minor" -lt 13 ]; then
         if [ ! -e $MOBILE_FORGE_ANDROID_SUPPORT_PATH/install/android/armeabi-v7a/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
             echo "MOBILE_FORGE_ANDROID_SUPPORT_PATH does not appear to contain a Python $PYTHON_VERSION Android armeabi-v7a device binary."
             return
@@ -142,3 +271,6 @@ echo
 echo "Build all applicable versions of lru-dict for all iOS targets:"
 echo "   forge iOS --all-versions lru-dict"
 echo
+
+# The script is sourced; don't leave helper functions in the user's shell.
+unset -f download_support resolve_support_root

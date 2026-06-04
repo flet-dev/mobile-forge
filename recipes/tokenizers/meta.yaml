@@ -13,6 +13,6 @@ requirements:
 # {% endif %}
 
 build:
-  number: 5
+  number: 10
   script_env:
     _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'

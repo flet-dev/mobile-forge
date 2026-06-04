@@ -8,7 +8,7 @@ source:
   url: https://github.com/OSGeo/gdal/releases/download/v{{ version }}/gdal-{{ version }}.tar.gz
 
 build:
-  number: 4
+  number: 10
 
 requirements:
   build:

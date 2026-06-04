@@ -9,69 +9,60 @@ definitely encouraged.
 Usage
 -----
 
-Before using Mobile Forge, you'll need to compile Python for your build platform (e.g.,
-your laptop), and for host platform (e.g., for iOS). It may be helpful to use a project
-like `Python-Apple-support <https://github.com/beeware/Python-Apple-support>`__ to
-manage this compilation process.
+Mobile Forge builds wheels against pre-compiled Python "support" packages for the host
+platforms (iOS and Android). You no longer need to compile or download those packages
+yourself — ``setup.sh`` fetches them for you.
 
-Using Python-Apple-support
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+Getting started
+~~~~~~~~~~~~~~~
 
-If you *do* use Python-Apple-support, this repo contains an activation script that will
-configure your environment so it's ready to use.
+1. Install `uv <https://docs.astral.sh/uv/>`__ (used to create the build virtual
+   environment)::
 
-1. Set an environment variable declaring the location of your Python-Apple-support
-   checkout::
+    $ curl -LsSf https://astral.sh/uv/install.sh | sh
 
-    $ export PYTHON_APPLE_SUPPORT=/path/to/Python-Apple-support
-
-2. Clone this repository, and run the activate script for the Python version you want to
+2. Clone this repository and source the setup script for the Python version you want to
    use::
 
-    $ git clone https://github.com/beeware/mobile-forge.git
+    $ git clone https://github.com/flet-dev/mobile-forge.git
     $ cd mobile-forge
-    $ source ./setup-iOS.sh 3.11
+    $ source ./setup.sh 3.13
 
-This will create a Python virtual environment, install mobile forge, and provide
-some hints at forge commands you can run.
+   On first run this downloads the matching mobile-forge support package(s) into
+   ``downloads/`` (gitignored), creates a Python virtual environment, installs mobile
+   forge, builds the platform dependency wheels, and prints some hints at ``forge``
+   commands you can run. Subsequent runs reuse the cached download and the existing
+   virtual environment.
 
-If a virtual environment already exists, it will be activated, and the same hints
-displayed.
+   By default, on macOS both iOS and Android packages are downloaded; on Linux only
+   Android. To restrict this, pass the platform(s) as a second argument::
 
-The hard way
-~~~~~~~~~~~~
+    $ source ./setup.sh 3.13 iOS
+    $ source ./setup.sh 3.13 android
+    $ source ./setup.sh 3.13 iOS,android
 
-If you're *not* using Python-Apple-support, the setup process requires more manual steps::
+Bring your own support package
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-1. Create and activate a virtual environment using the Python build platform, using the
-   build platform Python compiled in step 1.
+If you maintain your own support packages (for example, a local
+`Python-Apple-support <https://github.com/beeware/Python-Apple-support>`__ build), set
+``MOBILE_FORGE_IOS_SUPPORT_PATH`` and/or ``MOBILE_FORGE_ANDROID_SUPPORT_PATH`` to the
+extracted trees before sourcing ``setup.sh``. When set, these paths are authoritative —
+``setup.sh`` validates them and skips the automatic download. Per-version overrides
+(``MOBILE_FORGE_IOS_SUPPORT_PATH_3_13`` etc.) are also honored, so several Python
+versions can be configured side-by-side.
 
-2. Clone this repository, and install it into your freshly created virtual environment::
+Building a package
+~~~~~~~~~~~~~~~~~
 
-    (venv3.11) $ git clone https://github.com/beeware/mobile-forge.git
-    (venv3.11) $ cd mobile-forge
-    (venv3.11) $ pip install -e .
+The ``recipes`` folder contains recipes for packages. ``lru-dict`` is a good first
+package to try::
 
-3. Ensure your ``PATH`` contains any tools that were necessary to compile the host CPython,
-   and does *not* contain any macOS development libraries. Mobile-forge will clean the ``PATH``
-   to remove known problematic paths (e.g., paths added by Homebrew, rbenv, npm, etc).
+    $ forge iOS lru-dict
 
-4. Set environment variables that define the location of the Python executable for each
-   of the **host** platforms you intend to target. For iOS, this means defining
-   3 environment variables::
+Or, to build a wheel for a single architecture::
 
-    (venv3.11) $ export MOBILE_FORGE_IPHONEOS_ARM64=...
-    (venv3.11) $ export MOBILE_FORGE_IPHONESIMULATOR_ARM64=...
-    (venv3.11) $ export MOBILE_FORGE_IPHONESIMULATOR_X86_64=...
-
-5. Build a package. The ``packages`` folder contains recipes for packages. ``lru-dict``
-   is a good first package to try::
-
-    (venv3.11) $ forge iOS lru-dict
-
-   Or, to build a wheel for a single architecture::
-
-    (venv3.11) $ forge iphonesimulator:12.0:arm64 lru-dict
+    $ forge iphonesimulator:arm64 lru-dict
 
 Once this command completes, there should be a wheel for each platform in the ``dist``
 folder. A log for each successful build will be in the ``logs`` folder; a log for each

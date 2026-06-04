@@ -1,13 +1,19 @@
 package:
   name: cryptography
+# cryptography 43.0.1 pins pyo3 0.22.2 which hard-stops at Python 3.13.
+# 48.0.0 moves to pyo3 0.28 (knows 3.14) and classifies 3.14 as supported.
+# {% if py_version.minor >= 14 %}
+  version: 48.0.0
+# {% else %}
   version: 43.0.1
+# {% endif %}
 
 requirements:
   host:
     - openssl ^3.0.12
 
 build:
-  number: 4
+  number: 10
   script_env:
     OPENSSL_DIR: '{platlib}/opt'
     _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
