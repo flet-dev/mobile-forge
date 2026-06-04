@@ -14,7 +14,7 @@ patches:
   - mkdir-cython-output.patch
 
 build:
-  number: 1
+  number: 10
   script_env:
 # {% if sdk == 'android' %}
     CMAKE_ARGS: >-

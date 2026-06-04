@@ -5,7 +5,7 @@ package:
   version: '{{ version }}'
 
 build:
-  number: 4
+  number: 10
 
 source:
   url: https://github.com/stef/libopaque/archive/refs/tags/v{{ version }}.tar.gz

@@ -4,7 +4,7 @@ package:
   platforms: [ios]
 
 build:
-  number: 2
+  number: 10
 
 patches:
   - mobile.patch

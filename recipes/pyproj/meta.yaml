@@ -3,7 +3,7 @@ package:
   version: 3.7.0
 
 build:
-  number: 5
+  number: 10
   script_env:
     PROJ_VERSION: 9.5.0
     PROJ_DIR: '{platlib}/opt'

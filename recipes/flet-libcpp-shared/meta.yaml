@@ -7,7 +7,7 @@ package:
   platforms: [android]
 
 build:
-  number: 4
+  number: 10
 
 source:
   url: https://github.com/flet-dev/awesome-flet/archive/refs/heads/main.zip

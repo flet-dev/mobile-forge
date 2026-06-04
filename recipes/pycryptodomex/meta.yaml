@@ -3,7 +3,7 @@ package:
   version: 3.21.0
 
 build:
-  number: 5
+  number: 10
 
 # Same fix rationale as recipes/pycryptodome/meta.yaml — pycryptodomex is
 # the sister package (same code under `Cryptodome.*` namespace). Without

@@ -12,7 +12,7 @@ requirements:
     - flet-libsodium 1.0.20
 
 build:
-  number: 4
+  number: 10
   script_env:
     CFLAGS: '-Qunused-arguments -Wno-unreachable-code'
 

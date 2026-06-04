@@ -3,7 +3,7 @@ package:
   version: 6.0.2
 
 build:
-  number: 5
+  number: 10
 
 requirements:
   host:

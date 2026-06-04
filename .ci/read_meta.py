@@ -51,7 +51,7 @@ def main(path: str) -> int:
             sdk_version=24,
             arch="arm64-v8a",
             version=None,
-            py_version=(3, 12, 12),
+            py_version=sys.version_info,
         )
         meta = yaml.safe_load(rendered) or {}
         pkg = meta.get("package") or {}

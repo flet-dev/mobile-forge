@@ -8,7 +8,7 @@ source:
   url: https://download.osgeo.org/libtiff/tiff-{{ version }}.tar.gz
 
 build:
-  number: 4
+  number: 10
 
 requirements:
   host:

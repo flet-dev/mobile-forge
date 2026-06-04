@@ -3,7 +3,7 @@ package:
   version: 1.4.7
 
 build:
-  number: 4
+  number: 10
 
 # {% if sdk == 'android' %}
 requirements:

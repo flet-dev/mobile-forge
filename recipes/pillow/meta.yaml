@@ -23,7 +23,7 @@ patches:
 # {% endif %}
 
 build:
-  number: 5
+  number: 10
   script_env:
 # {% if sdk == 'android' %}
     # pillow's setup.py manually probes `self.compiler.{include,library}_dirs`

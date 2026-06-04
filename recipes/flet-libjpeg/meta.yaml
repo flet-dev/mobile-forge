@@ -6,7 +6,7 @@ source:
   url: https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.0.90/libjpeg-turbo-3.0.90.tar.gz
 
 build:
-  number: 4
+  number: 10
 
 requirements:
   build:

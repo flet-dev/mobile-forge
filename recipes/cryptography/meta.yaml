@@ -13,7 +13,7 @@ requirements:
     - openssl ^3.0.12
 
 build:
-  number: 4
+  number: 10
   script_env:
     OPENSSL_DIR: '{platlib}/opt'
     _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
