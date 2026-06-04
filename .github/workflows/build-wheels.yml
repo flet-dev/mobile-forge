@@ -20,6 +20,11 @@ on:
         required: false
         default: ""
 
+# Cancel in-flight runs when a newer event arrives for the same logical branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 env:
   UV_PYTHON: "3.12.13"
   MOBILE_FORGE_CACHE_DOWNLOADS_OFF: "1"
