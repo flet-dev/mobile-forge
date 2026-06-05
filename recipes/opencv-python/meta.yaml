@@ -1,6 +1,6 @@
 package:
   name: opencv-python
-  version: 4.10.0.84
+  version: 4.13.0.92
 
 requirements:
   host:
@@ -10,7 +10,7 @@ patches:
   - mobile.patch
 
 build:
-  number: 10
+  number: 1
   script_env:
 # {% if sdk == 'android' %}
     CMAKE_ARGS: >-

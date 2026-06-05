@@ -3,7 +3,7 @@
 
 package:
   name: numpy
-  version: 2.2.2
+  version: 2.4.6
 
 requirements:
  build:
@@ -21,7 +21,7 @@ patches:
 {% endif %}
 
 build:
-  number: 10
+  number: 1
   script_env:
     NPY_DISABLE_SVML: 1
 

@@ -1,9 +1,9 @@
 package:
   name: kiwisolver
-  version: 1.4.7
+  version: 1.5.0
 
 build:
-  number: 10
+  number: 1
 
 # {% if sdk == 'android' %}
 requirements:

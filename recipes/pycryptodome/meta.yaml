@@ -1,9 +1,9 @@
 package:
   name: pycryptodome
-  version: 3.21.0
+  version: 3.23.0
 
 build:
-  number: 10
+  number: 1
 
 # pycryptodome's internal Crypto/Util/_raw_api.py tries a cffi-based
 # fast path first, and only falls back to ctypes.pythonapi.PyObject_GetBuffer

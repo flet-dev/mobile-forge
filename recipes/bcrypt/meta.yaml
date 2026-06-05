@@ -1,8 +1,8 @@
 package:
   name: bcrypt
-  version: 4.2.0
+  version: 5.0.0
 
 build:
-  number: 10
+  number: 1
   script_env:
     _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'

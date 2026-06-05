@@ -1,10 +1,10 @@
 package:
   name: pyjnius
-  version: 1.6.1
+  version: 1.7.0
   platforms: [android]
 
 build:
-  number: 10
+  number: 1
 
 patches:
   - mobile.patch

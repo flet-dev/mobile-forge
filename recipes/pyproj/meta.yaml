@@ -1,9 +1,9 @@
 package:
   name: pyproj
-  version: 3.7.0
+  version: 3.7.2
 
 build:
-  number: 10
+  number: 1
   script_env:
     PROJ_VERSION: 9.5.0
     PROJ_DIR: '{platlib}/opt'

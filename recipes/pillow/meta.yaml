@@ -1,6 +1,6 @@
 package:
   name: Pillow
-  version: 11.1.0
+  version: 12.2.0
 
 requirements:
   host:
@@ -23,7 +23,7 @@ patches:
 # {% endif %}
 
 build:
-  number: 10
+  number: 1
   script_env:
 # {% if sdk == 'android' %}
     # pillow's setup.py manually probes `self.compiler.{include,library}_dirs`

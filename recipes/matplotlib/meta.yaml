@@ -1,6 +1,6 @@
 package:
   name: matplotlib
-  version: 3.10.0
+  version: 3.10.9
 
 requirements:
   build:
@@ -15,7 +15,7 @@ requirements:
 # {% endif %}
 
 build:
-  number: 10
+  number: 1
 # {% if sdk == 'android' and arch in ['armeabi-v7a', 'x86'] %}
   script_env:
     CPPFLAGS: -Wno-c++11-narrowing

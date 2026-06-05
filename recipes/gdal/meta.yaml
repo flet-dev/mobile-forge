@@ -1,6 +1,6 @@
 package:
   name: gdal
-  version: 3.10.0
+  version: 3.13.1
 
 requirements:
   host:
@@ -16,7 +16,7 @@ requirements:
 # {% endif %}
 
 build:
-  number: 10
+  number: 1
   script_env:
     GDAL_VERSION: 3.10.0
     GDAL_PREFIX: '{platlib}/opt'

@@ -1,9 +1,9 @@
 package:
   name: shapely
-  version: 2.0.6
+  version: 2.1.2
 
 build:
-  number: 10
+  number: 1
 
 requirements:
   host:
