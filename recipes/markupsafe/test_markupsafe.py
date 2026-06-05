@@ -14,8 +14,17 @@ def test_escape():
 
 def test_speedups_loaded():
     """Confirms the C extension `markupsafe._speedups` actually loaded; the
-    pure-Python fallback wouldn't expose `escape` from this module."""
+    pure-Python fallback wouldn't expose the C accelerator at all.
+
+    Markupsafe 3.0 renamed the C entry point: `escape` (2.x) became
+    `_escape_inner` (3.x). The public `markupsafe.escape` dispatches to
+    it. We probe whichever name the installed version exposes so the
+    test stays useful across version bumps."""
     from markupsafe import _speedups
 
-    assert callable(_speedups.escape)
-    assert str(_speedups.escape("<&>")) == "&lt;&amp;&gt;"
+    fn = getattr(_speedups, "_escape_inner", None) or getattr(_speedups, "escape", None)
+    assert callable(fn), (
+        f"neither _escape_inner nor escape on markupsafe._speedups; "
+        f"have: {[n for n in dir(_speedups) if not n.startswith('__')]}"
+    )
+    assert str(fn("<&>")) == "&lt;&amp;&gt;"
