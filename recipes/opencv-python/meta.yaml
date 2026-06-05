@@ -1,6 +1,6 @@
 package:
   name: opencv-python
-  version: 4.13.0.92
+  version: 4.12.0.88
 
 requirements:
   host:
