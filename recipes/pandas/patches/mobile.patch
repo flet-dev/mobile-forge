@@ -1,21 +1,8 @@
---- a/pyproject.toml	2026-05-31 23:37:15
-+++ b/pyproject.toml	2026-05-31 23:37:15
-@@ -2,8 +2,10 @@
- # Minimum requirements for the build system to execute.
- # See https://github.com/scipy/scipy/pull/12940 for the AIX issue.
- requires = [
--    "meson-python==0.13.1",
--    "meson==1.2.1",
-+    # Upstream pinned 0.13.1 + 1.2.1 — bump to a recent meson-python so the
-+    # mobile-forge meson-wrapper.py below works (older mesonpy ignored the
-+    # tool.meson-python.meson setting).
-+    "meson-python>=0.16.0",
-     "wheel",
-     "Cython~=3.0.5",  # Note: sync with setup.py, environment.yml and asv.conf.json
-     # Force numpy higher than 2.0, so that built wheels are compatible
-@@ -809,3 +811,15 @@
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -833,3 +833,15 @@
  [tool.codespell]
- ignore-words-list = "blocs, coo, hist, nd, sav, ser, recuse, nin, timere, expec, expecs"
+ ignore-words-list = "blocs, coo, hist, nd, sav, ser, recuse, nin, timere, expec, expecs, indext, SME, NotIn, tructures, tru, indx, abd, ABD"
  ignore-regex = 'https://([\w/\.])+'
 +
 +# Added by mobile-forge mobile.patch — see meson-wrapper.py.

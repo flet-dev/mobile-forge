@@ -1,5 +1,4 @@
 diff --git a/pyobjus/_runtime.h b/pyobjus/_runtime.h
-index c31b7ba..6d0cf85 100644
 --- a/pyobjus/_runtime.h
 +++ b/pyobjus/_runtime.h
 @@ -1,6 +1,6 @@
@@ -11,10 +10,9 @@ index c31b7ba..6d0cf85 100644
  #include <dlfcn.h>
  #include <string.h>
 diff --git a/pyobjus/common.pxi b/pyobjus/common.pxi
-index 3a17bbb..4f43c6a 100644
 --- a/pyobjus/common.pxi
 +++ b/pyobjus/common.pxi
-@@ -109,7 +109,7 @@ cdef extern from "objc/runtime.h":
+@@ -110,7 +110,7 @@
      objc_method_description* protocol_copyMethodDescriptionList(Protocol *p, BOOL isRequiredMethod, BOOL isInstanceMethod, unsigned int *outCount)
 
 
@@ -23,101 +21,15 @@ index 3a17bbb..4f43c6a 100644
      ctypedef unsigned long  ffi_arg
      ctypedef signed long    ffi_sarg
      ctypedef enum: FFI_TYPE_STRUCT
-diff --git a/setup.py b/setup.py
-index 0de7708..c8deb36 100644
---- a/setup.py
-+++ b/setup.py
-@@ -20,13 +20,7 @@ if kivy_ios_root is not None:
- print("Pyobjus platform is {}".format(dev_platform))
-
- # OSX
--files = []
--if dev_platform == 'darwin':
--    files = ['pyobjus.pyx']
--# iOS
--elif dev_platform == 'ios':
--    files = ['pyobjus.c']
--
-+files = ['pyobjus.pyx']
-
- class PyObjusBuildExt(build_ext, object):
-
-@@ -43,13 +37,10 @@ class PyObjusBuildExt(build_ext, object):
-         # The following essentially supply a dynamically generated subclass
-         # that mix in the cython version of build_ext so that the
-         # functionality provided will also be executed.
--        if dev_platform != 'ios':
--            from Cython.Distutils import build_ext as cython_build_ext
--            build_ext_cls = type(
--                'PyObjusBuildExt', (PyObjusBuildExt, cython_build_ext), {})
--            return super(PyObjusBuildExt, cls).__new__(build_ext_cls)
--        else:
--            return super(PyObjusBuildExt, cls).__new__(cls)
-+        from Cython.Distutils import build_ext as cython_build_ext
-+        build_ext_cls = type(
-+            'PyObjusBuildExt', (PyObjusBuildExt, cython_build_ext), {})
-+        return super(PyObjusBuildExt, cls).__new__(build_ext_cls)
-
-     def build_extensions(self):
-         # create a configuration file for pyobjus (export the platform)
-@@ -57,11 +48,9 @@ class PyObjusBuildExt(build_ext, object):
-         config_pxi_need_update = True
-         config_pxi = 'DEF PLATFORM = "{}"\n'.format(dev_platform)
-         config_pxi += 'DEF ARCH = "{}"\n'.format(arch)
--        if dev_platform == 'ios':
--            cython3 = False # Assume Cython 0.29, which is what we use for kivy-ios (ATM)
--        else:
--            import Cython
--            cython3 = Cython.__version__.startswith('3.')
-+
-+        import Cython
-+        cython3 = Cython.__version__.startswith('3.')
-         config_pxi += f"DEF PYOBJUS_CYTHON_3 = {cython3}"
-         if exists(config_pxi_fn):
-             with open(config_pxi_fn) as fd:
-@@ -73,7 +62,7 @@ class PyObjusBuildExt(build_ext, object):
-         super().build_extensions()
-
-
--libraries = ['ffi']
-+libraries = ['ffi', 'objc']
- library_dirs = []
- extra_compile_args = []
- extra_link_args = []
 diff --git a/pyobjus/pyobjus_conversions.pxi b/pyobjus/pyobjus_conversions.pxi
 --- a/pyobjus/pyobjus_conversions.pxi
 +++ b/pyobjus/pyobjus_conversions.pxi
-@@ -428,10 +428,8 @@
+@@ -428,7 +428,7 @@
          return arg
      elif arg in (True, False):
          return autoclass('NSNumber').alloc().initWithBool_(int(arg))
 -    elif isinstance(arg, (str, unicode)):
 +    elif isinstance(arg, str):
          return autoclass('NSString').alloc().initWithUTF8String_(arg)
--    elif isinstance(arg, long):
--        return autoclass('NSNumber').alloc().initWithInt_(arg)
      elif isinstance(arg, int):
          return autoclass('NSNumber').alloc().initWithLong_(arg)
-     elif isinstance(arg, float):
-@@ -525,10 +523,10 @@
-     # method is accepting long
-     elif sig == b'l':
-         if by_value:
--            (<long*>val_ptr)[0] = <long>long(arg)
-+            (<long*>val_ptr)[0] = <long>int(arg)
-         else:
-             if not objc_ref:
--                (<long*>arg_val_ptr)[0] = <long>long(arg)
-+                (<long*>arg_val_ptr)[0] = <long>int(arg)
-             (<long**>val_ptr)[0] = <long*>arg_val_ptr
-     # method is accepting long long
-     elif sig == b'q':
-@@ -692,7 +690,7 @@
-             # ARRAY, ETC.
-         else:
-             # TODO: Add better conversion between primitive types!
--            if type(arg) is long:
-+            if type(arg) is int:
-                 (<void**>val_ptr)[0] = <void*><unsigned long long>arg
-             elif type(arg) is str:
-                 # passing bytes as void* is the same as for char*
