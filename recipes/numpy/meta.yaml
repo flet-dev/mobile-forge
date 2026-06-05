@@ -13,12 +13,14 @@ requirements:
   - flet-libcpp-shared >=27.2.12479018
 {% endif %}
 
-patches:
 {% if version and version < (2, 0) %}
+patches:
   - mobile-1.26.4.patch
-{% else %}
-  - mobile-2.2.2.patch
 {% endif %}
+# numpy >= 2.0: no patches required. The 2.2.2-era patch (vendored
+# meson: -bundle -> -dynamiclib for the iOS shared-module link) was
+# upstreamed in numpy's vendored meson — `get_std_shared_module_args`
+# now branches on `self.system == 'ios'` natively.
 
 build:
   number: 1

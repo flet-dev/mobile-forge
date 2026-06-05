@@ -1,6 +1,15 @@
 package:
   name: tokenizers
-  version: 0.23.1
+  # Capped at 0.22.2 (last stable release without 32-bit-incompatible
+  # atomics). tokenizers 0.23.1 introduced `static NEXT_CACHE_ID:
+  # AtomicU64` in src/models/bpe/model.rs which fails to compile on
+  # `arm-linux-androideabi` (armeabi-v7a) with `error[E0432]:
+  # unresolved import std::sync::atomic::AtomicU64` — the ARMv7-A
+  # core has no native 64-bit atomic ops. Re-attempt 0.23+ once we
+  # carry a recipe-side patch swapping the AtomicU64 for a portable-
+  # atomic crate, or after upstream gates the cache id on a
+  # `cfg(target_has_atomic = "64")` build.
+  version: 0.22.2
 
 # {% if sdk == 'android' %}
 requirements:
