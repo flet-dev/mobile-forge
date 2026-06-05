@@ -1,9 +1,9 @@
 package:
   name: PyNaCl
-  version: 1.6.2
+  version: 1.5.0
 
 build:
-  number: 1
+  number: 10
 
 requirements:
   host:

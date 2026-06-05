@@ -1,9 +1,9 @@
 package:
   name: opaque
-  version: 1.0.0
+  version: 0.2.0
 
 build:
-  number: 1
+  number: 10
 
 requirements:
   host:

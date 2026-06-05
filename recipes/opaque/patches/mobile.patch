@@ -1,12 +1,11 @@
 diff --git a/setup.py b/setup.py
 --- a/setup.py
 +++ b/setup.py
-@@ -21,7 +21,7 @@
+@@ -19,6 +19,7 @@
      long_description=read('README.md'),
      long_description_content_type="text/markdown",
      requires=["libsodium"],
--    install_requires = ("pysodium"),
 +    install_requires=["pysodium"],
      classifiers=["Development Status :: 4 - Beta",
-                  "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
+                  "License :: OSI Approved :: BSD License",
                   "Topic :: Security :: Cryptography",

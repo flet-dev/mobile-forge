@@ -1,7 +1,16 @@
 diff --git a/setup.py b/setup.py
+index 96d4b32..045314f 100644
 --- a/setup.py
 +++ b/setup.py
-@@ -197,7 +197,7 @@ setup(
+@@ -29,7 +29,6 @@ from setuptools import Distribution, setup
+ from setuptools.command.build_clib import build_clib as _build_clib
+ from setuptools.command.build_ext import build_ext as _build_ext
+ 
+-
+ requirements = []
+ setup_requirements = ["setuptools"]
+ test_requirements = [
+@@ -218,8 +217,8 @@ setup(
      package_data={"nacl": ["py.typed"]},
      ext_package="nacl",
      cffi_modules=["src/bindings/build.py:ffi"],
@@ -10,4 +19,5 @@ diff --git a/setup.py b/setup.py
 +    # cmdclass={"build_ext": build_ext},
 +    # distclass=Distribution,
      zip_safe=False,
- )
+     classifiers=[
+         "Programming Language :: Python :: Implementation :: CPython",

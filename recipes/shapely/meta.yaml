@@ -1,27 +1,14 @@
 package:
   name: shapely
-  version: 2.1.2
+  version: 2.0.6
 
 build:
-  number: 1
-  script_env:
-    # shapely 2.1+ supports an official cross-compile path: when both
-    # GEOS_INCLUDE_PATH and GEOS_LIBRARY_PATH are set, setup.py skips the
-    # geos-config probe and the version compatibility check, and links
-    # against `geos_c` directly. Replaces the 2.0.x-era mobile.patch
-    # that commented out the geos-config block by hand.
-    GEOS_INCLUDE_PATH: '{platlib}/opt/include'
-    GEOS_LIBRARY_PATH: '{platlib}/opt/lib'
-# {% if sdk != 'android' %}
-    # iOS-only — flet-libgeos is built static, so the C extension link
-    # would otherwise leave unresolved refs from libgeos_c into libgeos.
-    # Defer them at link time; the dynamic loader picks them up at
-    # dlopen via the bundled libs. Same static-cascade fix shipped in
-    # recipes/pyogrio and recipes/fiona.
-    LDFLAGS: '-undefined dynamic_lookup'
-# {% endif %}
+  number: 10
 
 requirements:
   host:
     - flet-libgeos 3.13.0
     - numpy ^2.0.0
+
+patches:
+  - mobile.patch
