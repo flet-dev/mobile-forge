@@ -37,18 +37,20 @@ index a688e2b..7018adf 100644
                  if obj == NULL:
                      j_env[0].ExceptionClear(j_env)
                  elif 0 != j_env[0].IsAssignableFrom(j_env, obj, me.j_cls):
-@@ -177,11 +177,11 @@ class MetaJavaClass(MetaJavaBase):
-         cdef JNIEnv *j_env = get_jnienv()
- 
+@@ -191,13 +191,13 @@ class MetaJavaClass(MetaJavaBase):
+
          if __javainterfaces__ and __javabaseclass__:
+
 -            baseclass = j_env[0].FindClass(j_env, <char*>__javabaseclass__)
 +            baseclass = PyJni_FindClass(<char*>__javabaseclass__)
-             interfaces = <jclass *>malloc(sizeof(jclass) * len(__javainterfaces__))
- 
+             interfaces = j_env[0].NewObjectArray(j_env, len(__javainterfaces__), classClass, NULL)
+             # interfaces = <jclass *>malloc(sizeof(jclass) * len(__javainterfaces__))
+
              for n, i in enumerate(__javainterfaces__):
--                interfaces[n] = j_env[0].FindClass(j_env, <char*>i)
-+                interfaces[n] = PyJni_FindClass(<char*>i)
- 
+                 # interfaces[n] = j_env[0].FindClass(j_env, <char*>i)
+-                j_env[0].SetObjectArrayElement(j_env, interfaces, n, j_env[0].FindClass(j_env, <char*>i))
++                j_env[0].SetObjectArrayElement(j_env, interfaces, n, PyJni_FindClass(<char*>i))
+
              getProxyClass = j_env[0].GetStaticMethodID(
                  j_env, baseclass, "getProxyClass",
 @@ -206,8 +206,7 @@ class MetaJavaClass(MetaJavaBase):
