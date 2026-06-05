@@ -10,6 +10,18 @@ diff --git a/blis/_src/frame/thread/bli_pthread.c b/blis/_src/frame/thread/bli_p
 
  // For OS X and Windows, we define barriers ourselves in terms of the rest
  // of the API, though for slightly different reasons: For Windows, we must
+diff --git a/blis/_src/include/linux-generic/blis.h b/blis/_src/include/linux-generic/blis.h
+--- a/blis/_src/include/linux-generic/blis.h
++++ b/blis/_src/include/linux-generic/blis.h
+@@ -1537,7 +1537,7 @@ typedef pthread_cond_t         bli_pthread_cond_t;
+ typedef pthread_condattr_t     bli_pthread_condattr_t;
+ typedef pthread_once_t         bli_pthread_once_t;
+
+-#if defined(__APPLE__)
++#if defined(__APPLE__) || defined(__ANDROID__)
+
+ // For OS X, we must define the barrier types ourselves since Apple does
+ // not implement barriers in their variant of pthreads.
 diff --git a/setup.py b/setup.py
 --- a/setup.py
 +++ b/setup.py

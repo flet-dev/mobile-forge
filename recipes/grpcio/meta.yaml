@@ -13,7 +13,11 @@ build:
     CFLAGS: '-U__ANDROID_API__ -D__ANDROID_API__={{ sdk_version }} -Wno-reserved-user-defined-literal'
     LDFLAGS: '-llog -L{platlib}/opt/lib'
 # {% else %}
-    CXXFLAGS: -std=c++14 -Wno-c++11-narrowing
+    # grpcio 1.81's vendored abseil-cpp requires C++17 (policy_checks.h
+    # rejects anything < C++17). The narrowing warning suppression is
+    # carried forward from the prior C++14 setting because some legacy
+    # grpc files still trip on init-list narrowing.
+    CXXFLAGS: -std=c++17 -Wno-c++11-narrowing
     LDFLAGS: '-framework CoreFoundation'
 # {% endif %}
 
