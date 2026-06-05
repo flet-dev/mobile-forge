@@ -33,3 +33,34 @@ diff --git a/pyobjus/pyobjus_conversions.pxi b/pyobjus/pyobjus_conversions.pxi
          return autoclass('NSString').alloc().initWithUTF8String_(arg)
      elif isinstance(arg, int):
          return autoclass('NSNumber').alloc().initWithLong_(arg)
+diff --git a/setup.py b/setup.py
+--- a/setup.py
++++ b/setup.py
+@@ -43,23 +43,10 @@
+ include_dirs = []
+
+ if sys.platform == "ios":
+-    ios_ver = platform.ios_ver()
+-    ios_deps_path = join(dirname(__file__), "ios-deps-install")
+-
+-    # Check if the ios-deps-install directory exists
+-    if not exists(ios_deps_path):
+-        raise RuntimeError(
+-            "iOS dependencies not found. Please run the .ci/build_ios_dependencies.sh script to build them."
+-        )
+-
+-    ffi_lib_path = join(
+-        ios_deps_path,
+-        "iphonesimulator" if ios_ver.is_simulator else "iphoneos",
+-        arch,
+-    )
+-    library_dirs.append(join(ffi_lib_path, "lib"))
+-    include_dirs.append(join(ffi_lib_path, "include"))
+-    include_dirs.append(join(ffi_lib_path, "include", "ffi"))
++    # Mobile-forge supplies libffi via the recipe's libffi host dep
++    # (CFLAGS/CPPFLAGS/LDFLAGS already point at {platlib}/opt). Bypass
++    # the build-time ios-deps-install/ check pyobjus 1.2.4 added; let
++    # forge's env do the libffi wiring.
+     libraries.append('objc')
+
+ depends = [join('pyobjus', x) for x in (
