@@ -21,9 +21,13 @@ on:
         default: ""
 
 # Cancel in-flight runs when a newer event arrives for the same logical branch.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
+# Disabled on this branch — during the bumps iteration we want every push
+# (even a quick stack of follow-up commits) to fully run so each commit
+# leaves an actionable CI trail, instead of older runs getting killed
+# mid-flight when a newer commit lands.
+# concurrency:
+#   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+#   cancel-in-progress: true
 
 env:
   UV_PYTHON: "3.12.13"
