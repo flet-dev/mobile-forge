@@ -19,6 +19,16 @@ on:
           python-build support tree, instead of the v<version> release tarball.
         required: false
         default: ""
+      prebuild_libs:
+        description: |
+          Optional. Comma-separated list of recipes (typically flet-lib*) to
+          build FIRST and seed into the main matrix's dist/ via PIP_FIND_LINKS,
+          so chain-dep bumps (e.g. flet-libgdal -> gdal/fiona/rasterio/pyogrio)
+          can be validated end-to-end in a single CI run without a round-trip
+          through pypi.flet.dev. Format matches `packages`:
+          e.g. "flet-libgdal:3.13.1,flet-libgeos:3.13.1".
+        required: false
+        default: ""
 
 # Cancel in-flight runs when a newer event arrives for the same logical branch.
 # Disabled on this branch — during the bumps iteration we want every push
@@ -41,6 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      prebuild_matrix: ${{ steps.set-prebuild-matrix.outputs.matrix }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -137,8 +148,142 @@ jobs:
           matrix+=']}'
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
-  build:
+      - id: set-prebuild-matrix
+        # Build a matrix for the optional `prebuild_libs` input — same
+        # arch fan-out as the main matrix, but only over the user-supplied
+        # list (not changed-files / detect-packages). Emits an empty
+        # matrix when prebuild_libs is unset; the prebuild job below is
+        # then skipped by its `if:` guard.
+        shell: bash
+        env:
+          PREBUILD_LIBS: ${{ inputs.prebuild_libs }}
+        run: |
+          ARCHS="${{ inputs.archs || 'android,iOS' }}"
+
+          matrix='{"include":['
+          first=true
+          if [[ -n "$PREBUILD_LIBS" ]]; then
+            for arch in $(echo "$ARCHS" | tr ',' ' '); do
+              for pkg in $(echo "$PREBUILD_LIBS" | tr ',' ' '); do
+                pkg_name="${pkg%%:*}"
+                pkg_ver_override="${pkg#*:}"
+                if [[ "$arch" == "android" ]]; then
+                  runner="ubuntu-latest"
+                  platform="android"
+                  rust_targets="aarch64-linux-android,arm-linux-androideabi,x86_64-linux-android,i686-linux-android"
+                else
+                  runner="macos-26"
+                  platform="ios"
+                  rust_targets="aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios"
+                fi
+                # Read recipe meta the same way set-matrix does — for
+                # platforms gate + display version fallback.
+                recipe_version=""; declared=""
+                if [[ -f "recipes/$pkg_name/meta.yaml" ]]; then
+                  IFS=$'\t' read -r recipe_version _ declared \
+                    <<< "$(uv run --script .ci/read_meta.py "recipes/$pkg_name/meta.yaml")"
+                fi
+                if [[ -n "$declared" && ! " $declared " == *" $platform "* ]]; then
+                  echo "::notice::Skip prebuild ${platform}: ${pkg_name} — declares platforms=[$declared]"
+                  continue
+                fi
+                display_version="${pkg_ver_override:-$recipe_version}"
+                job_name="prebuild ${platform}: ${pkg_name} ${display_version}"
+
+                if [ "$first" = true ]; then first=false; else matrix+=','; fi
+                matrix+="{\"job_name\":\"$job_name\",\"artifact_name\":\"prebuild-${platform}-${pkg_name}\",\"runner\":\"$runner\",\"platform\":\"$platform\",\"forge_arch\":\"$arch\",\"forge_packages\":\"$pkg\",\"rust_targets\":\"$rust_targets\"}"
+              done
+            done
+          fi
+          matrix+=']}'
+          echo "Prebuild matrix: $matrix"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  prebuild:
+    # Optional chain-dep-staging job. Runs ONLY when the user supplies a
+    # `prebuild_libs` workflow_dispatch input. Each matrix entry builds
+    # one native-lib recipe for one arch and uploads the resulting
+    # dist/*.whl as an artifact named `prebuild-<platform>-<recipe>`.
+    # The downstream `build` job downloads ALL such artifacts at start
+    # and stages them into its own dist/ + PIP_FIND_LINKS, so forge's
+    # host-dep resolution picks up the freshly-built libs instead of
+    # whatever pypi.flet.dev has published.
     needs: setup
+    if: ${{ inputs.prebuild_libs != '' && needs.setup.outputs.prebuild_matrix != '{"include":[]}' }}
+    name: ${{ matrix.job_name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup.outputs.prebuild_matrix) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Free disk space (Ubuntu runners only)
+        if: runner.os == 'Linux'
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: false
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: true
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
+
+      - name: Install NDK ${{ env.FORGE_NDK_VERSION }} for forge on Android
+        if: matrix.platform == 'android'
+        shell: bash
+        run: .ci/install_ndk.sh "$FORGE_NDK_VERSION"
+
+      - name: Build prebuild wheel
+        shell: bash
+        env:
+          FORGE_ARCH: ${{ matrix.forge_arch }}
+          FORGE_PACKAGES: ${{ matrix.forge_packages }}
+          PLATFORM: ${{ matrix.platform }}
+          PYTHON_BUILD_RUN_ID: ${{ inputs.python_build_run_id }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euxo pipefail
+          . .ci/common.sh
+          if [[ "$PLATFORM" == "android" ]]; then
+            sudo apt-get update
+            sudo apt-get install -y sqlite3
+          fi
+          source ./setup.sh "$UV_PYTHON" "$PLATFORM"
+          IFS=' ' read -r -a packages <<< "$FORGE_PACKAGES"
+          for package in "${packages[@]}"; do
+            forge "$FORGE_ARCH" "$package"
+          done
+          rm -f dist/bzip2-* dist/libffi-* dist/mpdecimal-* dist/openssl-* dist/sqlite-* dist/xz-*
+
+      - name: Upload prebuilt wheels
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.artifact_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/*.whl
+          if-no-files-found: error
+          retention-days: 7
+
+  build:
+    # Depend on both `setup` and `prebuild`. When `prebuild_libs` is
+    # empty, the `prebuild` job is skipped — we still want to run
+    # `build`, which is why the condition allows `prebuild.result ==
+    # 'skipped'` alongside 'success'. If prebuild ran and FAILED, we
+    # propagate that failure (chain dep is broken — building consumers
+    # would just fail downstream anyway).
+    needs: [setup, prebuild]
+    if: ${{ always() && needs.setup.result == 'success' && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped') }}
     name: ${{ matrix.job_name }}
     runs-on: ${{ matrix.runner }}
     strategy:
@@ -177,6 +322,28 @@ jobs:
         shell: bash
         run: .ci/install_ndk.sh "$FORGE_NDK_VERSION"
 
+      - name: Seed dist/ from prebuild artifacts
+        # Pull every prebuild-<platform>-<recipe> artifact for THIS platform
+        # produced by the prebuild job and copy the .whl files into dist/,
+        # so forge's host-dep pip resolution (which honors PIP_FIND_LINKS
+        # set on the Build wheels step below) finds the freshly-built libs
+        # instead of pypi.flet.dev's last-published version.
+        if: ${{ inputs.prebuild_libs != '' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euxo pipefail
+          mkdir -p dist
+          gh run download "${{ github.run_id }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "prebuild-${PLATFORM}-*-${{ github.run_id }}-${{ github.run_attempt }}" \
+            --dir /tmp/prebuilt/
+          find /tmp/prebuilt -name '*.whl' -print -exec cp {} dist/ \;
+          echo "Seeded dist/ contents:"
+          ls -la dist/
+
       - name: Build wheels
         shell: bash
         env:
@@ -185,6 +352,13 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
           PYTHON_BUILD_RUN_ID: ${{ inputs.python_build_run_id }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # used by `gh run download`
+          # When prebuild_libs is set, the seed step above has already
+          # populated dist/ with freshly-built native-lib wheels. Point
+          # forge's pip resolver at that dir so host-dep resolution
+          # prefers them over whatever pypi.flet.dev has published.
+          # Harmless when dist/ has no extra wheels (this is forge's own
+          # output dir; pip just sees a directory listing).
+          PIP_FIND_LINKS: ${{ github.workspace }}/dist
         run: |
           set -euxo pipefail
 
