@@ -4,7 +4,7 @@ package:
 
 requirements:
   host:
-    - flet-libgdal 3.10.0
+    - flet-libgdal 3.13.1
     - numpy ^2.0.0
 # {% if sdk == 'android' %}
     # rasterio's `_warp.so` / `_filepath.so` / `_fill.so` carry
@@ -17,9 +17,9 @@ requirements:
 # {% endif %}
 
 build:
-  number: 10
+  number: 1
   script_env:
-    GDAL_VERSION: 3.10.0
+    GDAL_VERSION: 3.13.1
     GDAL_LIB_PATH: '{platlib}/opt/lib'
     GDAL_INCLUDE_PATH: '{platlib}/opt/include'
 # {% if sdk == 'android' %}

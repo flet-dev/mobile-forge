@@ -1,15 +1,14 @@
 package:
   name: gdal
-  # Pinned to 3.10.0 to match `flet-libgdal 3.10.0` (the host C library).
-  # GDAL's Python bindings hard-require an exact major.minor match with
-  # libgdal — bumping to 3.13.x would need flet-libgdal bumped first,
-  # plus fiona / rasterio / pyogrio re-pinned in lockstep. That whole
-  # chain is a separate effort; deferred from this bulk-bump pass.
-  version: 3.10.0
+  # Pinned to match `flet-libgdal` (the host C library). GDAL's Python
+  # bindings hard-require an exact major.minor match with libgdal —
+  # any bump here must come with flet-libgdal bumped to the same
+  # version, plus fiona / rasterio / pyogrio re-pinned in lockstep.
+  version: 3.13.1
 
 requirements:
   host:
-    - flet-libgdal 3.10.0
+    - flet-libgdal 3.13.1
 # {% if sdk == 'android' %}
     # libgdal links C++; the SWIG-generated _gdal.so loads via dlopen which
     # needs libc++_shared.so on Android.
@@ -21,9 +20,9 @@ requirements:
 # {% endif %}
 
 build:
-  number: 10
+  number: 1
   script_env:
-    GDAL_VERSION: 3.10.0
+    GDAL_VERSION: 3.13.1
     GDAL_PREFIX: '{platlib}/opt'
     GDAL_CFLAGS: ''
 # {% if sdk != 'android' %}
