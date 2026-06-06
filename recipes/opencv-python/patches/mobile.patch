@@ -339,25 +339,23 @@ index e729c86..c5779d3 100644
 --- a/opencv/modules/videoio/misc/python/pyopencv_videoio.hpp
 +++ b/opencv/modules/videoio/misc/python/pyopencv_videoio.hpp
 @@ -23,7 +23,7 @@ bool pyopencv_to(PyObject *o, std::vector<cv::VideoCaptureAPIs>& apis, const Arg
- 
+
  template<> bool pyopencv_to(PyObject* obj, cv::VideoCapture& stream, const ArgInfo& info)
  {
 -    Ptr<VideoCapture> * obj_getp = nullptr;
 +    cv::Ptr<VideoCapture> * obj_getp = nullptr;
      if (!pyopencv_VideoCapture_getp(obj, obj_getp))
          return (failmsgp("Incorrect type of self (must be 'VideoCapture' or its derivative)") != nullptr);
- 
-diff --git a/pyproject.toml b/pyproject.toml
-index 71de7f9..740eabe 100644
---- a/pyproject.toml
-+++ b/pyproject.toml
-@@ -9,5 +9,5 @@ requires = [
-   "numpy>=2.0.0;  python_version>='3.9'",
-   "pip",
-   "scikit-build>=0.14.0",
--  "setuptools==59.2.0",
-+  "setuptools",
- ]
+
+@@ -117,7 +117,7 @@ private:
+ };
+
+ template<>
+-bool pyopencv_to(PyObject* obj, Ptr<cv::IStreamReader>& p, const ArgInfo&)
++bool pyopencv_to(PyObject* obj, cv::Ptr<cv::IStreamReader>& p, const ArgInfo&)
+ {
+     if (!obj)
+         return false;
 diff --git a/setup.py b/setup.py
 index 48d5a65..125b9b4 100644
 --- a/setup.py
