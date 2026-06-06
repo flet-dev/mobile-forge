@@ -49,7 +49,8 @@ else
         -DGDAL_BUILD_OPTIONAL_DRIVERS=OFF \
         -DOGR_BUILD_OPTIONAL_DRIVERS=OFF \
         -DBUILD_APPS=OFF \
-        -DBUILD_TESTING=OFF
+        -DBUILD_TESTING=OFF \
+        -DBUILD_PYTHON_BINDINGS=OFF
 fi
 
 cmake --build . -j $CPU_COUNT
