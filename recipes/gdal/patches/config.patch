@@ -1,16 +1,16 @@
 diff --git a/setup.py b/setup.py
 --- a/setup.py
 +++ b/setup.py
-@@ -54,6 +54,8 @@
-     include_dirs = ['/home/even/gdal/3.10/build/port', '/home/even/gdal/3.10/port', '/home/even/gdal/3.10/build/gcore', '/home/even/gdal/3.10/gcore', '/home/even/gdal/3.10/alg', '/home/even/gdal/3.10/ogr/', '/home/even/gdal/3.10/ogr/ogrsf_frmts', '/home/even/gdal/3.10/gnm', '/home/even/gdal/3.10/apps']
-     library_dirs = ['/home/even/gdal/3.10/build']
+@@ -55,6 +55,8 @@
+     include_dirs = ['/home/runner/work/gdal/gdal/python_pkgs/port', '/home/runner/work/gdal/gdal/port', '/home/runner/work/gdal/gdal/python_pkgs/gcore', '/home/runner/work/gdal/gdal/gcore',  '/home/runner/work/gdal/gdal/gcore/multidim', '/home/runner/work/gdal/gdal/alg', '/home/runner/work/gdal/gdal/ogr/', '/home/runner/work/gdal/gdal/ogr/ogrsf_frmts', '/home/runner/work/gdal/gdal/gnm', '/home/runner/work/gdal/gdal/apps']
+     library_dirs = ['/home/runner/work/gdal/gdal/python_pkgs']
  libraries = ['gdal']
 +if 'GDAL_LIBS' in os.environ:
 +    libraries = os.environ['GDAL_LIBS'].split(',')
 
 
  # ---------------------------------------------------------------------------
-@@ -228,6 +230,9 @@
+@@ -240,6 +242,9 @@
 
      def get_gdal_config(self, option):
          try:
