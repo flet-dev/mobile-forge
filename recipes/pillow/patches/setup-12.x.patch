@@ -72,6 +72,6 @@ diff --git a/setup.py b/setup.py
              if sys.platform == "ios":
                  # Ensure transitive dependencies are linked.
 -                libs.extend(["z", "bz2", "brotlicommon", "brotlidec", "png"])
-+                libs.extend(["z", "bz2", "png"])
++                libs.extend(["z", "bz2"])
 
              self._update_extension("PIL._imagingft", libs, defs, srcs)
