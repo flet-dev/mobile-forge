@@ -1,14 +1,43 @@
 package:
   name: shapely
-  version: 2.0.6
+  version: 2.1.2
 
 build:
-  number: 10
+  number: 1
+  script_env:
+    # shapely 2.1+ supports an official cross-compile path: when both
+    # GEOS_INCLUDE_PATH and GEOS_LIBRARY_PATH are set, setup.py skips the
+    # geos-config probe and the version compatibility check, and links
+    # against `geos_c` directly. Replaces the 2.0.x-era mobile.patch
+    # that commented out the geos-config block by hand.
+    GEOS_INCLUDE_PATH: '{platlib}/opt/include'
+    GEOS_LIBRARY_PATH: '{platlib}/opt/lib'
+# {% if sdk != 'android' %}
+    # iOS-only — flet-libgeos is built static (`-DBUILD_SHARED_LIBS=OFF`),
+    # which presents two problems for shapely's C++ extension:
+    #
+    # 1. shapely's C extension subclasses `geos::geom::GeometryComponentFilter`
+    #    and overrides the virtual `filter_ro(const Geometry*)`. The vtable
+    #    for the base class lives in libgeos.a's object file, but the linker
+    #    only pulls object files that satisfy *direct* symbol references —
+    #    not vtables expected by C++ dispatch. At dlopen, dyld fails on
+    #    `__ZN4geos4geom23GeometryComponentFilter9filter_roEPKNS0_8GeometryE`.
+    #    Fix: `-Wl,-force_load,<libgeos.a>` brings every object out of
+    #    the archive so the vtable is present in shapely.so.
+    #
+    # 2. libgeos_c.a still references geos_c-only externals (and shapely's
+    #    .so references libgeos_c internals); `-undefined dynamic_lookup`
+    #    keeps the link from failing on those, deferring resolution to
+    #    dlopen — at which point force_load has provided what's needed.
+    #
+    # Same static-cascade pattern shipped in recipes/pyogrio and
+    # recipes/fiona, but those only needed the dynamic_lookup half because
+    # their missing symbols were from *external* deps of libgdal — not
+    # C++ vtables internal to libgdal itself.
+    LDFLAGS: '-undefined dynamic_lookup -Wl,-force_load,{platlib}/opt/lib/libgeos.a'
+# {% endif %}
 
 requirements:
   host:
-    - flet-libgeos 3.13.0
+    - flet-libgeos 3.14.1
     - numpy ^2.0.0
-
-patches:
-  - mobile.patch
