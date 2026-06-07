@@ -17,7 +17,13 @@ requirements:
 # {% endif %}
 
 build:
-  number: 1
+  # Same source version as pypi.flet.dev's rasterio-1.5.0-10 wheel, but
+  # this rebuild links against flet-libgdal 3.13.1 (vs. the published
+  # wheel's 3.10.0). pip's wheel selection picks the higher build_tag
+  # per PEP 427 when name+version collide; the new wheel must outrank
+  # build 10 or downstream installs would silently keep the old
+  # libgdal-3.10-linked rasterio and the gdal chain bump would be invisible.
+  number: 11
   script_env:
     GDAL_VERSION: 3.13.1
     GDAL_LIB_PATH: '{platlib}/opt/lib'
