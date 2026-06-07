@@ -17,10 +17,6 @@ requirements:
 patches:
   - mobile-1.26.4.patch
 {% endif %}
-# numpy >= 2.0: no patches required. The 2.2.2-era patch (vendored
-# meson: -bundle -> -dynamiclib for the iOS shared-module link) was
-# upstreamed in numpy's vendored meson — `get_std_shared_module_args`
-# now branches on `self.system == 'ios'` natively.
 
 build:
   number: 1
@@ -35,7 +31,7 @@ build:
 
   meson:
     properties:
-# {% if sdk == 'iOS' or (sdk == 'android' and arch in ['arm64-v8a', 'x86_64']) %}
+# {% if sdk == 'android' and arch in ['arm64-v8a', 'x86_64'] %}
       longdouble_format: IEEE_QUAD_LE
 # {% else %}
       longdouble_format: IEEE_DOUBLE_LE

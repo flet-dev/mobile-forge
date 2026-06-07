@@ -4,10 +4,9 @@ package:
 
 requirements:
   build:
-    # opencv-python's setup.py invokes its own dependency check (via
-    # scikit-build) which hard-requires cmake>=3.5 on PATH. macOS
-    # runners pre-install cmake but iOS lane's cross-venv strips it
-    # from the shimmed PATH, so add the pip-installable shim that
+    # opencv-python's setup.py invokes its own dependency check (via scikit-build) which
+    # hard-requires cmake>=3.5 on PATH. macOS runners pre-install cmake but iOS lane's
+    # cross-venv strips it from the shimmed PATH, so add the pip-installable shim that
     # ships a cmake binary into the build venv.
     - cmake
   host:

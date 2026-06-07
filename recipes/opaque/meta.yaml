@@ -15,9 +15,5 @@ requirements:
 # a tuple, which setuptools treats inconsistently. mobile.patch rewrites
 # it to a proper list `install_requires=["pysodium"]` so pip pulls
 # pysodium reliably.
-#
-# Also depends on flet-libopaque >= 1.0.0 for opaque_FinalizeRequest_core,
-# which the wrapper calls but earlier libopaque versions (≤ 0.99.x)
-# don't export.
 patches:
   - mobile.patch
