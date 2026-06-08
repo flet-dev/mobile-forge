@@ -28,9 +28,9 @@ on:
         default: ""
 
 # Cancel in-flight runs when a newer event arrives for the same logical branch.
-# concurrency:
-#   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-#   cancel-in-progress: true
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 
 env:
   UV_PYTHON: "3.12.13"
