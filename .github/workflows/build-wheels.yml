@@ -12,7 +12,7 @@ on:
       packages:
         description: "Packages (comma-separated, e.g. pillow:11.1.0,pydantic-core:2.33.2) — or 'ALL' to build/test every recipe"
         required: false
-        default: "pydantic-core:2.33.2,numpy:2.4.6,pillow:12.2.0"
+        default: "pydantic-core:,numpy:,pillow:"
       prebuild_recipes:
         description: |
           Comma-separated list of recipes (typically flet-lib*) to
@@ -26,7 +26,7 @@ on:
           e.g. "3.12.13,3.13.13,3.14.5"). Empty = event default
           (push to main: DEFAULT_PYTHONS_PUBLISH; otherwise DEFAULT_PYTHONS_DEV).
         required: false
-        default: ""
+        default: "3.12.13,3.13.13,3.14.5"
       python_build_run_id:
         description: |
           flet-dev/python-build Actions run-id whose artifacts to use as the
@@ -47,7 +47,7 @@ env:
   # DEV     = used on every other event (faster iteration; manual dispatch
   #           can override via the `python_versions` input).
   DEFAULT_PYTHONS_PUBLISH: "3.12.13,3.13.13,3.14.5"
-  DEFAULT_PYTHONS_DEV:     "3.12.13"
+  DEFAULT_PYTHONS_DEV:     "3.12.13,3.13.13,3.14.5"
   MOBILE_FORGE_CACHE_DOWNLOADS_OFF: "1"
   FORGE_NDK_VERSION: r27d  # used by forge for wheel cross-compile.
   FLUTTER_NDK_VERSION: "28.2.13676358"  # used by flutter for apk build.
@@ -101,7 +101,7 @@ jobs:
           INPUT_PACKAGES: ${{ inputs.packages }}
           CHANGED_DIRS: ${{ steps.changed-recipes.outputs.all_changed_files }}
         run: |
-          SMOKE_TEST="pydantic-core:2.33.2,numpy:2.4.6,pillow:12.2.0"
+          SMOKE_TEST="pydantic-core:,numpy:,pillow:"
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             # The literal value "ALL" expands to every recipe with a meta.yaml under recipes/.
             if [[ "$INPUT_PACKAGES" == "ALL" ]]; then
