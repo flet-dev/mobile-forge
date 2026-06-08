@@ -240,7 +240,12 @@ jobs:
 
           if [[ "$PLATFORM" == "android" ]]; then
             sudo apt-get update
-            sudo apt-get install -y sqlite3
+            # pkg-config is what meson's `py.dependency()` uses to resolve
+            # the Python C dep via the `.pc` files setup.sh relocates.
+            # Without it, meson falls back to sysconfig — which on
+            # Python 3.14 returns the bogus `/usr/local/...` paths and
+            # reports the dep as "not found" (numpy 2.4.6 hits this).
+            sudo apt-get install -y sqlite3 pkg-config
           fi
 
           # setup.sh downloads the matching mobile-forge support package for the

@@ -400,6 +400,17 @@ class Builder(ABC):
             else self.cross_venv.platform_triplet
         )
 
+        # Point pkg-config at the per-arch python install's pkgconfig dir
+        # so meson's `py.dependency()` can resolve the Python C dep via
+        # the `.pc` files setup.sh relocated. The `.pc` files use
+        # `prefix=${pcfiledir}/../..` so pkg-config emits the correct
+        # `-I<install_root>/include/python3.X` regardless of where on
+        # disk the install tree lives.
+        pkg_config_path = ""
+        pc_dir = install_root / "lib" / "pkgconfig"
+        if pc_dir.is_dir():
+            pkg_config_path = str(pc_dir)
+
         env = {
             "AR": ar,
             "CC": cc,
@@ -409,6 +420,7 @@ class Builder(ABC):
             "CFLAGS": cflags,
             "CPPFLAGS": cppflags,
             "LDFLAGS": ldflags,
+            "PKG_CONFIG_PATH": pkg_config_path,
             "CROSS_VENV_SDK": self.cross_venv.sdk,
             "CARGO_BUILD_TARGET": cargo_build_target,
             "CARGO_TARGET_{}_LINKER".format(

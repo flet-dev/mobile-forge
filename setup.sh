@@ -91,6 +91,47 @@ download_support() {
     echo "Extracting ${tarball} into ${dest}..."
     mkdir -p "$dest"
     tar -xzf "downloads/${tarball}" -C "$dest"
+
+    # Rewrite the `prefix=` line in every shipped `lib/pkgconfig/*.pc` to
+    # pkg-config's relocatable form `prefix=${pcfiledir}/../..` so consumer
+    # pkg-config invocations resolve include/lib paths to the actual
+    # on-disk install root, NOT the build-time `/usr/local` autoconf
+    # default that CPython bakes in. Without this, meson's `py.dependency()`
+    # gets `-I/usr/local/include/python3.X` (a path that does not exist on
+    # the CI runner) and reports the Python dep as "not found" — surfaced
+    # by numpy 2.4.6 on Python 3.14 Android. Upstream fix tracked in
+    # flet-dev/python-build (`fix/sysconfig-usr-local-paths` branch);
+    # this is the equivalent workaround at the mobile-forge consumer side,
+    # works against any python-build tarball that hasn't shipped the
+    # upstream fix yet.
+    relocate_pkgconfig_prefix "$dest"
+}
+
+# Walk every `.pc` file under <dest>/.../lib/pkgconfig/ and rewrite the
+# (literal absolute-path) `prefix=` line to pkg-config's standard
+# relocatable `prefix=${pcfiledir}/../..`. Idempotent — if the line is
+# already in the relocatable form, the sed substitution silently
+# leaves the file alone. Safe to call across versions / platforms;
+# the find prunes to pkgconfig dirs explicitly.
+relocate_pkgconfig_prefix() {
+    local dest="$1"
+    # Find every lib/pkgconfig dir under the extracted tree. CPython
+    # ships .pc files under <install>/<abi>/python-<ver>/lib/pkgconfig
+    # on Android and under <Python.xcframework>/<slice>/lib/pkgconfig on iOS.
+    find "$dest" -type d -name pkgconfig 2>/dev/null | while read -r pcdir; do
+        # `prefix=${pcfiledir}/../..` -- pkg-config / pkgconf substitutes
+        # ${pcfiledir} with the .pc file's actual directory at lookup
+        # time. <dir>/../.. on a .pc at <install>/lib/pkgconfig/*.pc
+        # resolves to <install> -- the consumer's real install prefix.
+        for pc in "$pcdir"/*.pc; do
+            [ -f "$pc" ] || continue
+            # macOS sed doesn't have -i without an extension arg; use a
+            # portable in-place edit via a temp file.
+            local tmp
+            tmp="$(mktemp)"
+            sed -E 's|^prefix=.*|prefix=${pcfiledir}/../..|' "$pc" > "$tmp" && mv "$tmp" "$pc"
+        done
+    done
 }
 
 # Echo the directory that actually contains the support/ tree: $1 itself, or a
@@ -273,4 +314,4 @@ echo "   forge iOS --all-versions lru-dict"
 echo
 
 # The script is sourced; don't leave helper functions in the user's shell.
-unset -f download_support resolve_support_root
+unset -f download_support resolve_support_root relocate_pkgconfig_prefix
