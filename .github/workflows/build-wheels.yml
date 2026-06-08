@@ -12,12 +12,19 @@ on:
       packages:
         description: "Packages (comma-separated, e.g. pillow:11.1.0,pydantic-core:2.33.2) — or 'ALL' to build/test every recipe"
         required: false
-        default: "pydantic-core:2.33.2"
+        default: "pydantic-core:2.33.2,numpy:2.4.6,pillow:12.2.0"
       prebuild_recipes:
         description: |
           Comma-separated list of recipes (typically flet-lib*) to
           build FIRST and seed into the matrix's dist/ for host-dep pip resolution
           (e.g. flet-libgdal -> gdal).
+        required: false
+        default: ""
+      python_versions:
+        description: |
+          Python versions to fan the matrix across (comma-separated,
+          e.g. "3.12.13,3.13.13,3.14.5"). Empty = event default
+          (push to main: DEFAULT_PYTHONS_PUBLISH; otherwise DEFAULT_PYTHONS_DEV).
         required: false
         default: ""
       python_build_run_id:
@@ -28,12 +35,19 @@ on:
         default: ""
 
 # Cancel in-flight runs when a newer event arrives for the same logical branch.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
+# Disabled during the multi-python rollout — each push should leave a full
+# CI trail so we can see how each Python version's matrix behaves.
+# concurrency:
+#   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+#   cancel-in-progress: true
 
 env:
-  UV_PYTHON: "3.12.13"
+  # Default Python sets selected by the setup job's detect-pythons step.
+  # PUBLISH = used on push-to-main (we ship cp312/cp313/cp314 wheels).
+  # DEV     = used on every other event (faster iteration; manual dispatch
+  #           can override via the `python_versions` input).
+  DEFAULT_PYTHONS_PUBLISH: "3.12.13,3.13.13,3.14.5"
+  DEFAULT_PYTHONS_DEV:     "3.12.13"
   MOBILE_FORGE_CACHE_DOWNLOADS_OFF: "1"
   FORGE_NDK_VERSION: r27d  # used by forge for wheel cross-compile.
   FLUTTER_NDK_VERSION: "28.2.13676358"  # used by flutter for apk build.
@@ -59,6 +73,27 @@ jobs:
           dir_names: true
           dir_names_max_depth: 2
 
+      - id: detect-pythons
+        # Decide which Python versions this run fans out across. Workflow
+        # input wins; otherwise: push to main publishes the full PUBLISH
+        # set (cp312/cp313/cp314), every other trigger uses DEV (just
+        # cp312) for iteration speed.
+        shell: bash
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
+          INPUT_PYTHONS: ${{ inputs.python_versions }}
+        run: |
+          if [[ -n "$INPUT_PYTHONS" ]]; then
+            pythons="$INPUT_PYTHONS"
+          elif [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF" == "refs/heads/main" ]]; then
+            pythons="$DEFAULT_PYTHONS_PUBLISH"
+          else
+            pythons="$DEFAULT_PYTHONS_DEV"
+          fi
+          echo "Detected pythons: $pythons"
+          echo "pythons=$pythons" >> "$GITHUB_OUTPUT"
+
       - id: detect-packages
         shell: bash
         env:
@@ -66,7 +101,7 @@ jobs:
           INPUT_PACKAGES: ${{ inputs.packages }}
           CHANGED_DIRS: ${{ steps.changed-recipes.outputs.all_changed_files }}
         run: |
-          SMOKE_TEST="pydantic-core:2.33.2"
+          SMOKE_TEST="pydantic-core:2.33.2,numpy:2.4.6,pillow:12.2.0"
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             # The literal value "ALL" expands to every recipe with a meta.yaml under recipes/.
             if [[ "$INPUT_PACKAGES" == "ALL" ]]; then
@@ -95,46 +130,50 @@ jobs:
         shell: bash
         run: |
           ARCHS="${{ inputs.archs || 'android,iOS' }}"
+          PYTHONS="${{ steps.detect-pythons.outputs.pythons }}"
           PACKAGES="${{ steps.detect-packages.outputs.packages }}"
 
           matrix='{"include":['
           first=true
           for arch in $(echo "$ARCHS" | tr ',' ' '); do
-            for pkg in $(echo "$PACKAGES" | tr ',' ' '); do
-              pkg_name="${pkg%%:*}"
-              if [[ "$arch" == "android" ]]; then
-                runner="ubuntu-latest"
-                platform="android"
-                rust_targets="aarch64-linux-android,arm-linux-androideabi,x86_64-linux-android,i686-linux-android"
-              else
-                runner="macos-26"
-                platform="ios"
-                rust_targets="aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios"
-              fi
-              # Read recipe meta (version + build_number + platforms)
-              recipe_version=""; recipe_build=""; declared=""
-              if [[ -f "recipes/$pkg_name/meta.yaml" ]]; then
-                IFS=$'\t' read -r recipe_version recipe_build declared \
-                  <<< "$(uv run --script .ci/read_meta.py "recipes/$pkg_name/meta.yaml")"
-              fi
+            for py in $(echo "$PYTHONS" | tr ',' ' '); do
+              py_short="${py%.*}"   # 3.12.13 -> 3.12 (display + tag prefix)
+              for pkg in $(echo "$PACKAGES" | tr ',' ' '); do
+                pkg_name="${pkg%%:*}"
+                if [[ "$arch" == "android" ]]; then
+                  runner="ubuntu-latest"
+                  platform="android"
+                  rust_targets="aarch64-linux-android,arm-linux-androideabi,x86_64-linux-android,i686-linux-android"
+                else
+                  runner="macos-26"
+                  platform="ios"
+                  rust_targets="aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios"
+                fi
+                # Read recipe meta (version + build_number + platforms)
+                recipe_version=""; recipe_build=""; declared=""
+                if [[ -f "recipes/$pkg_name/meta.yaml" ]]; then
+                  IFS=$'\t' read -r recipe_version recipe_build declared \
+                    <<< "$(uv run --script .ci/read_meta.py "recipes/$pkg_name/meta.yaml")"
+                fi
 
-              # Honor recipe's `package.platforms` on the matrix.
-              if [[ -n "$declared" && ! " $declared " == *" $platform "* ]]; then
-                echo "::notice::Skip ${platform}: ${pkg_name} — recipe declares platforms=[$declared]"
-                continue
-              fi
+                # Honor recipe's `package.platforms` on the matrix.
+                if [[ -n "$declared" && ! " $declared " == *" $platform "* ]]; then
+                  echo "::notice::Skip py${py_short} ${platform}: ${pkg_name} — recipe declares platforms=[$declared]"
+                  continue
+                fi
 
-              # Compose the job display name. The build number comes from
-              # the recipe's meta.yaml (read above): #59 dropped the
-              # build_number workflow input, so meta.yaml is the source of
-              # truth.
-              pkg_ver_override="${pkg#*:}"
-              display_version="${pkg_ver_override:-$recipe_version}"
-              display_build="${recipe_build:-0}"
-              job_name="${platform}: ${pkg_name} ${display_version} #${display_build}"
+                # Compose the job display name. The build number comes from
+                # the recipe's meta.yaml (read above): #59 dropped the
+                # build_number workflow input, so meta.yaml is the source of
+                # truth.
+                pkg_ver_override="${pkg#*:}"
+                display_version="${pkg_ver_override:-$recipe_version}"
+                display_build="${recipe_build:-0}"
+                job_name="py${py_short} ${platform}: ${pkg_name} ${display_version} #${display_build}"
 
-              if [ "$first" = true ]; then first=false; else matrix+=','; fi
-              matrix+="{\"job_name\":\"$job_name\",\"artifact_name\":\"${platform}-${pkg_name}\",\"runner\":\"$runner\",\"platform\":\"$platform\",\"forge_arch\":\"$arch\",\"forge_packages\":\"$pkg\",\"rust_targets\":\"$rust_targets\"}"
+                if [ "$first" = true ]; then first=false; else matrix+=','; fi
+                matrix+="{\"job_name\":\"$job_name\",\"artifact_name\":\"py${py_short}-${platform}-${pkg_name}\",\"runner\":\"$runner\",\"platform\":\"$platform\",\"forge_arch\":\"$arch\",\"forge_packages\":\"$pkg\",\"python_version\":\"$py\",\"python_short\":\"$py_short\",\"rust_targets\":\"$rust_targets\"}"
+              done
             done
           done
           matrix+=']}'
@@ -190,6 +229,10 @@ jobs:
           PYTHON_BUILD_RUN_ID: ${{ inputs.python_build_run_id }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PIP_FIND_LINKS: ${{ github.workspace }}/dist
+          # Pinned per matrix entry by detect-pythons + set-matrix (e.g. 3.13.13).
+          # setup.sh consumes this and pulls the matching python-build support
+          # tarball from flet-dev/python-build/releases/v${minor}.
+          UV_PYTHON: ${{ matrix.python_version }}
         run: |
           set -euxo pipefail
 
@@ -234,14 +277,22 @@ jobs:
         shell: bash
         env:
           FORGE_PACKAGES: ${{ matrix.forge_packages }}
+          PYTHON_SHORT: ${{ matrix.python_short }}
         run: |
           set -euo pipefail
           pkg_name="${FORGE_PACKAGES%%:*}"
           pkg_version="${FORGE_PACKAGES#*:}"
           [[ "$pkg_version" == "$FORGE_PACKAGES" ]] && pkg_version=""
 
+          # Recipe-tester runtime targets Python 3.12 only — `flet build apk`
+          # and the iOS simulator app embed a 3.12 interpreter. Wheels built
+          # for cp313/cp314 are produced and published, but their runtime
+          # tests are skipped here until the Flet runtime catches up.
+          if [[ "$PYTHON_SHORT" != "3.12" ]]; then
+            echo "::notice::Skipping mobile test — recipe-tester runtime is 3.12 only (this entry is py${PYTHON_SHORT})"
+            echo "has_tests=false" >> "$GITHUB_OUTPUT"
           # Check for the presence of any test files at known locations.
-          if [[ -d "recipes/$pkg_name/tests" ]] \
+          elif [[ -d "recipes/$pkg_name/tests" ]] \
               || [[ -d "recipes/$pkg_name/test" ]] \
               || compgen -G "recipes/$pkg_name/test_*.py" > /dev/null; then
             echo "Found tests for $pkg_name"
