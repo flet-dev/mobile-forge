@@ -123,6 +123,17 @@ relocate_pkgconfig_prefix() {
         # ${pcfiledir} with the .pc file's actual directory at lookup
         # time. <dir>/../.. on a .pc at <install>/lib/pkgconfig/*.pc
         # resolves to <install> -- the consumer's real install prefix.
+        #
+        # Also substitute `$(BLDLIBRARY)` in the Libs: line. CPython's
+        # autoconf-built python-X.Y.pc ships `Libs: -L${libdir} $(BLDLIBRARY)`
+        # -- the `$(BLDLIBRARY)` is supposed to expand to `-lpython3.X`
+        # at install time but never does, and pkg-config passes the
+        # literal through to the linker which then fails with
+        # `clang++: error: no such file or directory: '$(BLDLIBRARY)'`.
+        # Only the python-X.Y.pc files are affected; python-X.Y-embed.pc
+        # already has `-lpythonX.Y` written directly. We fix both
+        # idempotently by rewriting `$(BLDLIBRARY)` -> `-lpython${ver}`
+        # where ver is derived from the .pc filename.
         for pc in "$pcdir"/*.pc; do
             [ -f "$pc" ] || continue
             # macOS sed doesn't have -i without an extension arg; use a
@@ -130,6 +141,17 @@ relocate_pkgconfig_prefix() {
             local tmp
             tmp="$(mktemp)"
             sed -E 's|^prefix=.*|prefix=${pcfiledir}/../..|' "$pc" > "$tmp" && mv "$tmp" "$pc"
+
+            # If this is a python-X.Y.pc (not the -embed variant or some
+            # other recipe-shipped .pc), substitute $(BLDLIBRARY) with
+            # the matching -lpythonX.Y.
+            local base
+            base="$(basename "$pc")"
+            if [[ "$base" =~ ^python-([0-9]+\.[0-9]+)\.pc$ ]]; then
+                local ver="${BASH_REMATCH[1]}"
+                tmp="$(mktemp)"
+                sed -E 's|\$\(BLDLIBRARY\)|-lpython'"$ver"'|g' "$pc" > "$tmp" && mv "$tmp" "$pc"
+            fi
         done
     done
 }
