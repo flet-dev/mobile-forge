@@ -1,4 +1,4 @@
-# {% set version = "6.1.0" %}
+# {% set version = "6.1.1" %}
 # {% if version.startswith('5.') %}
 # {%   set libxml2_version = "2.9.8" %}
 # {%   set libxslt_version = "1.1.32" %}
@@ -12,7 +12,7 @@ package:
   version: '{{ version }}'
 
 build:
-  number: 10
+  number: 1
   script_env:
     WITH_XML2_CONFIG: '{platlib}/opt/bin/xml2-config'
     WITH_XSLT_CONFIG: '{platlib}/opt/bin/xslt-config'

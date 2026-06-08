@@ -1,6 +1,6 @@
 package:
   name: Pillow
-  version: 11.1.0
+  version: 12.2.0
 
 requirements:
   host:
@@ -8,11 +8,13 @@ requirements:
     - flet-libjpeg 3.0.90
     - flet-libfreetype 2.13.3
 
-# {% if not version or version >= (11,0,0) %}
-# pillow >= 11.x
+# {% if not version or version >= (12,0,0) %}
+# pillow >= 12.x  (12.x drops `self.add_imaging_libs = ""` from
+# initialize_options, so the 11.x patch's hunk-1 context no longer
+# matches; the 12.x patch is otherwise identical to the 11.x one.)
 
 patches:
-  - setup-11.x.patch
+  - setup-12.x.patch
 
 # {% else %}
 # pillow <= 10.x
@@ -23,7 +25,7 @@ patches:
 # {% endif %}
 
 build:
-  number: 10
+  number: 1
   script_env:
 # {% if sdk == 'android' %}
     # pillow's setup.py manually probes `self.compiler.{include,library}_dirs`

@@ -1,12 +1,12 @@
 package:
   name: flet-libgeos
-  version: 3.13.0
+  version: 3.13.1
 
 build:
-  number: 10
+  number: 1
 
 source:
-  url: http://download.osgeo.org/geos/geos-3.13.0.tar.bz2
+  url: http://download.osgeo.org/geos/geos-3.13.1.tar.bz2
 
 requirements:
   build:

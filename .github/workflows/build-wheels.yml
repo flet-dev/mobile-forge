@@ -13,6 +13,13 @@ on:
         description: "Packages (comma-separated, e.g. pillow:11.1.0,pydantic-core:2.33.2) — or 'ALL' to build/test every recipe"
         required: false
         default: "pydantic-core:2.33.2"
+      prebuild_recipes:
+        description: |
+          Comma-separated list of recipes (typically flet-lib*) to
+          build FIRST and seed into the matrix's dist/ for host-dep pip resolution
+          (e.g. flet-libgdal -> gdal).
+        required: false
+        default: ""
       python_build_run_id:
         description: |
           flet-dev/python-build Actions run-id whose artifacts to use as the
@@ -178,9 +185,11 @@ jobs:
         env:
           FORGE_ARCH: ${{ matrix.forge_arch }}
           FORGE_PACKAGES: ${{ matrix.forge_packages }}
+          PREBUILD_RECIPES: ${{ inputs.prebuild_recipes }}
           PLATFORM: ${{ matrix.platform }}
           PYTHON_BUILD_RUN_ID: ${{ inputs.python_build_run_id }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # used by `gh run download`
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PIP_FIND_LINKS: ${{ github.workspace }}/dist
         run: |
           set -euxo pipefail
 
@@ -197,6 +206,16 @@ jobs:
           # fetches from that python-build Actions run's artifacts instead of
           # the canonical v<version> release.
           source ./setup.sh "$UV_PYTHON" "$PLATFORM"
+
+          # When prebuild_recipes is set, this step builds those recipes FIRST. Their wheels
+          # land in dist/ alongside the consumer wheels. PIP_FIND_LINKS points forge's
+          # host-dep pip resolution at dist/, so the consumer build below picks up the
+          # freshly-built libs over whatever pypi.flet.dev has published.
+          if [[ -n "${PREBUILD_RECIPES:-}" ]]; then
+            for lib in $(echo "$PREBUILD_RECIPES" | tr ',' ' '); do
+              forge "$FORGE_ARCH" "$lib"
+            done
+          fi
 
           IFS=' ' read -r -a packages <<< "$FORGE_PACKAGES"
           for package in "${packages[@]}"; do

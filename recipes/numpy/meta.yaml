@@ -3,7 +3,7 @@
 
 package:
   name: numpy
-  version: 2.2.2
+  version: 2.4.6
 
 requirements:
  build:
@@ -13,15 +13,13 @@ requirements:
   - flet-libcpp-shared >=27.2.12479018
 {% endif %}
 
-patches:
 {% if version and version < (2, 0) %}
+patches:
   - mobile-1.26.4.patch
-{% else %}
-  - mobile-2.2.2.patch
 {% endif %}
 
 build:
-  number: 10
+  number: 1
   script_env:
     NPY_DISABLE_SVML: 1
 
@@ -33,7 +31,7 @@ build:
 
   meson:
     properties:
-# {% if sdk == 'iOS' or (sdk == 'android' and arch in ['arm64-v8a', 'x86_64']) %}
+# {% if sdk == 'android' and arch in ['arm64-v8a', 'x86_64'] %}
       longdouble_format: IEEE_QUAD_LE
 # {% else %}
       longdouble_format: IEEE_DOUBLE_LE

@@ -1,13 +1,13 @@
 package:
   name: google-crc32c
-  version: 1.6.0
+  version: 1.8.0
 
 requirements:
   host:
     - flet-libcrc32c 1.1.2
 
 build:
-  number: 10
+  number: 1
 # {% if sdk != 'android' %}
   script_env:
     LDFLAGS: '-lc++'

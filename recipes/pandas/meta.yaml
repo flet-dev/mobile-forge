@@ -1,6 +1,6 @@
 package:
   name: pandas
-  version: 2.2.3
+  version: 3.0.3
 
 # {% if not version or version >= (2,1) %}
 # pandas >= 2.1.0
@@ -19,7 +19,7 @@ patches:
   - mobile.patch
 
 build:
-  number: 10
+  number: 1
   backend-args:
     - -Csetup-args=--cross-file
     - -Csetup-args={MESON_CROSS_FILE}

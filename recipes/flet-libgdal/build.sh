@@ -26,6 +26,7 @@ if [ $CROSS_VENV_SDK == "android" ]; then
         -DGDAL_USE_OPENSSL=OFF \
         -DGDAL_USE_CURL=OFF \
         -DGDAL_USE_LIBXML2=OFF \
+        -DGDAL_USE_OPENMP=OFF \
         -DBUILD_APPS=OFF \
         -DBUILD_TESTING=OFF \
         -DBUILD_PYTHON_BINDINGS=OFF
@@ -48,8 +49,10 @@ else
         -DSQLite3_INCLUDE_DIR=$SDK_ROOT/usr/include \
         -DGDAL_BUILD_OPTIONAL_DRIVERS=OFF \
         -DOGR_BUILD_OPTIONAL_DRIVERS=OFF \
+        -DGDAL_USE_OPENMP=OFF \
         -DBUILD_APPS=OFF \
-        -DBUILD_TESTING=OFF
+        -DBUILD_TESTING=OFF \
+        -DBUILD_PYTHON_BINDINGS=OFF
 fi
 
 cmake --build . -j $CPU_COUNT

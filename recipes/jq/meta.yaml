@@ -1,12 +1,12 @@
 package:
   name: jq
-  version: 1.8.0
+  version: 1.11.0
 
 requirements:
   host:
     - flet-libjq 1.7.1
 
 build:
-  number: 10
+  number: 1
   script_env:
     JQPY_USE_SYSTEM_LIBS: 1

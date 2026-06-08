@@ -1,10 +1,10 @@
 package:
   name: pyobjus
-  version: 1.2.3
+  version: 1.2.4
   platforms: [ios]
 
 build:
-  number: 10
+  number: 1
 
 patches:
   - mobile.patch

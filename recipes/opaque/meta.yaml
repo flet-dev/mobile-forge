@@ -1,21 +1,19 @@
 package:
   name: opaque
-  version: 0.2.0
+  version: 1.0.0
 
 build:
-  number: 10
+  number: 1
 
 requirements:
   host:
-    - flet-libopaque 0.99.8
+    - flet-libopaque 1.0.1
 
-# Patch upstream setup.py to declare `pysodium` as install_requires.
-# Upstream's 0.2.0 setup.py only sets `requires=["libsodium"]` (metadata-
-# only, NOT a real pip dependency), so when the recipe-tester installs
-# `opaque` pip doesn't pull pysodium, and `import opaque` then fails at
-# runtime with `ModuleNotFoundError: No module named 'pysodium'`. The
-# 1.0.0 upstream tried to fix this but shipped `install_requires =
-# ("pysodium")` — string-without-trailing-comma is just a string, not a
-# tuple, and setuptools silently drops it.
+# opaque 1.0.0 upstream tried to fix the install_requires problem the
+# 0.2.0 recipe had to work around, but shipped `install_requires =
+# ("pysodium")` — string-without-trailing-comma is just a string, not
+# a tuple, which setuptools treats inconsistently. mobile.patch rewrites
+# it to a proper list `install_requires=["pysodium"]` so pip pulls
+# pysodium reliably.
 patches:
   - mobile.patch
