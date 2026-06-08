@@ -985,6 +985,18 @@ class PythonPackageBuilder(Builder):
                     / "bin"
                     / f"python3.{sys.version_info.minor}"
                 ),
+                # Declare pkg-config explicitly. Meson cross-compile mode
+                # otherwise treats pkg-config as a build-machine-only tool
+                # and refuses to use it for target dep resolution -- even
+                # when it's installed and on PATH. Without this declaration
+                # meson reports "Found pkg-config: NO" regardless, defeats
+                # `py.dependency()` via pkg-config, and falls through to
+                # the sysconfig path that 3.14 doesn't tolerate the
+                # autoconf-baked `/usr/local` paths in. With it declared,
+                # meson invokes pkg-config + honors PKG_CONFIG_PATH (set
+                # in compile_env() above), reads the relocated `.pc` file,
+                # and emits the consumer-correct -I/-L flags.
+                "pkg-config": "pkg-config",
             },
             "built-in options": {
                 "c_args": env["CFLAGS"],
