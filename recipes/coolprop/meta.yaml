@@ -24,10 +24,10 @@ build:
       -DANDROID_STL=c++_shared
       -DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384
       -DCMAKE_MODULE_LINKER_FLAGS=-Wl,-z,max-page-size=16384
-      -DPython_LIBRARY={prefix}/lib/libpython{py_version_short}.so
-      -DPython_INCLUDE_DIR={prefix}/include/python{py_version_short}
-      -DPython3_LIBRARY={prefix}/lib/libpython{py_version_short}.so
-      -DPython3_INCLUDE_DIR={prefix}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.so
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython3_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.so
+      -DPython3_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
 # {% else %}
     CMAKE_ARGS: >-
       -DCMAKE_SYSTEM_NAME=iOS
