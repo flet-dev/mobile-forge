@@ -34,36 +34,60 @@ on:
         required: false
         default: ""
 
+  # Reusable-workflow entry point for cross-repo callers.
+  workflow_call:
+    inputs:
+      archs:
+        type: string
+        required: false
+        default: "android,iOS"
+      packages:
+        type: string
+        required: false
+        default: "pydantic-core:,numpy:,pillow:"
+      prebuild_recipes:
+        type: string
+        required: false
+        default: ""
+      python_versions:
+        type: string
+        required: false
+        default: "3.12.13,3.13.13,3.14.5"
+      python_build_run_id:
+        type: string
+        required: false
+        default: ""
+    secrets:
+      GEMFURY_TOKEN:
+        required: false
+
 # Cancel in-flight runs when a newer event arrives for the same logical branch.
-# Disabled during the multi-python rollout — each push should leave a full
-# CI trail so we can see how each Python version's matrix behaves.
 # concurrency:
 #   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
 #   cancel-in-progress: true
 
 env:
-  # Default Python sets selected by the setup job's detect-pythons step.
+  # Default Python sets selected by the detect job's detect-pythons step.
   # PUBLISH = used on push-to-main (we ship cp312/cp313/cp314 wheels).
   # DEV     = used on every other event (faster iteration; manual dispatch
   #           can override via the `python_versions` input).
   DEFAULT_PYTHONS_PUBLISH: "3.12.13,3.13.13,3.14.5"
   DEFAULT_PYTHONS_DEV:     "3.12.13,3.13.13,3.14.5"
-  MOBILE_FORGE_CACHE_DOWNLOADS_OFF: "1"
-  FORGE_NDK_VERSION: r27d  # used by forge for wheel cross-compile.
-  FLUTTER_NDK_VERSION: "28.2.13676358"  # used by flutter for apk build.
-  FLET_CLI_NO_RICH_OUTPUT: 1
 
 jobs:
-  setup:
+  # Single coordination job: decides which Python versions and which
+  # recipe set this run covers, then hands both off to one child workflow
+  # run per Python version. The child (build-wheels-version.yml) is
+  # responsible for the per-recipe matrix and the build/test/publish
+  # steps.
+  detect:
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      pythons_json: ${{ steps.detect-pythons.outputs.pythons_json }}
+      packages: ${{ steps.detect-packages.outputs.packages }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v7
 
       - name: Get changed recipes
         id: changed-recipes
@@ -77,7 +101,8 @@ jobs:
         # Decide which Python versions this run fans out across. Workflow
         # input wins; otherwise: push to main publishes the full PUBLISH
         # set (cp312/cp313/cp314), every other trigger uses DEV (just
-        # cp312) for iteration speed.
+        # cp312) for iteration speed. Emits a JSON array consumed by the
+        # build job's `strategy.matrix.python_version`.
         shell: bash
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
@@ -91,8 +116,17 @@ jobs:
           else
             pythons="$DEFAULT_PYTHONS_DEV"
           fi
-          echo "Detected pythons: $pythons"
-          echo "pythons=$pythons" >> "$GITHUB_OUTPUT"
+          
+          # Hand-built JSON array — no jq dep needed.
+          json="["
+          first=true
+          for py in $(echo "$pythons" | tr ',' ' '); do
+            if [ "$first" = true ]; then first=false; else json+=","; fi
+            json+="\"$py\""
+          done
+          json+="]"
+          echo "Detected pythons: $pythons -> $json"
+          echo "pythons_json=$json" >> "$GITHUB_OUTPUT"
 
       - id: detect-packages
         shell: bash
@@ -102,7 +136,7 @@ jobs:
           CHANGED_DIRS: ${{ steps.changed-recipes.outputs.all_changed_files }}
         run: |
           SMOKE_TEST="pydantic-core:,numpy:,pillow:"
-          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" || "$GITHUB_EVENT_NAME" == "workflow_call" ]]; then
             # The literal value "ALL" expands to every recipe with a meta.yaml under recipes/.
             if [[ "$INPUT_PACKAGES" == "ALL" ]]; then
               pkgs=""
@@ -126,341 +160,19 @@ jobs:
           echo "Detected packages: $pkgs"
           echo "packages=$pkgs" >> "$GITHUB_OUTPUT"
 
-      - id: set-matrix
-        shell: bash
-        run: |
-          ARCHS="${{ inputs.archs || 'android,iOS' }}"
-          PYTHONS="${{ steps.detect-pythons.outputs.pythons }}"
-          PACKAGES="${{ steps.detect-packages.outputs.packages }}"
-
-          matrix='{"include":['
-          first=true
-          for arch in $(echo "$ARCHS" | tr ',' ' '); do
-            for py in $(echo "$PYTHONS" | tr ',' ' '); do
-              py_short="${py%.*}"   # 3.12.13 -> 3.12 (display + tag prefix)
-              for pkg in $(echo "$PACKAGES" | tr ',' ' '); do
-                pkg_name="${pkg%%:*}"
-                if [[ "$arch" == "android" ]]; then
-                  runner="ubuntu-latest"
-                  platform="android"
-                  rust_targets="aarch64-linux-android,arm-linux-androideabi,x86_64-linux-android,i686-linux-android"
-                else
-                  runner="macos-26"
-                  platform="ios"
-                  rust_targets="aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios"
-                fi
-                # Read recipe meta (version + build_number + platforms)
-                recipe_version=""; recipe_build=""; declared=""
-                if [[ -f "recipes/$pkg_name/meta.yaml" ]]; then
-                  IFS=$'\t' read -r recipe_version recipe_build declared \
-                    <<< "$(uv run --script .ci/read_meta.py "recipes/$pkg_name/meta.yaml")"
-                fi
-
-                # Honor recipe's `package.platforms` on the matrix.
-                if [[ -n "$declared" && ! " $declared " == *" $platform "* ]]; then
-                  echo "::notice::Skip py${py_short} ${platform}: ${pkg_name} — recipe declares platforms=[$declared]"
-                  continue
-                fi
-
-                # Compose the job display name. The build number comes from
-                # the recipe's meta.yaml (read above): #59 dropped the
-                # build_number workflow input, so meta.yaml is the source of
-                # truth.
-                pkg_ver_override="${pkg#*:}"
-                display_version="${pkg_ver_override:-$recipe_version}"
-                display_build="${recipe_build:-0}"
-                job_name="py${py_short} ${platform}: ${pkg_name} ${display_version} #${display_build}"
-
-                if [ "$first" = true ]; then first=false; else matrix+=','; fi
-                matrix+="{\"job_name\":\"$job_name\",\"artifact_name\":\"py${py_short}-${platform}-${pkg_name}\",\"runner\":\"$runner\",\"platform\":\"$platform\",\"forge_arch\":\"$arch\",\"forge_packages\":\"$pkg\",\"python_version\":\"$py\",\"python_short\":\"$py_short\",\"rust_targets\":\"$rust_targets\"}"
-              done
-            done
-          done
-          matrix+=']}'
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-
+  # One child workflow run per Python version.
   build:
-    needs: setup
-    name: ${{ matrix.job_name }}
-    runs-on: ${{ matrix.runner }}
+    name: Python ${{ matrix.python_version }}
+    needs: detect
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Free disk space (Ubuntu runners only)
-        if: runner.os == 'Linux'
-        uses: jlumbroso/free-disk-space@main
-        with:
-          tool-cache: false      # KEEP — we need android sdk + python tooling
-          android: false         # KEEP — Android SDK is used by Build wheels (NDK) + Test
-          dotnet: true
-          haskell: true
-          large-packages: false  # SKIP — sudo apt remove takes minutes; reaping above is enough
-          docker-images: true
-          swap-storage: true
-
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v7
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.rust_targets }}
-
-      - name: Install NDK ${{ env.FORGE_NDK_VERSION }} for forge on Android
-        # forge cross-compiles Android wheels with this NDK. The install
-        # script writes NDK_HOME to $GITHUB_ENV so the Build wheels step
-        # (and forge subprocesses) pick it up.
-        if: matrix.platform == 'android'
-        shell: bash
-        run: .ci/install_ndk.sh "$FORGE_NDK_VERSION"
-
-      - name: Build wheels
-        shell: bash
-        env:
-          FORGE_ARCH: ${{ matrix.forge_arch }}
-          FORGE_PACKAGES: ${{ matrix.forge_packages }}
-          PREBUILD_RECIPES: ${{ inputs.prebuild_recipes }}
-          PLATFORM: ${{ matrix.platform }}
-          PYTHON_BUILD_RUN_ID: ${{ inputs.python_build_run_id }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PIP_FIND_LINKS: ${{ github.workspace }}/dist
-          # Pinned per matrix entry by detect-pythons + set-matrix (e.g. 3.13.13).
-          # setup.sh consumes this and pulls the matching python-build support
-          # tarball from flet-dev/python-build/releases/v${minor}.
-          UV_PYTHON: ${{ matrix.python_version }}
-        run: |
-          set -euxo pipefail
-
-          . .ci/common.sh
-
-          if [[ "$PLATFORM" == "android" ]]; then
-            sudo apt-get update
-            # pkg-config is what meson's `py.dependency()` uses to resolve
-            # the Python C dep via the `.pc` files setup.sh relocates.
-            # Without it, meson falls back to sysconfig — which on
-            # Python 3.14 returns the bogus `/usr/local/...` paths and
-            # reports the dep as "not found" (numpy 2.4.6 hits this).
-            sudo apt-get install -y sqlite3 pkg-config
-          fi
-
-          # setup.sh downloads the matching mobile-forge support package for the
-          # requested platform and sets MOBILE_FORGE_*_SUPPORT_PATH. When the
-          # PYTHON_BUILD_RUN_ID env (from inputs above) is set, setup.sh
-          # fetches from that python-build Actions run's artifacts instead of
-          # the canonical v<version> release.
-          source ./setup.sh "$UV_PYTHON" "$PLATFORM"
-
-          # When prebuild_recipes is set, this step builds those recipes FIRST. Their wheels
-          # land in dist/ alongside the consumer wheels. PIP_FIND_LINKS points forge's
-          # host-dep pip resolution at dist/, so the consumer build below picks up the
-          # freshly-built libs over whatever pypi.flet.dev has published.
-          if [[ -n "${PREBUILD_RECIPES:-}" ]]; then
-            for lib in $(echo "$PREBUILD_RECIPES" | tr ',' ' '); do
-              forge "$FORGE_ARCH" "$lib"
-            done
-          fi
-
-          IFS=' ' read -r -a packages <<< "$FORGE_PACKAGES"
-          for package in "${packages[@]}"; do
-            forge "$FORGE_ARCH" "$package"
-          done
-
-          # Drop the support-tree dep wheels produced by make_dep_wheels.py
-          # iOS deps: bzip2, libffi, mpdecimal, openssl, xz
-          # Android deps: bzip2, libffi, openssl, sqlite, xz
-          rm -f dist/bzip2-* dist/libffi-* dist/mpdecimal-* dist/openssl-* dist/sqlite-* dist/xz-*
-
-      # --- Mobile test lane ---------------------------------------------------
-
-      - name: Detect test files for this recipe
-        id: detect-tests
-        shell: bash
-        env:
-          FORGE_PACKAGES: ${{ matrix.forge_packages }}
-          PYTHON_SHORT: ${{ matrix.python_short }}
-        run: |
-          set -euo pipefail
-          pkg_name="${FORGE_PACKAGES%%:*}"
-          pkg_version="${FORGE_PACKAGES#*:}"
-          [[ "$pkg_version" == "$FORGE_PACKAGES" ]] && pkg_version=""
-
-          # Recipe-tester runtime targets Python 3.12 only — `flet build apk`
-          # and the iOS simulator app embed a 3.12 interpreter. Wheels built
-          # for cp313/cp314 are produced and published, but their runtime
-          # tests are skipped here until the Flet runtime catches up.
-          if [[ "$PYTHON_SHORT" != "3.12" ]]; then
-            echo "::notice::Skipping mobile test — recipe-tester runtime is 3.12 only (this entry is py${PYTHON_SHORT})"
-            echo "has_tests=false" >> "$GITHUB_OUTPUT"
-          # Check for the presence of any test files at known locations.
-          elif [[ -d "recipes/$pkg_name/tests" ]] \
-              || [[ -d "recipes/$pkg_name/test" ]] \
-              || compgen -G "recipes/$pkg_name/test_*.py" > /dev/null; then
-            echo "Found tests for $pkg_name"
-            echo "has_tests=true" >> "$GITHUB_OUTPUT"
-            echo "pkg_name=$pkg_name" >> "$GITHUB_OUTPUT"
-            echo "pkg_version=$pkg_version" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::Skipping mobile test — no tests/, test/ or test_*.py under recipes/$pkg_name/"
-            echo "has_tests=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Enable KVM
-        # GA'd April 2024 on standard Linux runners; needs a udev rule to grant the runner
-        # user rw on /dev/kvm. Android-only — macOS uses Hypervisor.Framework on its own.
-        if: matrix.platform == 'android' && steps.detect-tests.outputs.has_tests == 'true'
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
-            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-
-      - name: Install NDK ${{ env.FLUTTER_NDK_VERSION }} for Flutter Android build
-        # `flet build apk` shells out to Flutter, whose generated Gradle
-        # uses `ndkVersion = flutter.ndkVersion`. Without this NDK
-        # pre-installed at $ANDROID_HOME/ndk/<version>/, Gradle triggers
-        # an auto-install mid-build that flakes intermittently
-        # (InstallFailedException / ZipException). Pre-installing via
-        # the shared install_ndk.sh removes that race.
-        if: matrix.platform == 'android' && steps.detect-tests.outputs.has_tests == 'true'
-        shell: bash
-        run: .ci/install_ndk.sh "$FLUTTER_NDK_VERSION"
-
-      - name: Stage tests + build recipe-tester APK
-        if: matrix.platform == 'android' && steps.detect-tests.outputs.has_tests == 'true'
-        shell: bash
-        env:
-          PKG_NAME: ${{ steps.detect-tests.outputs.pkg_name }}
-          PKG_VERSION: ${{ steps.detect-tests.outputs.pkg_version }}
-        run: |
-          set -euxo pipefail
-
-          # Copy just-built wheels into dist-test/ with build tags bumped to
-          # 9999. Reason: pip's resolver merges --find-links and the
-          # --extra-index-url (pypi.flet.dev) and picks the wheel with the
-          # highest build tag per PEP 427. The published wheel on
-          # pypi.flet.dev typically has build tag >= 1, while forge's
-          # freshly-built wheel for the same version may have a lower (or
-          # absent) build tag — so pip silently uses the OLD published wheel
-          # and the recipe fix being validated is bypassed. Bumping local
-          # copies to 9999 guarantees they win. Original dist/ is left
-          # untouched so the publish step still ships at the user-specified
-          # build_number.
-          mkdir -p "$GITHUB_WORKSPACE/dist-test"
-          for w in "$GITHUB_WORKSPACE"/dist/*.whl; do
-              [[ -e "$w" ]] || continue
-              base=$(basename "$w")
-              # name-version[-buildtag]-pytag-abitag-plat.whl
-              # → name-version-9999-pytag-abitag-plat.whl
-              # abitag covers both cp312-cp312 (Python-specific) and
-              # cp37-abi3 (stable ABI, used e.g. by cryptography).
-              new=$(printf '%s\n' "$base" \
-                    | sed -E 's/^([^-]+-[^-]+)(-[0-9]+)?-(cp[0-9]+-(cp[0-9]+|abi[0-9]+))-/\1-9999-\3-/')
-              cp "$w" "$GITHUB_WORKSPACE/dist-test/$new"
-          done
-
-          ./tests/recipe-tester/stage_recipe.sh "$PKG_NAME" "$PKG_VERSION"
-          cd tests/recipe-tester
-          PIP_FIND_LINKS="$GITHUB_WORKSPACE/dist-test" \
-            uvx --with flet-cli flet build apk --arch x86_64 -vv --yes
-
-      - name: Test on Android emulator (API 28, x86_64)
-        if: matrix.platform == 'android' && steps.detect-tests.outputs.has_tests == 'true'
-        uses: reactivecircus/android-emulator-runner@v2
-        timeout-minutes: 20
-        with:
-          # API 28 minimum, NOT 24. mobile-forge wheels target API 24, but
-          # Flet's Android app shell uses ImageDecoder.OnHeaderDecodedListener
-          # (added in API 28) — on a 24 AVD the recipe-tester APK crashes at
-          # launch with ClassNotFoundException before Python ever starts.
-          api-level: 28
-          arch: x86_64
-          target: default
-          disable-animations: true
-          # The reactivecircus action invokes EACH LINE of `script:` through
-          # `sh -c` separately — multi-line constructs (functions, traps, if
-          # blocks) don't survive. Logic lives in .ci/run_android_test.sh
-          # instead, which has its own bash shebang.
-          script: .ci/run_android_test.sh
-
-      # --- iOS lane ----------------------------------------------------------
-
-      - name: Stage tests + build recipe-tester iOS sim app
-        if: matrix.platform == 'ios' && steps.detect-tests.outputs.has_tests == 'true'
-        shell: bash
-        env:
-          PKG_NAME: ${{ steps.detect-tests.outputs.pkg_name }}
-          PKG_VERSION: ${{ steps.detect-tests.outputs.pkg_version }}
-        run: |
-          set -euxo pipefail
-
-          # Same dist-test wheel-bump as the Android lane — pip's build-tag
-          # preference applies equally to iOS-tagged wheels resolving against
-          # pypi.flet.dev's published copies.
-          mkdir -p "$GITHUB_WORKSPACE/dist-test"
-          for w in "$GITHUB_WORKSPACE"/dist/*.whl; do
-              [[ -e "$w" ]] || continue
-              base=$(basename "$w")
-              new=$(printf '%s\n' "$base" \
-                    | sed -E 's/^([^-]+-[^-]+)(-[0-9]+)?-(cp[0-9]+-(cp[0-9]+|abi[0-9]+))-/\1-9999-\3-/')
-              cp "$w" "$GITHUB_WORKSPACE/dist-test/$new"
-          done
-
-          ./tests/recipe-tester/stage_recipe.sh "$PKG_NAME" "$PKG_VERSION"
-          cd tests/recipe-tester
-          PIP_FIND_LINKS="$GITHUB_WORKSPACE/dist-test" \
-            uvx --with flet-cli flet build ios-simulator -v --yes
-
-      - name: Test on iOS Simulator
-        if: matrix.platform == 'ios' && steps.detect-tests.outputs.has_tests == 'true'
-        timeout-minutes: 25
-        shell: bash
-        # iOS sim cold-boot can take 1-4 min on the macos-26 image.
-        run: .ci/run_ios_test.sh
-
-      # --- /iOS lane ---------------------------------------------------------
-
-      - name: Upload test artifacts
-        if: always() && steps.detect-tests.outputs.has_tests == 'true'
-        uses: actions/upload-artifact@v6
-        with:
-          name: test-${{ matrix.artifact_name }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            console.log
-            logcat-on-failure.txt
-            screen-on-failure.png
-            syslog-on-failure.txt
-          if-no-files-found: ignore
-          retention-days: 90
-
-      # --- /Mobile test lane ------------------------------------------------
-
-      - name: Publish wheels
-        # `success() &&` so a test failure blocks publish — without it, a
-        # passing build with failing tests would still ship the wheel.
-        if: ${{ success() && hashFiles('dist/*.whl') != '' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-        shell: bash
-        env:
-          GEMFURY_TOKEN: ${{ secrets.GEMFURY_TOKEN }}
-        run: |
-          set -euxo pipefail
-          . .ci/common.sh
-          publish_to_pypi dist/*.whl
-
-      - name: Upload logs on success
-        if: ${{ success() && hashFiles('logs/*.log') != '' }}
-        uses: actions/upload-artifact@v6
-        with:
-          name: logs-${{ matrix.artifact_name }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: logs/*.log
-
-      - name: Upload errors on failure
-        if: ${{ failure() && hashFiles('errors/*.log') != '' }}
-        uses: actions/upload-artifact@v6
-        with:
-          name: errors-${{ matrix.artifact_name }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: errors/*.log
+      matrix:
+        python_version: ${{ fromJson(needs.detect.outputs.pythons_json) }}
+    uses: ./.github/workflows/build-wheels-version.yml
+    with:
+      python_version: ${{ matrix.python_version }}
+      archs: ${{ inputs.archs || 'android,iOS' }}
+      packages: ${{ needs.detect.outputs.packages }}
+      prebuild_recipes: ${{ inputs.prebuild_recipes || '' }}
+      python_build_run_id: ${{ inputs.python_build_run_id || '' }}
+    secrets: inherit
