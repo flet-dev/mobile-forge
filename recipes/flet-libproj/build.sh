@@ -1,6 +1,22 @@
 #!/bin/bash
 set -eu
 
+# SQLite3 discovery for Android, similar layout drift as openssl:
+#   - 3.12/3.13: sqlite3.h is bundled inside the python install dir,
+#     so $HOST_PYTHON_HOME/include/sqlite3.h works.
+#   - 3.14+: sqlite3.h lives in a sibling dir alongside the python
+#     install (.../install/android/<abi>/sqlite-X.Y.Z/include/).
+# The .so library itself stays inside $HOST_PYTHON_HOME/lib/ on both.
+SQLITE3_INC="$HOST_PYTHON_HOME/include"
+if [ ! -f "$SQLITE3_INC/sqlite3.h" ]; then
+    for candidate in "$HOST_PYTHON_HOME"/../sqlite-*; do
+        if [ -f "$candidate/include/sqlite3.h" ]; then
+            SQLITE3_INC="$candidate/include"
+            break
+        fi
+    done
+fi
+
 if [ $CROSS_VENV_SDK == "android" ]; then
     cmake \
         -DCMAKE_SYSTEM_NAME=Android \
@@ -15,8 +31,8 @@ if [ $CROSS_VENV_SDK == "android" ]; then
         -DTIFF_INCLUDE_DIR="$PLATLIB/opt/include" \
         -DCURL_LIBRARY="$PLATLIB/opt/lib/libcurl.so" \
         -DCURL_INCLUDE_DIR="$PLATLIB/opt/include" \
-        -DSQLite3_LIBRARY=$PYTHON_PREFIX/lib/libsqlite3_python.so \
-        -DSQLite3_INCLUDE_DIR=$PYTHON_PREFIX/include
+        -DSQLite3_LIBRARY=$HOST_PYTHON_HOME/lib/libsqlite3_python.so \
+        -DSQLite3_INCLUDE_DIR=$SQLITE3_INC
 else
     cmake \
         -DCMAKE_SYSTEM_NAME=iOS \
