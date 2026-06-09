@@ -253,15 +253,8 @@ jobs:
           pkg_version="${FORGE_PACKAGES#*:}"
           [[ "$pkg_version" == "$FORGE_PACKAGES" ]] && pkg_version=""
 
-          # Recipe-tester runtime targets Python 3.12 only — `flet build apk`
-          # and the iOS simulator app embed a 3.12 interpreter. Wheels built
-          # for cp313/cp314 are produced and published, but their runtime
-          # tests are skipped here until the Flet runtime catches up.
-          if [[ "$PYTHON_SHORT" != "3.12" ]]; then
-            echo "::notice::Skipping mobile test — recipe-tester runtime is 3.12 only (this entry is py${PYTHON_SHORT})"
-            echo "has_tests=false" >> "$GITHUB_OUTPUT"
           # Check for the presence of any test files at known locations.
-          elif [[ -d "recipes/$pkg_name/tests" ]] \
+          if [[ -d "recipes/$pkg_name/tests" ]] \
               || [[ -d "recipes/$pkg_name/test" ]] \
               || compgen -G "recipes/$pkg_name/test_*.py" > /dev/null; then
             echo "Found tests for $pkg_name"
