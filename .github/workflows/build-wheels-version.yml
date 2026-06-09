@@ -1,4 +1,4 @@
-name: Build wheels for Python
+name: Build wheels for Python version
 
 # Reusable child of build-wheels.yml (the orchestrator). Builds the
 # recipe matrix for one Python version. Called once per Python version
@@ -125,7 +125,7 @@ jobs:
               pkg_ver_override="${pkg#*:}"
               display_version="${pkg_ver_override:-$recipe_version}"
               display_build="${recipe_build:-0}"
-              job_name="${platform}: ${pkg_name} ${display_version} #${display_build}"
+              job_name="${pkg_name} ${display_version} (${platform}) #${display_build}"
 
               if [ "$first" = true ]; then first=false; else matrix+=','; fi
               matrix+="{\"job_name\":\"$job_name\",\"artifact_name\":\"py${py_short}-${platform}-${pkg_name}\",\"runner\":\"$runner\",\"platform\":\"$platform\",\"forge_arch\":\"$arch\",\"forge_packages\":\"$pkg\",\"python_short\":\"$py_short\",\"rust_targets\":\"$rust_targets\"}"
