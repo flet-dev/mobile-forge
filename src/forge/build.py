@@ -400,15 +400,21 @@ class Builder(ABC):
             else self.cross_venv.platform_triplet
         )
 
-        # Point pkg-config at two pkgconfig dirs that matter for the
+        # Point pkg-config at the pkgconfig dirs that matter for the
         # target build:
         #   1. host_python_home/lib/pkgconfig — where python-X.Y.pc lives.
         #      Required for meson's `py.dependency()` to resolve the
         #      Python C dep via the relocated `.pc` files.
         #   2. install_root/lib/pkgconfig — where flet-lib* extract their
         #      own `.pc` files when installed as host wheels.
-        # Both `.pc` files use `prefix=${pcfiledir}/../..` so pkg-config
-        # emits paths relative to the on-disk .pc location.
+        #   3. <cross-venv>/{build,cross}/lib/pythonX.Y/site-packages/*/share/pkgconfig
+        #      — pure-Python wheels (pybind11, …) ship their .pc files
+        #      bundled inside site-packages rather than the usual
+        #      lib/pkgconfig dir, so `dependency('pybind11')` via meson's
+        #      pkg-config method only resolves once the .pc dir under the
+        #      installed wheel is added explicitly.
+        # All three sets of `.pc` files use `prefix=${pcfiledir}/../..` so
+        # pkg-config emits paths relative to the on-disk .pc location.
         pkg_config_paths = []
         python_pc_dir = self.cross_venv.host_python_home / "lib" / "pkgconfig"
         if python_pc_dir.is_dir():
@@ -416,6 +422,20 @@ class Builder(ABC):
         pc_dir = install_root / "lib" / "pkgconfig"
         if pc_dir.is_dir():
             pkg_config_paths.append(str(pc_dir))
+        if self.cross_venv.venv_path.is_dir():
+            py_short = f"python3.{sys.version_info.minor}"
+            for env_root in ("build", "cross"):
+                site_dir = (
+                    self.cross_venv.venv_path
+                    / env_root
+                    / "lib"
+                    / py_short
+                    / "site-packages"
+                )
+                if site_dir.is_dir():
+                    for share_pkgconfig in site_dir.glob("*/share/pkgconfig"):
+                        if share_pkgconfig.is_dir():
+                            pkg_config_paths.append(str(share_pkgconfig))
         pkg_config_path = ":".join(pkg_config_paths)
 
         env = {
