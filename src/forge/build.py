@@ -635,7 +635,7 @@ class Builder(ABC):
                     self.log_file,
                     f"[{self.cross_venv}] {so_path.name}: NEEDED "
                     f"'{name.decode(errors='replace')}' -> "
-                    f"'{name[slash + 1:].decode(errors='replace')}'",
+                    f"'{name[slash + 1 :].decode(errors='replace')}'",
                 )
 
     def _check_elf_alignment(self, so_path: Path):
@@ -850,6 +850,15 @@ class SimplePackageBuilder(Builder):
                     "PREFIX": str(self.build_path / "wheel" / "opt"),
                     "PYTHON_PREFIX": self.cross_venv.sysconfig_data["prefix"],
                     "PLATLIB": self.cross_venv.scheme_paths["platlib"],
+                    # The on-disk python install directory for the target SDK/arch inside the
+                    # mobile-forge support tree (`MOBILE_FORGE_<SDK>_SUPPORT_PATH/install/<sdk>/<arch>/python-<X.Y.Z>` on
+                    # Android, the matching Python.xcframework slice on iOS). Stable across recipe
+                    # builds within a session and always a real directory on disk -- useful when a recipe
+                    # needs to locate sibling artifacts shipped alongside Python in the support
+                    # tree (e.g. host libraries the python-build tarball ships outside the python install itself).
+                    # Distinct from PYTHON_PREFIX, which reflects the cross-venv's relocated sysconfigdata `prefix` and may
+                    # not map back to the support tree on every python-build version.
+                    "HOST_PYTHON_HOME": str(self.cross_venv.host_python_home),
                 }
             ),
         )

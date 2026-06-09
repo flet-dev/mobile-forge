@@ -19,9 +19,11 @@ fi
 
 #   3. python-build 3.14+ (Android): openssl lives as a *sibling* of the
 #      python install dir (e.g. .../install/android/<abi>/openssl-3.0.20-1).
-#      Glob the sibling, take the first match.
+#      Glob siblings of $HOST_PYTHON_HOME (the support-tree python install
+#      dir, distinct from $PYTHON_PREFIX which on 3.14 relocates into the
+#      cross-venv), and take the first match.
 if [ ! -f "$OPENSSL_PREFIX/include/openssl/ssl.h" ]; then
-    for candidate in "$PYTHON_PREFIX"/../openssl-*; do
+    for candidate in "$HOST_PYTHON_HOME"/../openssl-*; do
         if [ -f "$candidate/include/openssl/ssl.h" ]; then
             OPENSSL_PREFIX="$candidate"
             break
