@@ -175,4 +175,14 @@ jobs:
       packages: ${{ needs.detect.outputs.packages }}
       prebuild_recipes: ${{ inputs.prebuild_recipes || '' }}
       python_build_run_id: ${{ inputs.python_build_run_id || '' }}
-    secrets: inherit
+    # Explicit pass-through of GEMFURY_TOKEN rather than `secrets: inherit`.
+    # `inherit` only works within the same organization; this orchestrator is
+    # also invoked via workflow_call from flet-dev/python-build (which lives
+    # under a different account), and `inherit` on the inner call fails the
+    # whole run at startup when that's the entry path. Explicit `secrets:`
+    # works in both same-repo and cross-repo cases — when the outer caller
+    # doesn't pass GEMFURY_TOKEN (e.g. python-build's validation call),
+    # `secrets.GEMFURY_TOKEN` is empty and the child's publish step is
+    # already gated off via `inputs.python_build_run_id != ''`.
+    secrets:
+      GEMFURY_TOKEN: ${{ secrets.GEMFURY_TOKEN }}
