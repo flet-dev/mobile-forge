@@ -400,16 +400,23 @@ class Builder(ABC):
             else self.cross_venv.platform_triplet
         )
 
-        # Point pkg-config at the per-arch python install's pkgconfig dir
-        # so meson's `py.dependency()` can resolve the Python C dep via
-        # the `.pc` files setup.sh relocated. The `.pc` files use
-        # `prefix=${pcfiledir}/../..` so pkg-config emits the correct
-        # `-I<install_root>/include/python3.X` regardless of where on
-        # disk the install tree lives.
-        pkg_config_path = ""
+        # Point pkg-config at two pkgconfig dirs that matter for the
+        # target build:
+        #   1. host_python_home/lib/pkgconfig — where python-X.Y.pc lives.
+        #      Required for meson's `py.dependency()` to resolve the
+        #      Python C dep via the relocated `.pc` files.
+        #   2. install_root/lib/pkgconfig — where flet-lib* extract their
+        #      own `.pc` files when installed as host wheels.
+        # Both `.pc` files use `prefix=${pcfiledir}/../..` so pkg-config
+        # emits paths relative to the on-disk .pc location.
+        pkg_config_paths = []
+        python_pc_dir = self.cross_venv.host_python_home / "lib" / "pkgconfig"
+        if python_pc_dir.is_dir():
+            pkg_config_paths.append(str(python_pc_dir))
         pc_dir = install_root / "lib" / "pkgconfig"
         if pc_dir.is_dir():
-            pkg_config_path = str(pc_dir)
+            pkg_config_paths.append(str(pc_dir))
+        pkg_config_path = ":".join(pkg_config_paths)
 
         env = {
             "AR": ar,
