@@ -384,18 +384,18 @@ class Builder(ABC):
             if (self.cross_venv.sdk_root / "usr" / "lib").is_dir():
                 ldflags += f" -L{self.cross_venv.sdk_root}/usr/lib"
 
-            # Add the framework path + Python framework link. The cargo
-            # branch below pairs `-F` with `-framework Python` because the
-            # iOS linker rejects `-undefined dynamic_lookup` (the default
-            # macOS Python-extension link policy) and refuses to leave
-            # Python C API symbols unresolved. meson-based builds (numpy,
-            # contourpy with pybind11, …) take LDFLAGS verbatim and have
-            # no other channel for the framework link, so emit the same
-            # pair here. Setuptools builds get `-framework Python` again
-            # via the target sysconfig's LDSHARED -- a second copy is a
-            # no-op for the linker, so the simpler unconditional form
-            # keeps both paths working.
-            ldflags += f' -F "{self.cross_venv.host_python_home}" -framework Python'
+            # Add the framework search path. We do *not* append
+            # `-framework Python` here -- doing so breaks autoconf-based
+            # builds like flet-libfreetype, whose `./configure` probes the
+            # C compiler by linking a trivial hello.c against $LDFLAGS;
+            # `-framework Python` makes that probe fail with
+            # `configure: error: C compiler cannot create executables`.
+            # Cargo / setuptools / meson recipes each get the framework
+            # link via their own channel (cargo_ldflags below, the cross
+            # sysconfig'\''s LDSHARED for setuptools, and the meson
+            # cross-file'\''s c_link_args / cpp_link_args augmented in
+            # _create_meson_cross for meson).
+            ldflags += f' -F "{self.cross_venv.host_python_home}"'
             cargo_ldflags += f" -C link-arg=-F{self.cross_venv.host_python_home} -C link-arg=-framework -C link-arg=Python"
 
         cargo_build_target = (
@@ -1049,8 +1049,20 @@ class PythonPackageBuilder(Builder):
             "built-in options": {
                 "c_args": env["CFLAGS"],
                 "cpp_args": env["CPPFLAGS"],
-                "c_links_args": env["LDFLAGS"],
-                "cpp_links_args": env["LDFLAGS"],
+                # iOS: append `-framework Python` to the meson c/cpp link
+                # args (not LDFLAGS env) so meson recipes (numpy, contourpy
+                # with pybind11, …) resolve the Python C API at link time
+                # without breaking autoconf-based builds whose hello.c
+                # probe also reads $LDFLAGS. See compile_env() in this file
+                # for the matching half of this split.
+                "c_links_args": (
+                    env["LDFLAGS"]
+                    + (" -framework Python" if self.cross_venv.sdk != "android" else "")
+                ),
+                "cpp_links_args": (
+                    env["LDFLAGS"]
+                    + (" -framework Python" if self.cross_venv.sdk != "android" else "")
+                ),
             },
             "properties": {"needs_exe_wrapper": False},
             "host_machine": {
