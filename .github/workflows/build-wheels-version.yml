@@ -202,14 +202,20 @@ jobs:
             # reports the dep as "not found" (numpy 2.4.6 hits this).
             sudo apt-get install -y sqlite3 pkg-config
           else
-            # iOS lane runs on macos-26 which doesn't ship pkg-config.
-            # Same rationale as Android: meson's `py.dependency()` and the
-            # config-tool fallback used by `dependency('pybind11')` (in
-            # contourpy etc.) both require a pkg-config binary on PATH
-            # before meson will accept it as the host-machine tool, even
-            # when the .pc file the recipe needs is already in
-            # PKG_CONFIG_PATH.
-            brew install pkg-config
+            # iOS lane: meson's `py.dependency()` and the config-tool
+            # fallback used by `dependency('pybind11')` (in contourpy
+            # etc.) both require a pkg-config binary on PATH before
+            # meson will accept it as the host-machine tool, even when
+            # the .pc file the recipe needs is already in
+            # PKG_CONFIG_PATH. macos-26 happens to ship `pkgconf`
+            # preinstalled (and that formula provides the `pkg-config`
+            # binary), but older / future runner images may not -- so
+            # install only when missing. Guarding the brew call also
+            # silences the "::warning::pkgconf is already installed"
+            # noise that brew otherwise emits unconditionally.
+            if ! command -v pkg-config >/dev/null 2>&1; then
+              brew install pkg-config
+            fi
           fi
 
           # setup.sh downloads the matching mobile-forge support package for the
