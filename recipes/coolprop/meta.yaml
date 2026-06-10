@@ -34,8 +34,8 @@ build:
       -DCMAKE_OSX_SYSROOT={{ sdk }}
       -DCMAKE_OSX_DEPLOYMENT_TARGET={{ sdk_version }}
       -DCMAKE_OSX_ARCHITECTURES={{ arch }}
-      -DPython_LIBRARY={prefix}/lib/libpython{py_version_short}.dylib
-      -DPython_INCLUDE_DIR={prefix}/include/python{py_version_short}
-      -DPython3_LIBRARY={prefix}/lib/libpython{py_version_short}.dylib
-      -DPython3_INCLUDE_DIR={prefix}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.dylib
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython3_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.dylib
+      -DPython3_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
 # {% endif %}
