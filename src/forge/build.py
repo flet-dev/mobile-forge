@@ -384,8 +384,18 @@ class Builder(ABC):
             if (self.cross_venv.sdk_root / "usr" / "lib").is_dir():
                 ldflags += f" -L{self.cross_venv.sdk_root}/usr/lib"
 
-            # Add the framework path
-            ldflags += f' -F "{self.cross_venv.host_python_home}"'
+            # Add the framework path + Python framework link. The cargo
+            # branch below pairs `-F` with `-framework Python` because the
+            # iOS linker rejects `-undefined dynamic_lookup` (the default
+            # macOS Python-extension link policy) and refuses to leave
+            # Python C API symbols unresolved. meson-based builds (numpy,
+            # contourpy with pybind11, …) take LDFLAGS verbatim and have
+            # no other channel for the framework link, so emit the same
+            # pair here. Setuptools builds get `-framework Python` again
+            # via the target sysconfig's LDSHARED -- a second copy is a
+            # no-op for the linker, so the simpler unconditional form
+            # keeps both paths working.
+            ldflags += f' -F "{self.cross_venv.host_python_home}" -framework Python'
             cargo_ldflags += f" -C link-arg=-F{self.cross_venv.host_python_home} -C link-arg=-framework -C link-arg=Python"
 
         cargo_build_target = (
