@@ -92,59 +92,42 @@ download_support() {
     mkdir -p "$dest"
     tar -xzf "downloads/${tarball}" -C "$dest"
 
-    # Rewrite the `prefix=` line in every shipped `lib/pkgconfig/*.pc` to
-    # pkg-config's relocatable form `prefix=${pcfiledir}/../..` so consumer
-    # pkg-config invocations resolve include/lib paths to the actual
-    # on-disk install root, NOT the build-time `/usr/local` autoconf
-    # default that CPython bakes in. Without this, meson's `py.dependency()`
-    # gets `-I/usr/local/include/python3.X` (a path that does not exist on
-    # the CI runner) and reports the Python dep as "not found" — surfaced
-    # by numpy 2.4.6 on Python 3.14 Android. Upstream fix tracked in
-    # flet-dev/python-build (`fix/sysconfig-usr-local-paths` branch);
-    # this is the equivalent workaround at the mobile-forge consumer side,
-    # works against any python-build tarball that hasn't shipped the
-    # upstream fix yet.
+    # Rewrite the `prefix=` line in every shipped `lib/pkgconfig/*.pc` to pkg-config's relocatable
+    # form `prefix=${pcfiledir}/../..` so consumer pkg-config invocations resolve include/lib paths to the actual
+    # on-disk install root, NOT the build-time `/usr/local` autoconf default that CPython bakes in. Without
+    # this, meson's `py.dependency()` gets `-I/usr/local/include/python3.X` (a path that does not exist on
+    # the CI runner) and reports the Python dep as "not found" — surfaced by numpy 2.4.6 on Python 3.14 Android.
     relocate_pkgconfig_prefix "$dest"
 }
 
-# Walk every `.pc` file under <dest>/.../lib/pkgconfig/ and rewrite the
-# (literal absolute-path) `prefix=` line to pkg-config's standard
-# relocatable `prefix=${pcfiledir}/../..`. Idempotent — if the line is
-# already in the relocatable form, the sed substitution silently
-# leaves the file alone. Safe to call across versions / platforms;
-# the find prunes to pkgconfig dirs explicitly.
+# Walk every `.pc` file under <dest>/.../lib/pkgconfig/ and rewrite the (literal absolute-path) `prefix=`
+# line to pkg-config's standard relocatable `prefix=${pcfiledir}/../..`. Idempotent — if the line is
+# already in the relocatable form, the sed substitution silently leaves the file alone. Safe to call
+# across versions/platforms; the find prunes to pkgconfig dirs explicitly.
 relocate_pkgconfig_prefix() {
     local dest="$1"
-    # Find every lib/pkgconfig dir under the extracted tree. CPython
-    # ships .pc files under <install>/<abi>/python-<ver>/lib/pkgconfig
-    # on Android and under <Python.xcframework>/<slice>/lib/pkgconfig on iOS.
+    # Find every lib/pkgconfig dir under the extracted tree. CPython ships .pc files under
+    # <install>/<abi>/python-<ver>/lib/pkgconfig on Android and under <Python.xcframework>/<slice>/lib/pkgconfig on iOS.
     find "$dest" -type d -name pkgconfig 2>/dev/null | while read -r pcdir; do
-        # `prefix=${pcfiledir}/../..` -- pkg-config / pkgconf substitutes
-        # ${pcfiledir} with the .pc file's actual directory at lookup
-        # time. <dir>/../.. on a .pc at <install>/lib/pkgconfig/*.pc
+        # `prefix=${pcfiledir}/../..` -- pkg-config/pkgconf substitutes ${pcfiledir} with the .pc
+        # file's actual directory at lookup time. <dir>/../.. on a .pc at <install>/lib/pkgconfig/*.pc
         # resolves to <install> -- the consumer's real install prefix.
         #
-        # Also substitute `$(BLDLIBRARY)` in the Libs: line. CPython's
-        # autoconf-built python-X.Y.pc ships `Libs: -L${libdir} $(BLDLIBRARY)`
-        # -- the `$(BLDLIBRARY)` is supposed to expand to `-lpython3.X`
-        # at install time but never does, and pkg-config passes the
-        # literal through to the linker which then fails with
-        # `clang++: error: no such file or directory: '$(BLDLIBRARY)'`.
-        # Only the python-X.Y.pc files are affected; python-X.Y-embed.pc
-        # already has `-lpythonX.Y` written directly. We fix both
-        # idempotently by rewriting `$(BLDLIBRARY)` -> `-lpython${ver}`
-        # where ver is derived from the .pc filename.
+        # Also substitute `$(BLDLIBRARY)` in the Libs: line. CPython's autoconf-built python-X.Y.pc
+        # ships `Libs: -L${libdir} $(BLDLIBRARY)` -- the `$(BLDLIBRARY)` is supposed to expand to `-lpython3.X`
+        # at install time but never does, and pkg-config passes the literal through to the linker which then
+        # fails with `clang++: error: no such file or directory: '$(BLDLIBRARY)'`. Only the python-X.Y.pc files
+        # are affected; python-X.Y-embed.pc already has `-lpythonX.Y` written directly. We fix both
+        # idempotently by rewriting `$(BLDLIBRARY)` -> `-lpython${ver}` where ver is derived from the .pc filename.
         for pc in "$pcdir"/*.pc; do
             [ -f "$pc" ] || continue
-            # macOS sed doesn't have -i without an extension arg; use a
-            # portable in-place edit via a temp file.
+            # macOS sed doesn't have -i without an extension arg; use a portable in-place edit via a temp file.
             local tmp
             tmp="$(mktemp)"
             sed -E 's|^prefix=.*|prefix=${pcfiledir}/../..|' "$pc" > "$tmp" && mv "$tmp" "$pc"
 
-            # If this is a python-X.Y.pc (not the -embed variant or some
-            # other recipe-shipped .pc), substitute $(BLDLIBRARY) with
-            # the matching -lpythonX.Y.
+            # If this is a python-X.Y.pc (not the -embed variant or some other recipe-shipped .pc), substitute
+            # $(BLDLIBRARY) with the matching -lpythonX.Y.
             local base
             base="$(basename "$pc")"
             if [[ "$base" =~ ^python-([0-9]+\.[0-9]+)\.pc$ ]]; then

@@ -1,37 +1,43 @@
 name: Build and Publish wheels for Python version
 
-# Reusable child of build-wheels.yml (the orchestrator). Builds the recipe matrix for one Python version.
-
 on:
   workflow_call:
     inputs:
       python_version:
-        description: "Python version"
+        description: |
+          Python version:
         required: true
         type: string
       archs:
-        description: "Architectures (comma-separated)"
+        description: |
+          Architectures (comma-separated):
         required: false
         type: string
         default: "android,iOS"
       packages:
-        description: "Packages (comma-separated, name:version pairs)"
+        description: |
+          Packages (comma-separated) or 'ALL' to select all available recipes:
         required: true
         type: string
       prebuild_recipes:
-        description: "Recipes to build first into dist/"
+        description: |
+          Recipes (comma-separated; typically flet-lib*) to build FIRST and seed into 
+          the matrix's dist/ for host-dep pip resolution (e.g. flet-libgdal -> gdal):
         required: false
         type: string
         default: ""
       mobile_test_pythons:
         description: |
-          Comma-separated full python versions whose mobile tests should run (or "ALL").
-          Other python versions still build wheels but skip the APK / iOS-simulator stage.
+          Python versions (comma-separated) whose recipe mobile tests should actually run.
+          Versions in `python_versions` that aren't in this list still build wheels but skip the
+          APK/iOS-simulator test stage. Use "ALL" to run tests for every entry in `python_versions`:
         required: false
         type: string
         default: "3.12.13"
       python_build_run_id:
-        description: "flet-dev/python-build run id (overrides release tarball)"
+        description: |
+          flet-dev/python-build Actions run-id whose artifacts to use as the
+          python-build support tree, instead of the v<version> release tarball:
         required: false
         type: string
         default: ""
@@ -42,7 +48,8 @@ on:
   workflow_dispatch:
     inputs:
       python_version:
-        description: "Python version"
+        description: |
+          Python version:
         required: true
         type: choice
         options:
@@ -51,33 +58,39 @@ on:
           - 3.14.5
         default: 3.12.13
       archs:
-        description: "Architectures (comma-separated)"
+        description: |
+          Architectures (comma-separated):
         required: false
         default: "android,iOS"
       packages:
-        description: "Packages (comma-separated)"
+        description: |
+          Packages (comma-separated) or 'ALL' to select all available recipes:
         required: false
         default: "pydantic-core:,numpy:,pillow:"
       prebuild_recipes:
-        description: "Prebuild recipes (comma-separated)"
+        description: |
+          Recipes (comma-separated; typically flet-lib*) to build FIRST and seed into 
+          the matrix's dist/ for host-dep pip resolution (e.g. flet-libgdal -> gdal):
         required: false
         default: ""
       mobile_test_pythons:
         description: |
-          Comma-separated full python versions whose mobile tests
-          should run (or "ALL"). Other python versions still build
-          wheels but skip the APK / iOS-simulator stage.
+          Python versions (comma-separated) whose recipe mobile tests should actually run.
+          Versions in `python_versions` that aren't in this list still build wheels but skip the
+          APK/iOS-simulator test stage. Use "ALL" to run tests for every entry in `python_versions`:
         required: false
         default: "3.12.13"
       python_build_run_id:
-        description: "flet-dev/python-build run id"
+        description: |
+          flet-dev/python-build Actions run-id whose artifacts to use as the
+          python-build support tree, instead of the v<version> release tarball:
         required: false
         default: ""
 
 env:
-  MOBILE_FORGE_CACHE_DOWNLOADS_OFF: "1"
-  FORGE_NDK_VERSION: r27d  # used by forge for wheel cross-compile.
-  FLUTTER_NDK_VERSION: "28.2.13676358"  # used by flutter for apk build.
+  FORGE_NDK_VERSION: r27d  # used by forge for wheel cross-compile
+  FLUTTER_NDK_VERSION: "28.2.13676358"  # used by flutter for apk build
+  MOBILE_FORGE_CACHE_DOWNLOADS_OFF: "1"  # disable caching - guards against poisoned-cache failures
   FLET_CLI_NO_RICH_OUTPUT: 1
 
 jobs:
@@ -114,6 +127,7 @@ jobs:
                 platform="ios"
                 rust_targets="aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios"
               fi
+          
               # Read recipe meta (version + build_number + platforms)
               recipe_version=""; recipe_build=""; declared=""
               if [[ -f "recipes/$pkg_name/meta.yaml" ]]; then
@@ -121,7 +135,7 @@ jobs:
                   <<< "$(uv run --script .ci/read_meta.py "recipes/$pkg_name/meta.yaml")"
               fi
 
-              # Honor recipe's `package.platforms` on the matrix.
+              # Honor recipe's declared `platforms` on the matrix.
               if [[ -n "$declared" && ! " $declared " == *" $platform "* ]]; then
                 echo "::notice::Skip ${platform}: ${pkg_name} — recipe declares platforms=[$declared]"
                 continue
@@ -152,7 +166,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Free disk space (Ubuntu runners only)
+      - name: Free disk space
         if: runner.os == 'Linux'
         uses: jlumbroso/free-disk-space@main
         with:
@@ -201,7 +215,7 @@ jobs:
             sudo apt-get install -y sqlite3 pkg-config
           fi
 
-          # Downloads the matching mobile-forge support package for the requested platform.
+          # Sets up and downloads the matching mobile-forge support package for the requested platform.
           source ./setup.sh "$UV_PYTHON" "$PLATFORM"
 
           # When prebuild_recipes is set, this step builds those recipes FIRST. Their wheels

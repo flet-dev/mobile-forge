@@ -1,7 +1,7 @@
 #!/bin/bash
 set -eu
 
-# SQLite3 discovery for Android, similar layout drift as openssl:
+# SQLite3 discovery for Android:
 #   - 3.12/3.13: sqlite3.h is bundled inside the python install dir,
 #     so $HOST_PYTHON_HOME/include/sqlite3.h works.
 #   - 3.14+: sqlite3.h lives in a sibling dir alongside the python

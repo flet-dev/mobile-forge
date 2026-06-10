@@ -234,8 +234,12 @@ class Builder(ABC):
                 )
                 shutil.rmtree(self.build_path)
 
+        # Re-download sources if caching is disabled or no cached tarball exists.
+        # By default, the cached tarball is reused across arch builds to avoid downloading
+        # the same source multiple times. Disable caching when testing source-tarball patches,
+        # since each arch reuses and re-unpacks the same cached archive.
         if (
-            os.getenv(f"MOBILE_FORGE_CACHE_DOWNLOADS_OFF")
+            os.getenv("MOBILE_FORGE_CACHE_DOWNLOADS_OFF")
             or not self.source_archive_path.is_file()
         ):
             log(self.log_file, f"\n[{self.cross_venv}] Download package sources")
@@ -384,17 +388,13 @@ class Builder(ABC):
             if (self.cross_venv.sdk_root / "usr" / "lib").is_dir():
                 ldflags += f" -L{self.cross_venv.sdk_root}/usr/lib"
 
-            # Add the framework search path. We do *not* append
-            # `-framework Python` here -- doing so breaks autoconf-based
-            # builds like flet-libfreetype, whose `./configure` probes the
-            # C compiler by linking a trivial hello.c against $LDFLAGS;
-            # `-framework Python` makes that probe fail with
-            # `configure: error: C compiler cannot create executables`.
-            # Cargo / setuptools / meson recipes each get the framework
-            # link via their own channel (cargo_ldflags below, the cross
-            # sysconfig'\''s LDSHARED for setuptools, and the meson
-            # cross-file'\''s c_link_args / cpp_link_args augmented in
-            # _create_meson_cross for meson).
+            # Add the framework search path. We do *not* append `-framework Python`
+            # here -- doing so breaks autoconf-based builds like flet-libfreetype, whose
+            # `./configure` probes the C compiler by linking a trivial hello.c against $LDFLAGS;
+            # `-framework Python` makes that probe fail with `configure: error: C compiler cannot create executables`.
+            # Cargo/setuptools/meson recipes each get the framework link via their own channel (cargo_ldflags
+            # below, the cross sysconfig'\''s LDSHARED for setuptools, and the meson cross-file'\''s
+            # c_link_args / cpp_link_args augmented in _create_meson_cross for meson).
             ldflags += f' -F "{self.cross_venv.host_python_home}"'
             cargo_ldflags += f" -C link-arg=-F{self.cross_venv.host_python_home} -C link-arg=-framework -C link-arg=Python"
 
@@ -410,19 +410,17 @@ class Builder(ABC):
             else self.cross_venv.platform_triplet
         )
 
-        # Point pkg-config at the pkgconfig dirs that matter for the
-        # target build:
+        # Point pkg-config at the pkgconfig dirs that matter for the target build:
         #   1. host_python_home/lib/pkgconfig — where python-X.Y.pc lives.
         #      Required for meson's `py.dependency()` to resolve the
         #      Python C dep via the relocated `.pc` files.
         #   2. install_root/lib/pkgconfig — where flet-lib* extract their
         #      own `.pc` files when installed as host wheels.
         #   3. <cross-venv>/{build,cross}/lib/pythonX.Y/site-packages/*/share/pkgconfig
-        #      — pure-Python wheels (pybind11, …) ship their .pc files
-        #      bundled inside site-packages rather than the usual
-        #      lib/pkgconfig dir, so `dependency('pybind11')` via meson's
-        #      pkg-config method only resolves once the .pc dir under the
-        #      installed wheel is added explicitly.
+        #      — pure-Python wheels (pybind11, …) ship their .pc files bundled
+        #      inside site-packages rather than the usual lib/pkgconfig dir, so
+        #      `dependency('pybind11')` via meson's pkg-config method only resolves
+        #      once the .pc dir under the installed wheel is added explicitly.
         # All three sets of `.pc` files use `prefix=${pcfiledir}/../..` so
         # pkg-config emits paths relative to the on-disk .pc location.
         pkg_config_paths = []
@@ -1033,35 +1031,30 @@ class PythonPackageBuilder(Builder):
                     / "bin"
                     / f"python3.{sys.version_info.minor}"
                 ),
-                # Declare pkg-config explicitly. Meson cross-compile mode
-                # otherwise treats pkg-config as a build-machine-only tool
-                # and refuses to use it for target dep resolution -- even
-                # when it's installed and on PATH. Without this declaration
-                # meson reports "Found pkg-config: NO" regardless, defeats
-                # `py.dependency()` via pkg-config, and falls through to
-                # the sysconfig path that 3.14 doesn't tolerate the
-                # autoconf-baked `/usr/local` paths in. With it declared,
-                # meson invokes pkg-config + honors PKG_CONFIG_PATH (set
-                # in compile_env() above), reads the relocated `.pc` file,
-                # and emits the consumer-correct -I/-L flags.
+                # Declare pkg-config explicitly. Meson cross-compile mode otherwise treats
+                # pkg-config as a build-machine-only tool and refuses to use it for target dep
+                # resolution -- even when it's installed and on PATH. Without this declaration
+                # meson reports "Found pkg-config: NO" regardless, defeats `py.dependency()` via
+                # pkg-config, and falls through to the sysconfig path that 3.14 doesn't tolerate the
+                # autoconf-baked `/usr/local` paths in. With it declared, meson invokes
+                # pkg-config + honors PKG_CONFIG_PATH (set in compile_env() above), reads the
+                # relocated `.pc` file, and emits the consumer-correct -I/-L flags.
                 "pkg-config": "pkg-config",
             },
             "built-in options": {
                 "c_args": env["CFLAGS"],
                 "cpp_args": env["CPPFLAGS"],
-                # iOS: append `-framework Python` to the meson c/cpp link
-                # args (not LDFLAGS env) so meson recipes (numpy, contourpy
-                # with pybind11, …) resolve the Python C API at link time
-                # without breaking autoconf-based builds whose hello.c
-                # probe also reads $LDFLAGS. See compile_env() in this file
-                # for the matching half of this split.
+                # iOS: append `-framework Python` to the meson c/cpp link args (not LDFLAGS env) so
+                # meson recipes (numpy, contourpy with pybind11, …) resolve the Python C API at link time
+                # without breaking autoconf-based builds whose hello.c probe also reads $LDFLAGS.
+                # See compile_env() in this file for the matching half of this split.
                 "c_links_args": (
                     env["LDFLAGS"]
-                    + (" -framework Python" if self.cross_venv.sdk != "android" else "")
+                    + (" -framework Python" if self.cross_venv.host_os == "iOS" else "")
                 ),
                 "cpp_links_args": (
                     env["LDFLAGS"]
-                    + (" -framework Python" if self.cross_venv.sdk != "android" else "")
+                    + (" -framework Python" if self.cross_venv.host_os == "iOS" else "")
                 ),
             },
             "properties": {"needs_exe_wrapper": False},

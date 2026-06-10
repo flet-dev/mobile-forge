@@ -6,12 +6,6 @@ build:
   number: 10
 
 source:
-  # SourceForge instead of savannah.gnu.org: savannah's 302 redirects to a
-  # rotating set of nongnu.org mirrors, and the one CI was steered onto
-  # (ftp.cc.uoc.gr) intermittently serves truncated/HTML content, leaving
-  # forge with an unidentifiable archive ("Can't identify archive type
-  # of freetype-2.13.3.tar.gz"). The SourceForge mirror chain is shorter
-  # and has been stable for releases like this for a decade.
   url: https://downloads.sourceforge.net/project/freetype/freetype2/2.13.3/freetype-2.13.3.tar.gz
 
 patches:

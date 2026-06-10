@@ -430,13 +430,8 @@ class CrossVEnv:
                 str(self.venv_path / "bin"),
                 str(self.venv_path / self.venv_path.name / "bin"),
                 str(Path.home() / ".cargo/bin"),
-                # Homebrew prefix on Apple Silicon (macos-26) -- where the
-                # iOS-lane CI does `brew install pkg-config`. Without this,
-                # meson's `dependency('pybind11')` fails to find pkg-config
-                # by name and aborts with "Pkg-config for machine host
-                # machine not found" even when the brew install succeeded.
                 "/opt/homebrew/bin",
-                # Intel-macOS fallback / older runner images.
+                # For Intel-mac or older CI runner images that put Homebrew under /usr/local.
                 "/usr/local/bin",
                 "/usr/bin",
                 "/bin",

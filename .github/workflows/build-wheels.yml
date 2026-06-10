@@ -6,37 +6,37 @@ on:
   workflow_dispatch:
     inputs:
       archs:
-        description: "Architectures (comma-separated, e.g. android,iOS)"
+        description: |
+          Architectures (comma-separated):
         required: false
         default: "android,iOS"
       packages:
-        description: "Packages (comma-separated, e.g. pillow:11.1.0,pydantic-core:2.33.2) — or 'ALL' to build/test every recipe"
+        description: |
+          Packages (comma-separated) or 'ALL' to select all available recipes:
         required: false
         default: "pydantic-core:,numpy:,pillow:"
       prebuild_recipes:
         description: |
-          Comma-separated list of recipes (typically flet-lib*) to
-          build FIRST and seed into the matrix's dist/ for host-dep pip resolution
-          (e.g. flet-libgdal -> gdal).
+          Recipes (comma-separated; typically flet-lib*) to build FIRST and seed into 
+          the matrix's dist/ for host-dep pip resolution (e.g. flet-libgdal -> gdal):
         required: false
         default: ""
       python_versions:
         description: |
-          Python versions to fan the matrix across (comma-separated, e.g. "3.12.13,3.13.13,3.14.5").
-          Empty = event default (push to main: DEFAULT_PYTHONS_PUBLISH; otherwise DEFAULT_PYTHONS_DEV).
+          Python versions to fan the matrix across (comma-separated):
         required: false
         default: "3.12.13,3.13.13,3.14.5"
       mobile_test_pythons:
         description: |
-          Python versions (full, comma-separated) whose recipe mobile tests should actually run.
+          Python versions (comma-separated) whose recipe mobile tests should actually run.
           Versions in `python_versions` that aren't in this list still build wheels but skip the
-          APK / iOS-simulator test stage. Use "ALL" to run tests for every entry in `python_versions`.
+          APK/iOS-simulator test stage. Use "ALL" to run tests for every entry in `python_versions`:
         required: false
         default: "3.12.13"
       python_build_run_id:
         description: |
           flet-dev/python-build Actions run-id whose artifacts to use as the
-          python-build support tree, instead of the v<version> release tarball.
+          python-build support tree, instead of the v<version> release tarball:
         required: false
         default: ""
 
@@ -72,17 +72,16 @@ on:
         required: false
 
 # Cancel in-flight runs when a newer event arrives for the same logical branch.
-# concurrency:
-#   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-#   cancel-in-progress: true
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 
 env:
-  # Default Python sets selected by the detect job's detect-pythons step.
-  # PUBLISH = used on push-to-main (we ship cp312/cp313/cp314 wheels).
-  # DEV     = used on every other event (faster iteration; manual dispatch
-  #           can override via the `python_versions` input).
-  DEFAULT_PYTHONS_PUBLISH: "3.12.13,3.13.13,3.14.5"
-  DEFAULT_PYTHONS_DEV:     "3.12.13,3.13.13,3.14.5"
+  DEFAULT_PYTHONS: "3.12.13,3.13.13,3.14.5"
+  # Used as the fallback recipe set when `packages` input is empty
+  # (workflow_dispatch/workflow_call) or when no `recipes/**` paths
+  # changed in the triggering event (push/pull_request).
+  SMOKE_TEST_PACKAGES: "pydantic-core:,numpy:,pillow:"
 
 jobs:
   detect:
@@ -103,25 +102,13 @@ jobs:
           dir_names_max_depth: 2
 
       - id: detect-pythons
-        # Decide which Python versions this run fans out across. Workflow
-        # input wins; otherwise: push to main publishes the full PUBLISH
-        # set (cp312/cp313/cp314), every other trigger uses DEV (just
-        # cp312) for iteration speed. Emits a JSON array consumed by the
-        # build job's `strategy.matrix.python_version`.
+        # Decide which Python versions this run fans out across.
         shell: bash
         env:
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          GITHUB_REF: ${{ github.ref }}
           INPUT_PYTHONS: ${{ inputs.python_versions }}
         run: |
-          if [[ -n "$INPUT_PYTHONS" ]]; then
-            pythons="$INPUT_PYTHONS"
-          elif [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF" == "refs/heads/main" ]]; then
-            pythons="$DEFAULT_PYTHONS_PUBLISH"
-          else
-            pythons="$DEFAULT_PYTHONS_DEV"
-          fi
-          
+          pythons="${INPUT_PYTHONS:-$DEFAULT_PYTHONS}"
+
           # Hand-built JSON array — no jq dep needed.
           json="["
           first=true
@@ -140,7 +127,6 @@ jobs:
           INPUT_PACKAGES: ${{ inputs.packages }}
           CHANGED_DIRS: ${{ steps.changed-recipes.outputs.all_changed_files }}
         run: |
-          SMOKE_TEST="pydantic-core:,numpy:,pillow:"
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" || "$GITHUB_EVENT_NAME" == "workflow_call" ]]; then
             # The literal value "ALL" expands to every recipe with a meta.yaml under recipes/.
             if [[ "$INPUT_PACKAGES" == "ALL" ]]; then
@@ -151,7 +137,7 @@ jobs:
                 pkgs="${pkgs:+$pkgs,}${pkg}:"
               done
             else
-              pkgs="${INPUT_PACKAGES:-$SMOKE_TEST}"
+              pkgs="${INPUT_PACKAGES:-$SMOKE_TEST_PACKAGES}"
             fi
           else
             pkgs=""
@@ -159,7 +145,7 @@ jobs:
               [[ -f "$dir/meta.yaml" ]] || continue   # skip deleted recipes
               pkgs="${pkgs:+$pkgs,}${dir#recipes/}:"
             done
-            pkgs="${pkgs:-$SMOKE_TEST}"
+            pkgs="${pkgs:-$SMOKE_TEST_PACKAGES}"
           fi
 
           echo "Detected packages: $pkgs"
