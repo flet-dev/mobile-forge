@@ -83,10 +83,6 @@ jobs:
         uses: astral-sh/setup-uv@v7
 
       - id: set-matrix
-        # Matrix is now archs × packages only — the Python axis is
-        # handled by the orchestrator (one child workflow run per
-        # Python version), so this only fans out across what's
-        # specific to this Python.
         shell: bash
         run: |
           ARCHS="${{ inputs.archs }}"
@@ -125,7 +121,7 @@ jobs:
               pkg_ver_override="${pkg#*:}"
               display_version="${pkg_ver_override:-$recipe_version}"
               display_build="${recipe_build:-0}"
-              job_name="${pkg_name} ${display_version} (${platform}) #${display_build}"
+              job_name="${pkg_name} ${display_version} #${display_build} (${platform})"
 
               if [ "$first" = true ]; then first=false; else matrix+=','; fi
               matrix+="{\"job_name\":\"$job_name\",\"artifact_name\":\"py${py_short}-${platform}-${pkg_name}\",\"runner\":\"$runner\",\"platform\":\"$platform\",\"forge_arch\":\"$arch\",\"forge_packages\":\"$pkg\",\"python_short\":\"$py_short\",\"rust_targets\":\"$rust_targets\"}"
@@ -167,9 +163,8 @@ jobs:
           targets: ${{ matrix.rust_targets }}
 
       - name: Install NDK ${{ env.FORGE_NDK_VERSION }} for forge on Android
-        # forge cross-compiles Android wheels with this NDK. The install
-        # script writes NDK_HOME to $GITHUB_ENV so the Build wheels step
-        # (and forge subprocesses) pick it up.
+        # forge cross-compiles Android wheels with this NDK. The install script writes NDK_HOME
+        # to $GITHUB_ENV so the Build wheels step (and forge subprocesses) pick it up.
         if: matrix.platform == 'android'
         shell: bash
         run: .ci/install_ndk.sh "$FORGE_NDK_VERSION"
@@ -184,9 +179,6 @@ jobs:
           PYTHON_BUILD_RUN_ID: ${{ inputs.python_build_run_id }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PIP_FIND_LINKS: ${{ github.workspace }}/dist
-          # Per-child-workflow-run Python version. setup.sh consumes
-          # this and pulls the matching python-build support tarball
-          # from flet-dev/python-build/releases/v${minor}.
           UV_PYTHON: ${{ inputs.python_version }}
         run: |
           set -euxo pipefail
@@ -195,26 +187,13 @@ jobs:
 
           if [[ "$PLATFORM" == "android" ]]; then
             sudo apt-get update
-            # pkg-config is what meson's `py.dependency()` uses to resolve
-            # the Python C dep via the `.pc` files setup.sh relocates.
-            # Without it, meson falls back to sysconfig — which on
-            # Python 3.14 returns the bogus `/usr/local/...` paths and
-            # reports the dep as "not found" (numpy 2.4.6 hits this).
+            # pkg-config is what meson's `py.dependency()` uses to resolve the Python C dep via
+            # the `.pc` files setup.sh relocates. Without it, meson falls back to sysconfig — which on
+            # Python 3.14 returns the bogus `/usr/local/...` paths and reports the dep as "not found".
             sudo apt-get install -y sqlite3 pkg-config
           fi
-          # iOS lane intentionally does no system-dep install here.
-          # macos-26 already ships pkgconf, which provides the
-          # pkg-config binary meson's `py.dependency()` / config-tool
-          # fallback (used by `dependency('pybind11')` in contourpy
-          # etc.) need on PATH. If a future runner image drops it, the
-          # meson configure step will fail with "Did not find pkg-config
-          # by name 'pkg-config'" and we re-add a guarded install here.
 
-          # setup.sh downloads the matching mobile-forge support package for the
-          # requested platform and sets MOBILE_FORGE_*_SUPPORT_PATH. When the
-          # PYTHON_BUILD_RUN_ID env (from inputs above) is set, setup.sh
-          # fetches from that python-build Actions run's artifacts instead of
-          # the canonical v<version> release.
+          # Downloads the matching mobile-forge support package for the requested platform.
           source ./setup.sh "$UV_PYTHON" "$PLATFORM"
 
           # When prebuild_recipes is set, this step builds those recipes FIRST. Their wheels
@@ -236,8 +215,6 @@ jobs:
           # iOS deps: bzip2, libffi, mpdecimal, openssl, xz
           # Android deps: bzip2, libffi, openssl, sqlite, xz
           rm -f dist/bzip2-* dist/libffi-* dist/mpdecimal-* dist/openssl-* dist/sqlite-* dist/xz-*
-
-      # --- Mobile test lane ---------------------------------------------------
 
       - name: Detect test files for this recipe
         id: detect-tests
@@ -275,12 +252,6 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Install NDK ${{ env.FLUTTER_NDK_VERSION }} for Flutter Android build
-        # `flet build apk` shells out to Flutter, whose generated Gradle
-        # uses `ndkVersion = flutter.ndkVersion`. Without this NDK
-        # pre-installed at $ANDROID_HOME/ndk/<version>/, Gradle triggers
-        # an auto-install mid-build that flakes intermittently
-        # (InstallFailedException / ZipException). Pre-installing via
-        # the shared install_ndk.sh removes that race.
         if: matrix.platform == 'android' && steps.detect-tests.outputs.has_tests == 'true'
         shell: bash
         run: .ci/install_ndk.sh "$FLUTTER_NDK_VERSION"
@@ -294,17 +265,14 @@ jobs:
         run: |
           set -euxo pipefail
 
-          # Copy just-built wheels into dist-test/ with build tags bumped to
-          # 9999. Reason: pip's resolver merges --find-links and the
-          # --extra-index-url (pypi.flet.dev) and picks the wheel with the
-          # highest build tag per PEP 427. The published wheel on
-          # pypi.flet.dev typically has build tag >= 1, while forge's
-          # freshly-built wheel for the same version may have a lower (or
-          # absent) build tag — so pip silently uses the OLD published wheel
-          # and the recipe fix being validated is bypassed. Bumping local
-          # copies to 9999 guarantees they win. Original dist/ is left
-          # untouched so the publish step still ships at the user-specified
-          # build_number.
+          # Copy just-built wheels into dist-test/ with build tags bumped to 9999. 
+          # Reason: pip's resolver merges --find-links and the --extra-index-url (pypi.flet.dev)
+          # and picks the wheel with the highest build tag per PEP 427. The published wheel on
+          # pypi.flet.dev typically has build tag >= 1, while forge's freshly-built wheel for 
+          # the same version may have a lower (or absent) build tag — so pip silently uses the OLD 
+          # published wheel and the recipe fix being validated is bypassed. Bumping local copies to 
+          # 9999 guarantees they win. Original dist/ is left untouched so the publish step still ships 
+          # at the user-specified build_number.
           mkdir -p "$GITHUB_WORKSPACE/dist-test"
           for w in "$GITHUB_WORKSPACE"/dist/*.whl; do
               [[ -e "$w" ]] || continue
