@@ -22,11 +22,17 @@ on:
         default: ""
       python_versions:
         description: |
-          Python versions to fan the matrix across (comma-separated,
-          e.g. "3.12.13,3.13.13,3.14.5"). Empty = event default
-          (push to main: DEFAULT_PYTHONS_PUBLISH; otherwise DEFAULT_PYTHONS_DEV).
+          Python versions to fan the matrix across (comma-separated, e.g. "3.12.13,3.13.13,3.14.5").
+          Empty = event default (push to main: DEFAULT_PYTHONS_PUBLISH; otherwise DEFAULT_PYTHONS_DEV).
         required: false
         default: "3.12.13,3.13.13,3.14.5"
+      mobile_test_pythons:
+        description: |
+          Python versions (full, comma-separated) whose recipe mobile tests should actually run.
+          Versions in `python_versions` that aren't in this list still build wheels but skip the
+          APK / iOS-simulator test stage. Use "ALL" to run tests for every entry in `python_versions`.
+        required: false
+        default: "3.12.13"
       python_build_run_id:
         description: |
           flet-dev/python-build Actions run-id whose artifacts to use as the
@@ -53,6 +59,10 @@ on:
         type: string
         required: false
         default: "3.12.13,3.13.13,3.14.5"
+      mobile_test_pythons:
+        type: string
+        required: false
+        default: "3.12.13"
       python_build_run_id:
         type: string
         required: false
@@ -75,11 +85,6 @@ env:
   DEFAULT_PYTHONS_DEV:     "3.12.13,3.13.13,3.14.5"
 
 jobs:
-  # Single coordination job: decides which Python versions and which
-  # recipe set this run covers, then hands both off to one child workflow
-  # run per Python version. The child (build-wheels-version.yml) is
-  # responsible for the per-recipe matrix and the build/test/publish
-  # steps.
   detect:
     runs-on: ubuntu-latest
     outputs:
@@ -174,15 +179,7 @@ jobs:
       archs: ${{ inputs.archs || 'android,iOS' }}
       packages: ${{ needs.detect.outputs.packages }}
       prebuild_recipes: ${{ inputs.prebuild_recipes || '' }}
+      mobile_test_pythons: ${{ inputs.mobile_test_pythons || '3.12.13' }}
       python_build_run_id: ${{ inputs.python_build_run_id || '' }}
-    # Explicit pass-through of GEMFURY_TOKEN rather than `secrets: inherit`.
-    # `inherit` only works within the same organization; this orchestrator is
-    # also invoked via workflow_call from flet-dev/python-build (which lives
-    # under a different account), and `inherit` on the inner call fails the
-    # whole run at startup when that's the entry path. Explicit `secrets:`
-    # works in both same-repo and cross-repo cases — when the outer caller
-    # doesn't pass GEMFURY_TOKEN (e.g. python-build's validation call),
-    # `secrets.GEMFURY_TOKEN` is empty and the child's publish step is
-    # already gated off via `inputs.python_build_run_id != ''`.
     secrets:
       GEMFURY_TOKEN: ${{ secrets.GEMFURY_TOKEN }}

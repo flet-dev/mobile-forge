@@ -1,16 +1,12 @@
-name: Build wheels for Python version
+name: Build and Publish wheels for Python version
 
-# Reusable child of build-wheels.yml (the orchestrator). Builds the
-# recipe matrix for one Python version. Called once per Python version
-# from the orchestrator's `build` job; can also be dispatched standalone
-# for single-version debugging without going through the orchestrator's
-# event detection logic.
+# Reusable child of build-wheels.yml (the orchestrator). Builds the recipe matrix for one Python version.
 
 on:
   workflow_call:
     inputs:
       python_version:
-        description: "Full Python version (e.g. 3.12.13)"
+        description: "Python version"
         required: true
         type: string
       archs:
@@ -27,6 +23,13 @@ on:
         required: false
         type: string
         default: ""
+      mobile_test_pythons:
+        description: |
+          Comma-separated full python versions whose mobile tests should run (or "ALL").
+          Other python versions still build wheels but skip the APK / iOS-simulator stage.
+        required: false
+        type: string
+        default: "3.12.13"
       python_build_run_id:
         description: "flet-dev/python-build run id (overrides release tarball)"
         required: false
@@ -39,7 +42,7 @@ on:
   workflow_dispatch:
     inputs:
       python_version:
-        description: "Full Python version (e.g. 3.12.13)"
+        description: "Python version"
         required: true
         type: choice
         options:
@@ -59,6 +62,13 @@ on:
         description: "Prebuild recipes (comma-separated)"
         required: false
         default: ""
+      mobile_test_pythons:
+        description: |
+          Comma-separated full python versions whose mobile tests
+          should run (or "ALL"). Other python versions still build
+          wheels but skip the APK / iOS-simulator stage.
+        required: false
+        default: "3.12.13"
       python_build_run_id:
         description: "flet-dev/python-build run id"
         required: false
@@ -88,7 +98,7 @@ jobs:
           ARCHS="${{ inputs.archs }}"
           PACKAGES="${{ inputs.packages }}"
           py="${{ inputs.python_version }}"
-          py_short="${py%.*}"   # 3.12.13 -> 3.12 (used in artifact name + python_short field)
+          py_short="${py%.*}"   # 3.12.13 -> 3.12
 
           matrix='{"include":['
           first=true
@@ -163,8 +173,6 @@ jobs:
           targets: ${{ matrix.rust_targets }}
 
       - name: Install NDK ${{ env.FORGE_NDK_VERSION }} for forge on Android
-        # forge cross-compiles Android wheels with this NDK. The install script writes NDK_HOME
-        # to $GITHUB_ENV so the Build wheels step (and forge subprocesses) pick it up.
         if: matrix.platform == 'android'
         shell: bash
         run: .ci/install_ndk.sh "$FORGE_NDK_VERSION"
@@ -216,17 +224,32 @@ jobs:
           # Android deps: bzip2, libffi, openssl, sqlite, xz
           rm -f dist/bzip2-* dist/libffi-* dist/mpdecimal-* dist/openssl-* dist/sqlite-* dist/xz-*
 
-      - name: Detect test files for this recipe
+      - name: Detect test files
         id: detect-tests
         shell: bash
         env:
           FORGE_PACKAGES: ${{ matrix.forge_packages }}
           PYTHON_SHORT: ${{ matrix.python_short }}
+          MOBILE_TEST_PYTHONS: ${{ inputs.mobile_test_pythons }}
         run: |
           set -euo pipefail
           pkg_name="${FORGE_PACKAGES%%:*}"
           pkg_version="${FORGE_PACKAGES#*:}"
           [[ "$pkg_version" == "$FORGE_PACKAGES" ]] && pkg_version=""
+
+          # Gate on the caller-provided mobile_test_pythons list: only Python 
+          # versions in that list actually run the APK/iOS-sim test step.
+          if [[ "$MOBILE_TEST_PYTHONS" != "ALL" ]]; then
+            allowed=""
+            for v in $(echo "$MOBILE_TEST_PYTHONS" | tr ',' ' '); do
+              allowed="${allowed:+$allowed }${v%.*}"
+            done
+            if [[ ! " $allowed " == *" $PYTHON_SHORT "* ]]; then
+              echo "::notice::Skipping mobile test — py${PYTHON_SHORT} not in mobile_test_pythons=${MOBILE_TEST_PYTHONS}"
+              echo "has_tests=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
 
           # Check for the presence of any test files at known locations.
           if [[ -d "recipes/$pkg_name/tests" ]] \
@@ -237,7 +260,7 @@ jobs:
             echo "pkg_name=$pkg_name" >> "$GITHUB_OUTPUT"
             echo "pkg_version=$pkg_version" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice::Skipping mobile test — no tests/, test/ or test_*.py under recipes/$pkg_name/"
+            echo "::notice::Skipping mobile test — no tests/ under recipes/$pkg_name/"
             echo "has_tests=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -303,8 +326,6 @@ jobs:
           disable-animations: true
           script: .ci/run_android_test.sh
 
-      # --- iOS lane ----------------------------------------------------------
-
       - name: Stage tests + build recipe-tester iOS sim app
         if: matrix.platform == 'ios' && steps.detect-tests.outputs.has_tests == 'true'
         shell: bash
@@ -338,8 +359,6 @@ jobs:
         # iOS sim cold-boot can take 1-4 min on the macos-26 image.
         run: .ci/run_ios_test.sh
 
-      # --- /iOS lane ---------------------------------------------------------
-
       - name: Upload test artifacts
         if: always() && steps.detect-tests.outputs.has_tests == 'true'
         uses: actions/upload-artifact@v6
@@ -352,8 +371,6 @@ jobs:
             syslog-on-failure.txt
           if-no-files-found: ignore
           retention-days: 90
-
-      # --- /Mobile test lane ------------------------------------------------
 
       - name: Publish wheels
         if: ${{ success() && hashFiles('dist/*.whl') != '' && github.event_name == 'push' && github.ref == 'refs/heads/main' && inputs.python_build_run_id == '' }}
