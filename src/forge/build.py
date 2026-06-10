@@ -458,6 +458,17 @@ class Builder(ABC):
             "CPPFLAGS": cppflags,
             "LDFLAGS": ldflags,
             "PKG_CONFIG_PATH": pkg_config_path,
+            # PKG_CONFIG_LIBDIR overrides pkg-config's *default* search list
+            # (typically /opt/homebrew/lib/pkgconfig + /usr/lib/pkgconfig on
+            # macOS, /usr/lib/pkgconfig on Linux). Without it, recipes like
+            # Pillow that scan via pkg-config will happily resolve libtiff /
+            # liblcms2 / libpng to the build host's macOS dylibs and try to
+            # link them into iOS .so files -- the linker then aborts with
+            # "ld: building for 'iOS', but linking in dylib (...) built for
+            # 'macOS'". Point LIBDIR at the same support-tree-only paths
+            # PKG_CONFIG_PATH already enumerates so pkg-config can't even
+            # see Homebrew's pkgconfig dir.
+            "PKG_CONFIG_LIBDIR": pkg_config_path,
             "CROSS_VENV_SDK": self.cross_venv.sdk,
             "CARGO_BUILD_TARGET": cargo_build_target,
             "CARGO_TARGET_{}_LINKER".format(
