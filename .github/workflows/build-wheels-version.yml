@@ -277,12 +277,10 @@ jobs:
           for w in "$GITHUB_WORKSPACE"/dist/*.whl; do
               [[ -e "$w" ]] || continue
               base=$(basename "$w")
-              # name-version[-buildtag]-pytag-abitag-plat.whl
-              # → name-version-9999-pytag-abitag-plat.whl
-              # abitag covers both cp312-cp312 (Python-specific) and
-              # cp37-abi3 (stable ABI, used e.g. by cryptography).
+              # name-version[-buildtag]-cpXY-cpXY-plat.whl
+              # → name-version-9999-cpXY-cpXY-plat.whl
               new=$(printf '%s\n' "$base" \
-                    | sed -E 's/^([^-]+-[^-]+)(-[0-9]+)?-(cp[0-9]+-(cp[0-9]+|abi[0-9]+))-/\1-9999-\3-/')
+                    | sed -E 's/^([^-]+-[^-]+)(-[0-9]+)?-(cp[0-9]+-cp[0-9]+)-/\1-9999-\3-/')
               cp "$w" "$GITHUB_WORKSPACE/dist-test/$new"
           done
 
@@ -296,18 +294,13 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         timeout-minutes: 20
         with:
-          # API 28 minimum, NOT 24. mobile-forge wheels target API 24, but
-          # Flet's Android app shell uses ImageDecoder.OnHeaderDecodedListener
-          # (added in API 28) — on a 24 AVD the recipe-tester APK crashes at
-          # launch with ClassNotFoundException before Python ever starts.
+          # API 28 minimum, NOT 24. mobile-forge wheels target API 24, but Flet's Android app shell
+          # uses ImageDecoder.OnHeaderDecodedListener (added in API 28) — on a 24 AVD the recipe-tester
+          # APK crashes at launch with ClassNotFoundException before Python ever starts.
           api-level: 28
           arch: x86_64
           target: default
           disable-animations: true
-          # The reactivecircus action invokes EACH LINE of `script:` through
-          # `sh -c` separately — multi-line constructs (functions, traps, if
-          # blocks) don't survive. Logic lives in .ci/run_android_test.sh
-          # instead, which has its own bash shebang.
           script: .ci/run_android_test.sh
 
       # --- iOS lane ----------------------------------------------------------
