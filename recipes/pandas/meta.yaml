@@ -20,6 +20,13 @@ patches:
 
 build:
   number: 1
+  script_env:
+    # meson introspects numpy by running the cross-python from pandas's source
+    # dir, whose top-level `pandas/io/` shadows the stdlib `io` on sys.path[0]
+    # -> numpy's C-ext init fails ("cannot import name 'TextIOWrapper' from
+    # 'io'"). PYTHONSAFEPATH drops that implicit cwd entry (leaving PYTHONPATH,
+    # so crossenv's bridge still works).
+    PYTHONSAFEPATH: "1"
   backend-args:
     - -Csetup-args=--cross-file
     - -Csetup-args={MESON_CROSS_FILE}

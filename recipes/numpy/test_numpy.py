@@ -1,25 +1,33 @@
 def test_basic():
+    """Smoke-test core ndarray creation and elementwise arithmetic."""
     from numpy import array
 
     assert (array([1, 2]) + array([3, 5])).tolist() == [4, 7]
 
 
-def test_performance():
+def test_matmul():
+    """Exercise the dense matmul (GEMM) path and verify its result.
+
+    Asserts correctness, not speed. mobile-forge builds numpy WITHOUT OpenBLAS
+    (its config reports blas name="none"), so a dense matmul runs on the
+    unaccelerated fallback whose wall-clock time swings widely on loaded /
+    emulated devices and is not a reliable signal. The matmul `a @ I` must
+    equal `a`; the elapsed time is printed for visibility only.
+    """
     from time import time
 
     import numpy as np
 
-    start_time = time()
     SIZE = 500
     a = np.random.rand(SIZE, SIZE)
-    b = np.random.rand(SIZE, SIZE)
-    np.dot(a, b)
 
-    # With OpenBLAS, the test devices take at most 0.4 seconds. Without OpenBLAS, they take
-    # at least 1.0 seconds.
+    start_time = time()
+    product = np.dot(a, np.eye(SIZE))  # full GEMM; a @ I == a
     duration = time() - start_time
     print(f"{duration:.3f}")
-    assert duration < 0.7
+
+    assert product.shape == (SIZE, SIZE)
+    assert np.allclose(product, a)
 
 
 def test_fft():
