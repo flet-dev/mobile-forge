@@ -221,7 +221,19 @@ venv_dir="$(pwd)/venv$PYTHON_VER"
 if [ ! -d $venv_dir ]; then
     echo "Creating Python $PYTHON_VER virtual environment for build in $venv_dir..."
 
-    uv venv --seed --python="$PYTHON_VERSION" $venv_dir
+    # `--python-preference only-managed` forces uv to use a relocatable
+    # python-build-standalone interpreter and NEVER a system one. This is
+    # required for crossenv: a macOS *framework* build of CPython (e.g.
+    # Homebrew's `python@3.14`, which the macos-26 CI runner ships and uv
+    # would otherwise match for an exact `--python 3.14.5`) makes crossenv
+    # mis-detect sys.prefix/exec_prefix ("Unexpected value in sys.prefix,
+    # expected .../cross, got .../build"). That mis-routes target-arch host
+    # requirements (e.g. numpy) into the *build* venv instead of the *cross*
+    # venv, so the host (build-platform) numpy never gets installed and the
+    # build backend's `import numpy` (for numpy.get_include()) resolves to a
+    # non-importable target wheel -> "No module named numpy._core._multiarray_umath".
+    # Linux already gets a managed interpreter; this makes macOS consistent.
+    uv venv --seed --python-preference only-managed --python="$PYTHON_VERSION" $venv_dir
     source $venv_dir/bin/activate
 
     uv pip install -e .
