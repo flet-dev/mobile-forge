@@ -221,7 +221,9 @@ venv_dir="$(pwd)/venv$PYTHON_VER"
 if [ ! -d $venv_dir ]; then
     echo "Creating Python $PYTHON_VER virtual environment for build in $venv_dir..."
 
-    uv venv --seed --python="$PYTHON_VERSION" $venv_dir
+    # `--python-preference only-managed` forces uv to use a relocatable
+    # python-build-standalone interpreter and NEVER a system one.
+    uv venv --seed --python-preference only-managed --python="$PYTHON_VERSION" $venv_dir
     source $venv_dir/bin/activate
 
     uv pip install -e .
