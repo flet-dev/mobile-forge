@@ -234,8 +234,12 @@ class Builder(ABC):
                 )
                 shutil.rmtree(self.build_path)
 
+        # Re-download sources if caching is disabled or no cached tarball exists.
+        # By default, the cached tarball is reused across arch builds to avoid downloading
+        # the same source multiple times. Disable caching when testing source-tarball patches,
+        # since each arch reuses and re-unpacks the same cached archive.
         if (
-            os.getenv(f"MOBILE_FORGE_CACHE_DOWNLOADS_OFF")
+            os.getenv("MOBILE_FORGE_CACHE_DOWNLOADS_OFF")
             or not self.source_archive_path.is_file()
         ):
             log(self.log_file, f"\n[{self.cross_venv}] Download package sources")
@@ -384,7 +388,13 @@ class Builder(ABC):
             if (self.cross_venv.sdk_root / "usr" / "lib").is_dir():
                 ldflags += f" -L{self.cross_venv.sdk_root}/usr/lib"
 
-            # Add the framework path
+            # Add the framework search path. We do *not* append `-framework Python`
+            # here -- doing so breaks autoconf-based builds like flet-libfreetype, whose
+            # `./configure` probes the C compiler by linking a trivial hello.c against $LDFLAGS;
+            # `-framework Python` makes that probe fail with `configure: error: C compiler cannot create executables`.
+            # Cargo/setuptools/meson recipes each get the framework link via their own channel (cargo_ldflags
+            # below, the cross sysconfig'\''s LDSHARED for setuptools, and the meson cross-file'\''s
+            # c_link_args / cpp_link_args augmented in _create_meson_cross for meson).
             ldflags += f' -F "{self.cross_venv.host_python_home}"'
             cargo_ldflags += f" -C link-arg=-F{self.cross_venv.host_python_home} -C link-arg=-framework -C link-arg=Python"
 
@@ -400,6 +410,42 @@ class Builder(ABC):
             else self.cross_venv.platform_triplet
         )
 
+        # Point pkg-config at the pkgconfig dirs that matter for the target build:
+        #   1. host_python_home/lib/pkgconfig — where python-X.Y.pc lives.
+        #      Required for meson's `py.dependency()` to resolve the
+        #      Python C dep via the relocated `.pc` files.
+        #   2. install_root/lib/pkgconfig — where flet-lib* extract their
+        #      own `.pc` files when installed as host wheels.
+        #   3. <cross-venv>/{build,cross}/lib/pythonX.Y/site-packages/*/share/pkgconfig
+        #      — pure-Python wheels (pybind11, …) ship their .pc files bundled
+        #      inside site-packages rather than the usual lib/pkgconfig dir, so
+        #      `dependency('pybind11')` via meson's pkg-config method only resolves
+        #      once the .pc dir under the installed wheel is added explicitly.
+        # All three sets of `.pc` files use `prefix=${pcfiledir}/../..` so
+        # pkg-config emits paths relative to the on-disk .pc location.
+        pkg_config_paths = []
+        python_pc_dir = self.cross_venv.host_python_home / "lib" / "pkgconfig"
+        if python_pc_dir.is_dir():
+            pkg_config_paths.append(str(python_pc_dir))
+        pc_dir = install_root / "lib" / "pkgconfig"
+        if pc_dir.is_dir():
+            pkg_config_paths.append(str(pc_dir))
+        if self.cross_venv.venv_path.is_dir():
+            py_short = f"python3.{sys.version_info.minor}"
+            for env_root in ("build", "cross"):
+                site_dir = (
+                    self.cross_venv.venv_path
+                    / env_root
+                    / "lib"
+                    / py_short
+                    / "site-packages"
+                )
+                if site_dir.is_dir():
+                    for share_pkgconfig in site_dir.glob("*/share/pkgconfig"):
+                        if share_pkgconfig.is_dir():
+                            pkg_config_paths.append(str(share_pkgconfig))
+        pkg_config_path = ":".join(pkg_config_paths)
+
         env = {
             "AR": ar,
             "CC": cc,
@@ -409,6 +455,18 @@ class Builder(ABC):
             "CFLAGS": cflags,
             "CPPFLAGS": cppflags,
             "LDFLAGS": ldflags,
+            "PKG_CONFIG_PATH": pkg_config_path,
+            # PKG_CONFIG_LIBDIR overrides pkg-config's *default* search list
+            # (typically /opt/homebrew/lib/pkgconfig + /usr/lib/pkgconfig on
+            # macOS, /usr/lib/pkgconfig on Linux). Without it, recipes like
+            # Pillow that scan via pkg-config will happily resolve libtiff /
+            # liblcms2 / libpng to the build host's macOS dylibs and try to
+            # link them into iOS .so files -- the linker then aborts with
+            # "ld: building for 'iOS', but linking in dylib (...) built for
+            # 'macOS'". Point LIBDIR at the same support-tree-only paths
+            # PKG_CONFIG_PATH already enumerates so pkg-config can't even
+            # see Homebrew's pkgconfig dir.
+            "PKG_CONFIG_LIBDIR": pkg_config_path,
             "CROSS_VENV_SDK": self.cross_venv.sdk,
             "CARGO_BUILD_TARGET": cargo_build_target,
             "CARGO_TARGET_{}_LINKER".format(
@@ -429,6 +487,16 @@ class Builder(ABC):
                     else Path(self.cross_venv.sysconfig_data["prefix"]) / "lib"
                 )
             ),
+            # The on-disk python install directory for the target SDK /
+            # arch inside the mobile-forge support tree
+            # (`MOBILE_FORGE_<SDK>_SUPPORT_PATH/install/<sdk>/<arch>/python-<X.Y.Z>`
+            # on Android, the matching Python.xcframework slice on
+            # iOS). Always a real directory on disk -- useful when a
+            # recipe needs to locate sibling artifacts shipped alongside
+            # Python in the support tree, or to pin Python_LIBRARY /
+            # Python_INCLUDE_DIR against a path that doesn't move with
+            # crossenv relocation across python-build versions.
+            "HOST_PYTHON_HOME": str(self.cross_venv.host_python_home),
         }
         env.update(kwargs)
 
@@ -616,7 +684,7 @@ class Builder(ABC):
                     self.log_file,
                     f"[{self.cross_venv}] {so_path.name}: NEEDED "
                     f"'{name.decode(errors='replace')}' -> "
-                    f"'{name[slash + 1:].decode(errors='replace')}'",
+                    f"'{name[slash + 1 :].decode(errors='replace')}'",
                 )
 
     def _check_elf_alignment(self, so_path: Path):
@@ -658,21 +726,11 @@ class Builder(ABC):
 
         # Normalize wheel tags to forge platform tags so repacked wheels use
         # android_24_arm64_v8a / ios_13_0_arm64_iphoneos style platform tags.
-        # Preserve the Python/ABI part the upstream build wrote (e.g. maturin
-        # emits `cp37-abi3-*` for cryptography); only the platform component
-        # is swapped. Falls back to self.wheel_tag when no Tag was written.
         wheel_metadata_path = next(wheel_dir.glob("*.dist-info")) / "WHEEL"
         wheel_metadata = self.read_message_file(wheel_metadata_path)
-        upstream_tags = wheel_metadata.get_all("Tag", [])
-        del wheel_metadata["Tag"]
-        new_tags = []
-        for tag in upstream_tags:
-            py, abi, _platform = tag.rsplit("-", 2)
-            new_tags.append(f"{py}-{abi}-{self.cross_venv.tag}")
-        if not new_tags:
-            new_tags = [self.wheel_tag]
-        for tag in new_tags:
-            wheel_metadata["Tag"] = tag
+        if "Tag" in wheel_metadata:
+            del wheel_metadata["Tag"]
+        wheel_metadata["Tag"] = self.wheel_tag
         self.write_message_file(wheel_metadata_path, wheel_metadata)
 
         if self.cross_venv.sdk == "android":
@@ -973,12 +1031,31 @@ class PythonPackageBuilder(Builder):
                     / "bin"
                     / f"python3.{sys.version_info.minor}"
                 ),
+                # Declare pkg-config explicitly. Meson cross-compile mode otherwise treats
+                # pkg-config as a build-machine-only tool and refuses to use it for target dep
+                # resolution -- even when it's installed and on PATH. Without this declaration
+                # meson reports "Found pkg-config: NO" regardless, defeats `py.dependency()` via
+                # pkg-config, and falls through to the sysconfig path that 3.14 doesn't tolerate the
+                # autoconf-baked `/usr/local` paths in. With it declared, meson invokes
+                # pkg-config + honors PKG_CONFIG_PATH (set in compile_env() above), reads the
+                # relocated `.pc` file, and emits the consumer-correct -I/-L flags.
+                "pkg-config": "pkg-config",
             },
             "built-in options": {
                 "c_args": env["CFLAGS"],
                 "cpp_args": env["CPPFLAGS"],
-                "c_links_args": env["LDFLAGS"],
-                "cpp_links_args": env["LDFLAGS"],
+                # iOS: append `-framework Python` to the meson c/cpp link args (not LDFLAGS env) so
+                # meson recipes (numpy, contourpy with pybind11, …) resolve the Python C API at link time
+                # without breaking autoconf-based builds whose hello.c probe also reads $LDFLAGS.
+                # See compile_env() in this file for the matching half of this split.
+                "c_links_args": (
+                    env["LDFLAGS"]
+                    + (" -framework Python" if self.cross_venv.host_os == "iOS" else "")
+                ),
+                "cpp_links_args": (
+                    env["LDFLAGS"]
+                    + (" -framework Python" if self.cross_venv.host_os == "iOS" else "")
+                ),
             },
             "properties": {"needs_exe_wrapper": False},
             "host_machine": {

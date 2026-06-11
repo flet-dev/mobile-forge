@@ -430,6 +430,9 @@ class CrossVEnv:
                 str(self.venv_path / "bin"),
                 str(self.venv_path / self.venv_path.name / "bin"),
                 str(Path.home() / ".cargo/bin"),
+                "/opt/homebrew/bin",
+                # For Intel-mac or older CI runner images that put Homebrew under /usr/local.
+                "/usr/local/bin",
                 "/usr/bin",
                 "/bin",
                 "/usr/sbin",
