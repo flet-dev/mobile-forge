@@ -72,11 +72,9 @@ on:
         required: false
 
 # Cancel in-flight runs when a newer event arrives for the same logical branch.
-# TEMP: disabled during cp3.14 fix verification so overlapping dispatches
-# (and the push that lands them) don't cancel each other.
-# concurrency:
-#   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-#   cancel-in-progress: true
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 
 env:
   DEFAULT_PYTHONS: "3.12.13,3.13.13,3.14.5"
