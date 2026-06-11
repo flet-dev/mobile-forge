@@ -387,7 +387,16 @@ jobs:
           retention-days: 90
 
       - name: Publish wheels
-        if: ${{ success() && hashFiles('dist/*.whl') != '' && github.event_name == 'push' && github.ref == 'refs/heads/main' && inputs.python_build_run_id == '' }}
+        # Branches allowed to publish: `main` (the canonical release lane) and
+        # `py-publish` (a one-off lane for refreshing every recipe's wheels
+        # after a forge-pipeline change, without going through main). Events
+        # allowed: regular `push` and manual `workflow_dispatch`, so an
+        # operator can `gh workflow run packages=ALL` on `py-publish` and
+        # have the matrix actually ship.
+        if: ${{ success() && hashFiles('dist/*.whl') != ''
+                && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/py-publish')
+                && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+                && inputs.python_build_run_id == '' }}
         shell: bash
         env:
           GEMFURY_TOKEN: ${{ secrets.GEMFURY_TOKEN }}
