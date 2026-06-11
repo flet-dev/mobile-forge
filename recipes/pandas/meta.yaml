@@ -20,6 +20,18 @@ patches:
 
 build:
   number: 1
+  # meson runs the cross-python from the unpacked pandas *source* dir to
+  # introspect numpy (`import numpy; numpy.get_include()`). Python puts that
+  # cwd on sys.path[0], and pandas ships a top-level `pandas/io/` package
+  # that then shadows the stdlib `io` module mid-import, so numpy's
+  # C-extension init dies with "cannot import name 'TextIOWrapper' from 'io'".
+  # PYTHONSAFEPATH (3.11+) drops the implicit cwd entry without touching
+  # PYTHONPATH, so crossenv's import bridge is unaffected. Scoped to this
+  # recipe on purpose: a global setting would also drop the *script dir* for
+  # `python codegen.py` invocations and break recipes whose build generators
+  # import sibling modules (numpy's `genapi`, opencv's `hdr_parser`).
+  script_env:
+    PYTHONSAFEPATH: "1"
   backend-args:
     - -Csetup-args=--cross-file
     - -Csetup-args={MESON_CROSS_FILE}
