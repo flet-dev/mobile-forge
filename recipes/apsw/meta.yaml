@@ -1,0 +1,18 @@
+package:
+  name: apsw
+  version: "3.53.2.0"
+
+# apsw is pure C (no C++), so it needs neither libc++_shared (Android) nor any
+# -framework (iOS). Its PyPI sdist does NOT bundle the SQLite amalgamation:
+# apsw's setup.apsw sets `fetch = True`, so the build downloads the
+# version-matched amalgamation (sqlite-autoconf-3530200.tar.gz) from sqlite.org
+# and statically compiles sqlite3.c into the extension -- a self-contained .so
+# with no external libsqlite3 link (hence no requirements.host). forge's build
+# env has network (it pip-installs build/wheel) and apsw pins + checksums the
+# SQLite version, so the fetch is safe and reproducible. The patch only strips
+# host-tainting build steps; see patches/mobile-cross-compile.patch.
+patches:
+  - mobile-cross-compile.patch
+
+build:
+  number: 1
