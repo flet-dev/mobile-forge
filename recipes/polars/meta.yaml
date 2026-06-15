@@ -1,3 +1,11 @@
 package:
   name: polars
   version: 1.33.0
+
+build:
+  number: 1
+
+# Adds the iOS/Android Rust targets to polars' pinned nightly toolchain so the
+# cross-build can find the target std. See the header in patches/mobile.patch.
+patches:
+  - mobile.patch

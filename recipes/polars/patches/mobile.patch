@@ -1,0 +1,41 @@
+mobile.patch — install the cross-compile targets for polars' pinned Rust toolchain.
+
+polars pins nightly-2025-08-29 via rust-toolchain.toml (its `nightly` cargo
+feature is on by default and uses nightly-gated SIMD intrinsics), so cargo
+switches to that nightly when building py-polars. CI installs the iOS/Android
+Rust targets onto the *stable* toolchain only (dtolnay/rust-toolchain@stable
+with matrix.rust_targets), so the pinned nightly has no target std library and
+the cross-build fails with `error[E0463]: can't find crate for core`.
+
+Adding the mobile targets to rust-toolchain.toml makes rustup install them when
+it provisions the pinned nightly on first use. Both copies are patched (the
+workspace root and py-polars/) since cargo uses whichever is nearest its CWD.
+
+--- a/rust-toolchain.toml
++++ b/rust-toolchain.toml
+@@ -1,2 +1,11 @@
+ [toolchain]
+ channel = "nightly-2025-08-29"
++targets = [
++    "aarch64-linux-android",
++    "armv7-linux-androideabi",
++    "i686-linux-android",
++    "x86_64-linux-android",
++    "aarch64-apple-ios",
++    "aarch64-apple-ios-sim",
++    "x86_64-apple-ios",
++]
+--- a/py-polars/rust-toolchain.toml
++++ b/py-polars/rust-toolchain.toml
+@@ -1,2 +1,11 @@
+ [toolchain]
+ channel = "nightly-2025-08-29"
++targets = [
++    "aarch64-linux-android",
++    "armv7-linux-androideabi",
++    "i686-linux-android",
++    "x86_64-linux-android",
++    "aarch64-apple-ios",
++    "aarch64-apple-ios-sim",
++    "x86_64-apple-ios",
++]
