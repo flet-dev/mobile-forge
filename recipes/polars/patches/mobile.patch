@@ -1,15 +1,24 @@
-mobile.patch — install the cross-compile targets for polars' pinned Rust toolchain.
+mobile.patch — two changes to cross-compile polars for iOS/Android.
 
-polars pins nightly-2025-08-29 via rust-toolchain.toml (its `nightly` cargo
-feature is on by default and uses nightly-gated SIMD intrinsics), so cargo
-switches to that nightly when building py-polars. CI installs the iOS/Android
-Rust targets onto the *stable* toolchain only (dtolnay/rust-toolchain@stable
-with matrix.rust_targets), so the pinned nightly has no target std library and
-the cross-build fails with `error[E0463]: can't find crate for core`.
+1. rust-toolchain.toml (workspace root + py-polars/): install the cross-compile
+   targets on polars' pinned Rust toolchain.
 
-Adding the mobile targets to rust-toolchain.toml makes rustup install them when
-it provisions the pinned nightly on first use. Both copies are patched (the
-workspace root and py-polars/) since cargo uses whichever is nearest its CWD.
+   polars pins nightly-2025-08-29 (its `nightly` cargo feature is on by default
+   and uses nightly-gated SIMD intrinsics), so cargo switches to that nightly
+   when building py-polars. CI installs the iOS/Android Rust targets onto the
+   *stable* toolchain only (dtolnay/rust-toolchain@stable + matrix.rust_targets),
+   so the pinned nightly has no target std and the cross-build fails with
+   `error[E0463]: can't find crate for core`. Adding the targets to the toml
+   makes rustup install them when it provisions the nightly. Both copies are
+   patched since cargo uses whichever is nearest its CWD.
+
+2. py-polars/Cargo.toml + crates/polars-python/Cargo.toml: drop `clipboard` from
+   the `full` feature. The clipboard feature pulls `arboard`, a desktop-only
+   clipboard crate with no Android/iOS backend (it fails to compile:
+   `cannot find type Clipboard in module platform`, and on iOS drags in x11rb /
+   core-foundation). polars' default features are `["full", "nightly"]`, so
+   `full` is what enables it. Removing it from both `full` definitions drops the
+   whole arboard subtree (verified clean via `cargo tree --target`).
 
 --- a/rust-toolchain.toml
 +++ b/rust-toolchain.toml
@@ -39,3 +48,23 @@ workspace root and py-polars/) since cargo uses whichever is nearest its CWD.
 +    "aarch64-apple-ios-sim",
 +    "x86_64-apple-ios",
 +]
+--- a/py-polars/Cargo.toml
++++ b/py-polars/Cargo.toml
+@@ -92,7 +92,6 @@
+   "csv",
+   "polars_cloud_client",
+   "object",
+-  "clipboard",
+   "sql",
+   "trigonometry",
+   "parquet",
+--- a/crates/polars-python/Cargo.toml
++++ b/crates/polars-python/Cargo.toml
+@@ -258,7 +258,6 @@
+   "avro",
+   "csv",
+   "cloud",
+-  "clipboard",
+ ]
+ 
+ optimizations = [
