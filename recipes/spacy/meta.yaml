@@ -1,0 +1,6 @@
+package:
+  name: spacy
+  version: 3.8.14
+
+build:
+  number: 1
