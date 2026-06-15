@@ -5,7 +5,8 @@ package:
 build:
   number: 1
 
-# Adds the iOS/Android Rust targets to polars' pinned nightly toolchain so the
-# cross-build can find the target std. See the header in patches/mobile.patch.
+# Cross-build fixes: Rust targets on the pinned nightly, drop the desktop-only
+# clipboard/arboard feature, and use the system allocator on iOS (jemalloc's
+# config.sub rejects the iOS triple). Rationale is in the header of mobile.patch.
 patches:
   - mobile.patch

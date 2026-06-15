@@ -1,4 +1,4 @@
-mobile.patch — two changes to cross-compile polars for iOS/Android.
+mobile.patch — three changes to cross-compile polars for iOS/Android.
 
 1. rust-toolchain.toml (workspace root + py-polars/): install the cross-compile
    targets on polars' pinned Rust toolchain.
@@ -19,6 +19,16 @@ mobile.patch — two changes to cross-compile polars for iOS/Android.
    core-foundation). polars' default features are `["full", "nightly"]`, so
    `full` is what enables it. Removing it from both `full` definitions drops the
    whole arboard subtree (verified clean via `cargo tree --target`).
+
+3. crates/polars-python/src/c_api/allocator.rs + Cargo.toml: use the system
+   allocator on iOS instead of jemalloc. polars selects tikv-jemallocator for
+   `unix && !macos` (which includes iOS), but jemalloc's autotools `config.sub`
+   rejects the `aarch64-apple-ios-sim` triple, so its build.rs panics
+   (`config.sub aarch64-apple-ios-sim failed`). Excluding `target_os = "ios"`
+   from both the jemalloc dependency cfg and the `#[global_allocator]` cfg leaves
+   no custom allocator on iOS, so Rust falls back to the system allocator (no
+   extra C build). Android keeps jemalloc (its triple is accepted); macOS is
+   unaffected.
 
 --- a/rust-toolchain.toml
 +++ b/rust-toolchain.toml
@@ -60,6 +70,15 @@ mobile.patch — two changes to cross-compile polars for iOS/Android.
    "parquet",
 --- a/crates/polars-python/Cargo.toml
 +++ b/crates/polars-python/Cargo.toml
+@@ -55,7 +55,7 @@
+ mimalloc = { version = "0.1", default-features = false }
+ 
+ # Feature background_threads is unsupported on MacOS (https://github.com/jemalloc/jemalloc/issues/843).
+-[target.'cfg(all(target_family = "unix", not(target_os = "macos"), not(target_os = "emscripten")))'.dependencies]
++[target.'cfg(all(target_family = "unix", not(target_os = "macos"), not(target_os = "emscripten"), not(target_os = "ios")))'.dependencies]
+ tikv-jemallocator = { version = "0.6.0", features = ["disable_initial_exec_tls", "background_threads"] }
+ 
+ [target.'cfg(all(target_family = "unix", target_os = "macos"))'.dependencies]
 @@ -258,7 +258,6 @@
    "avro",
    "csv",
@@ -68,3 +87,13 @@ mobile.patch — two changes to cross-compile polars for iOS/Android.
  ]
  
  optimizations = [
+--- a/crates/polars-python/src/c_api/allocator.rs
++++ b/crates/polars-python/src/c_api/allocator.rs
+@@ -2,6 +2,7 @@
+     not(feature = "default_alloc"),
+     target_family = "unix",
+     not(target_os = "emscripten"),
++    not(target_os = "ios"),
+ ))]
+ #[global_allocator]
+ static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
