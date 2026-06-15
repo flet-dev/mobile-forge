@@ -1,0 +1,44 @@
+--- a/setup.py
++++ b/setup.py
+@@ -77,6 +77,33 @@
+ 
+         include_dirs = [get_path("include")]
+ 
++        # preshed cimports sibling Cython packages (cymem, murmurhash) whose .pxd
++        # files ship inside the installed packages. crossenv patches sysconfig, so
++        # get_path()/get_paths() return TARGET paths, not the build env's
++        # site-packages where the build deps are actually installed. Locate them via
++        # the import system / sys.path so Cython can resolve the cimports when cross
++        # compiling under `python -m build --no-isolation`.
++        import importlib.util as _ilu
++
++        def _pxd_root(_pkg, _pxd):
++            try:
++                _spec = _ilu.find_spec(_pkg)
++                for _loc in list(getattr(_spec, "submodule_search_locations", None) or []):
++                    _root = os.path.dirname(_loc)
++                    if os.path.isfile(os.path.join(_root, _pkg, _pxd)):
++                        return _root
++            except Exception:
++                pass
++            for _d in sys.path:
++                if _d and os.path.isfile(os.path.join(_d, _pkg, _pxd)):
++                    return _d
++            return None
++
++        _cython_includes = [
++            _p for _p in (_pxd_root("cymem", "cymem.pxd"),
++                          _pxd_root("murmurhash", "mrmr.pxd")) if _p
++        ]
++
+         ext_modules = []
+         for mod_name in MOD_NAMES:
+             mod_path = mod_name.replace(".", "/") + ".pyx"
+@@ -103,6 +130,7 @@
+                 ext_modules,
+                 language_level=2,
+                 compiler_directives={"freethreading_compatible": True},
++                include_path=_cython_includes,
+             ),
+             python_requires=">=3.9,<3.15",
+             install_requires=["cymem>=2.0.2,<2.1.0", "murmurhash>=0.28.0,<1.1.0"],

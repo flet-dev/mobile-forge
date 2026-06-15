@@ -1,8 +1,8 @@
 package:
-  name: spacy
-  version: 3.8.13
+  name: thinc
+  version: 8.3.13
 
-# spacy cimports sibling Cython packages (cymem, preshed, murmurhash, thinc) and
+# thinc cimports sibling Cython packages (cymem, preshed, murmurhash, blis) and
 # `cimport numpy`, but its setup.py never puts the build env's site-packages on
 # Cython's include_path, so cythonize can't resolve those cimports in the
 # cross-build. The patch locates each installed package and adds it.
@@ -12,8 +12,8 @@ patches:
 # {% if sdk == 'android' %}
 requirements:
   host:
-    # spacy's extensions compile as C++ (-std=c++11) and link their cymem/preshed/
-    # murmurhash/thinc deps (also C++); on Android they need libc++_shared.so at
+    # thinc's extensions compile as C++ (-std=c++11) and link their cymem/preshed/
+    # murmurhash/blis deps (also C++); on Android they need libc++_shared.so at
     # load time, which the device runtime doesn't provide unless we bundle it.
     - flet-libcpp-shared >=27.2.12479018
 # {% endif %}

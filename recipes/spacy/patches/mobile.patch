@@ -1,0 +1,51 @@
+--- a/setup.py
++++ b/setup.py
+@@ -182,6 +182,35 @@
+         numpy.get_include(),
+         get_path("include"),
+     ]
++
++    # spacy cimports sibling Cython packages (cymem, preshed, murmurhash,
++    # thinc) plus `cimport numpy`, whose .pxd files ship inside the installed
++    # packages. crossenv patches sysconfig so get_path()/get_paths() return
++    # TARGET paths, not the build env's site-packages where the build deps
++    # actually live, so Cython cannot resolve the cimports when cross compiling
++    # under `python -m build --no-isolation`. Locate each package via the
++    # import system / sys.path and add its parent dir to Cython's include_path.
++    import importlib.util as _ilu
++
++    def _pkg_root(_pkg):
++        try:
++            _spec = _ilu.find_spec(_pkg)
++            for _loc in list(getattr(_spec, "submodule_search_locations", None) or []):
++                _root = os.path.dirname(_loc)
++                if os.path.isdir(os.path.join(_root, _pkg)):
++                    return _root
++        except Exception:
++            pass
++        for _d in sys.path:
++            if _d and os.path.isdir(os.path.join(_d, _pkg)):
++                return _d
++        return None
++
++    _cython_includes = []
++    for _pkg in ("cymem", "preshed", "murmurhash", "thinc", "numpy"):
++        _root = _pkg_root(_pkg)
++        if _root and _root not in _cython_includes:
++            _cython_includes.append(_root)
+     ext_modules = []
+     ext_modules.append(
+         Extension(
+@@ -205,7 +234,11 @@
+         )
+         ext_modules.append(ext)
+     print("Cythonizing sources")
+-    ext_modules = cythonize(ext_modules, compiler_directives=COMPILER_DIRECTIVES)
++    ext_modules = cythonize(
++        ext_modules,
++        compiler_directives=COMPILER_DIRECTIVES,
++        include_path=_cython_includes,
++    )
+ 
+     setup(
+         name="spacy",
