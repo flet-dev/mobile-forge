@@ -2,10 +2,15 @@ package:
   name: spacy
   version: 3.8.13
 
-# spacy cimports sibling Cython packages (cymem, preshed, murmurhash, thinc) and
-# `cimport numpy`, but its setup.py never puts the build env's site-packages on
-# Cython's include_path, so cythonize can't resolve those cimports in the
-# cross-build. The patch locates each installed package and adds it.
+# mobile.patch does two things:
+#  1. setup.py: spacy cimports sibling Cython packages (cymem, preshed,
+#     murmurhash, thinc) and `cimport numpy`, but never puts the build env's
+#     site-packages on Cython's include_path, so cythonize can't resolve those
+#     cimports in the cross-build. The patch locates each package and adds it.
+#  2. setup.cfg: spacy imports `click` directly (spacy/cli/_util.py) but doesn't
+#     declare it — it relied on typer pulling click, but typer >=0.16 dropped that
+#     dependency, so `import spacy` now fails with ModuleNotFoundError: 'click'.
+#     The patch adds click to install_requires so the wheel declares it.
 patches:
   - mobile.patch
 
