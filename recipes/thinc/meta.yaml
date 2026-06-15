@@ -2,6 +2,9 @@ package:
   name: thinc
   version: 8.3.13
 
+build:
+  number: 1
+
 # thinc cimports sibling Cython packages (cymem, preshed, murmurhash, blis) and
 # `cimport numpy`, but its setup.py never puts the build env's site-packages on
 # Cython's include_path, so cythonize can't resolve those cimports in the
@@ -17,6 +20,3 @@ requirements:
     # load time, which the device runtime doesn't provide unless we bundle it.
     - flet-libcpp-shared >=27.2.12479018
 # {% endif %}
-
-build:
-  number: 1

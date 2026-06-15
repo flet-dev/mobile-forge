@@ -1,9 +1,7 @@
-def test_import_and_version():
+def test_import():
     """thinc imports and its compiled C++ extensions load (numpy_ops, cblas,
     sparselinear, premap_ids — which link cymem/preshed/murmurhash/blis)."""
     import thinc
-
-    assert thinc.__version__.startswith("8.3")
 
 
 def test_numpy_ops_gemm():

@@ -1,5 +1,3 @@
-# preshed — fast hash maps (Cython, C++; uses cymem/murmurhash).
-# https://pypi.org/project/preshed/
 def test_map():
     from preshed.maps import PreshMap
 

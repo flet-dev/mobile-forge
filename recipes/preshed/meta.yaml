@@ -2,6 +2,10 @@ package:
   name: preshed
   version: 3.0.13
 
+
+build:
+  number: 1
+
 # preshed cimports sibling Cython packages (cymem, murmurhash). Their .pxd
 # files ship inside the installed packages, but preshed's setup.py doesn't put
 # them on Cython's include_path, so cythonize fails to resolve them in the
@@ -17,5 +21,3 @@ requirements:
     - flet-libcpp-shared >=27.2.12479018
 # {% endif %}
 
-build:
-  number: 1

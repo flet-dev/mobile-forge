@@ -1,4 +1,3 @@
-# cymem — Cython memory pool. https://pypi.org/project/cymem/
 def test_pool():
     from cymem.cymem import Pool
 
