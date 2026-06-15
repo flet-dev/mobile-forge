@@ -378,6 +378,18 @@ class Builder(ABC):
             # 16 KB page alignment required by Google Play (Android 15+)
             cargo_ldflags += " -C link-arg=-z -C link-arg=max-page-size=16384"
 
+            # NDK r23+ removed libgcc.a (unwinding moved to libunwind), but some
+            # Rust toolchains still emit `-lgcc` on the link line -- e.g. recipes
+            # that pin an older nightly via rust-toolchain.toml (polars). The
+            # current stable target spec no longer does, so most recipes are
+            # unaffected. Drop a libgcc.a *linker script* that redirects to
+            # libunwind (already linked) onto the search path so `-lgcc` resolves
+            # instead of failing with `ld.lld: error: unable to find library -lgcc`.
+            libgcc_shim = self.build_path / ".libgcc-shim"
+            libgcc_shim.mkdir(parents=True, exist_ok=True)
+            (libgcc_shim / "libgcc.a").write_text("INPUT(-lunwind)\n")
+            cargo_ldflags += f" -L{libgcc_shim}"
+
         if self.cross_venv.sdk != "android":
             # Replace any hard-coded reference to -isysroot <sysroot> with the actual reference
             ldflags = re.sub(
