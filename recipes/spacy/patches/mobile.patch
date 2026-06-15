@@ -1,3 +1,20 @@
+mobile.patch — two changes needed to cross-compile spacy for iOS/Android:
+
+  1. setup.py: spacy cimports sibling Cython packages (cymem, preshed,
+     murmurhash, thinc) and `cimport numpy`, but never puts the build env's
+     site-packages on Cython's include_path, so cythonize can't resolve those
+     cimports in the cross-build (crossenv patches sysconfig, so get_path()
+     returns TARGET paths, not the build env's site-packages). The patch
+     locates each installed package via the import system / sys.path and adds
+     its parent dir to include_path.
+
+  2. setup.cfg: spacy imports `click` directly (spacy/cli/_util.py) but never
+     declares it — it relied on typer pulling click transitively, but typer
+     >=0.16 dropped its click dependency, so a fresh resolve of spacy 3.8.x
+     gets a click-less env and `import spacy` fails at runtime with
+     ModuleNotFoundError: No module named 'click' (even on desktop). The patch adds
+     click to install_requires so the built wheel declares it and pip bundles it.
+
 --- a/setup.py
 +++ b/setup.py
 @@ -182,6 +182,35 @@
@@ -46,7 +63,7 @@
 +        compiler_directives=COMPILER_DIRECTIVES,
 +        include_path=_cython_includes,
 +    )
- 
+
      setup(
          name="spacy",
 --- a/setup.cfg
