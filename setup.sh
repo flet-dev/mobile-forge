@@ -61,7 +61,10 @@ resolve_full_version() {
     elif command -v python3 >/dev/null 2>&1; then
         full="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("pythons",{}).get(sys.argv[2],{}).get("full_version",""))' "$mf" "$minor" 2>/dev/null)"
     else
-        full="$(sed -n "/\"$minor\"[[:space:]]*:/,/}/p" "$mf" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+[A-Za-z0-9]*' | head -1)"
+        # Match the minor literally in the sed range: a bare `.` is a regex
+        # wildcard, so escape each dot to `[.]` (e.g. 3.13 -> 3[.]13).
+        local minor_re="${minor//./[.]}"
+        full="$(sed -n "/\"$minor_re\"[[:space:]]*:/,/}/p" "$mf" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+[A-Za-z0-9]*' | head -1)"
     fi
 
     if [ -z "$full" ]; then
