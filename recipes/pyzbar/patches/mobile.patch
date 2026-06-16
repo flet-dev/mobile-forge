@@ -1,0 +1,39 @@
+diff --git a/pyzbar/zbar_library.py b/pyzbar/zbar_library.py
+--- a/pyzbar/zbar_library.py
++++ b/pyzbar/zbar_library.py
+@@ -59,11 +59,31 @@ def load():
+         except OSError:
+             dependencies, libzbar = load_objects(Path(__file__).parent)
+     else:
+-        # Assume a shared library on the path
++        # mobile-forge: find_library() returns None on iOS/Android (no
++        # ldconfig/compiler), so fall back to the libzbar shipped by the
++        # flet-libzbar wheel at <site-packages>/opt/lib, then to the platform
++        # native lib dir (Android jniLibs) / desktop names.
+         path = find_library('zbar')
+-        if not path:
+-            raise ImportError('Unable to find zbar shared library')
+-        libzbar = cdll.LoadLibrary(path)
++        if path:
++            libzbar = cdll.LoadLibrary(path)
++        else:
++            import os
++            _optlib = os.path.join(
++                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
++                'opt', 'lib')
++            libzbar = None
++            for _cand in (
++                os.path.join(_optlib, 'libzbar.fwork'),  # iOS embedded framework
++                os.path.join(_optlib, 'libzbar.so'),     # generic shipped path
++                'libzbar.so', 'libzbar.dylib',           # Android jniLibs / desktop
++            ):
++                try:
++                    libzbar = cdll.LoadLibrary(_cand)
++                    break
++                except OSError:
++                    libzbar = None
++            if libzbar is None:
++                raise ImportError('Unable to find zbar shared library')
+         dependencies = []
+
+     return libzbar, dependencies

@@ -1,0 +1,23 @@
+{% set version = "0.1.9" %}
+
+package:
+  name: pyzbar
+  version: '{{ version }}'
+
+source:
+  # pyzbar publishes wheels but no PyPI sdist, so build from the GitHub tag
+  # archive (PythonPackageBuilder honors source.url).
+  url: https://github.com/NaturalHistoryMuseum/pyzbar/archive/refs/tags/v{{ version }}.tar.gz
+
+build:
+  number: 0
+
+requirements:
+  host:
+    # pyzbar is a pure-Python ctypes wrapper that dlopens libzbar at runtime
+    # (loader patched by mobile.patch). Ship libzbar on both platforms; fix_wheel
+    # turns this into a Requires-Dist so pip pulls it.
+    - flet-libzbar 0.23.93
+
+patches:
+  - mobile.patch

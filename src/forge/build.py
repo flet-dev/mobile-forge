@@ -978,6 +978,17 @@ class PythonPackageBuilder(Builder):
         return f"{py_tag}-{py_tag}-{self.cross_venv.tag}"
 
     def download_source_url(self):
+        # Honor an explicit source.url (e.g. a GitHub tag archive) for Python
+        # packages that publish no PyPI sdist (wheels-only, like pyzbar);
+        # otherwise resolve the sdist from PyPI.
+        source = self.package.meta.get("source")
+        if isinstance(source, dict) and "url" in source:
+            return source["url"].format(
+                version=self.package.meta["package"]["version"],
+                build=self.package.meta["build"]["number"],
+                sdk=self.cross_venv.sdk,
+                arch=self.cross_venv.arch,
+            )
         return get_pypi_source_urls(self.package.name)[self.package.version]
 
     def prepare(self, clean=True):
