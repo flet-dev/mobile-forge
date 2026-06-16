@@ -25,18 +25,18 @@ on:
         description: |
           Python versions to fan the matrix across (comma-separated):
         required: false
-        default: "3.12.13,3.13.13,3.14.5"
+        default: "3.12,3.13,3.14"
       mobile_test_pythons:
         description: |
           Python versions (comma-separated) whose recipe mobile tests should actually run.
           Versions in `python_versions` that aren't in this list still build wheels but skip the
           APK/iOS-simulator test stage. Use "ALL" to run tests for every entry in `python_versions`:
         required: false
-        default: "3.12.13"
+        default: "3.12"
       python_build_run_id:
         description: |
           flet-dev/python-build Actions run-id whose artifacts to use as the
-          python-build support tree, instead of the v<version> release tarball:
+          python-build support tree, instead of the pinned date-keyed release tarball:
         required: false
         default: ""
 
@@ -58,11 +58,11 @@ on:
       python_versions:
         type: string
         required: false
-        default: "3.12.13,3.13.13,3.14.5"
+        default: "3.12,3.13,3.14"
       mobile_test_pythons:
         type: string
         required: false
-        default: "3.12.13"
+        default: "3.12"
       python_build_run_id:
         type: string
         required: false
@@ -77,7 +77,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DEFAULT_PYTHONS: "3.12.13,3.13.13,3.14.5"
+  DEFAULT_PYTHONS: "3.12,3.13,3.14"
   # Used as the fallback recipe set when `packages` input is empty
   # (workflow_dispatch/workflow_call) or when no `recipes/**` paths
   # changed in the triggering event (push/pull_request).
@@ -165,7 +165,7 @@ jobs:
       archs: ${{ inputs.archs || 'android,iOS' }}
       packages: ${{ needs.detect.outputs.packages }}
       prebuild_recipes: ${{ inputs.prebuild_recipes || '' }}
-      mobile_test_pythons: ${{ inputs.mobile_test_pythons || '3.12.13' }}
+      mobile_test_pythons: ${{ inputs.mobile_test_pythons || '3.12' }}
       python_build_run_id: ${{ inputs.python_build_run_id || '' }}
     secrets:
       GEMFURY_TOKEN: ${{ secrets.GEMFURY_TOKEN }}
