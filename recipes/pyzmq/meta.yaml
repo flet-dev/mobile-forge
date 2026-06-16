@@ -1,0 +1,6 @@
+package:
+  name: pyzmq
+  version: 27.1.0
+
+build:
+  number: 1
