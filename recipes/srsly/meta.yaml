@@ -1,0 +1,14 @@
+package:
+  name: srsly
+  version: 2.5.3
+
+build:
+  number: 1
+
+# {% if sdk == 'android' %}
+requirements:
+  host:
+    # srsly bundles C++ serializers (ujson/msgpack); on Android its .so links
+    # libc++_shared.so, which the device runtime doesn't provide unless bundled.
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}

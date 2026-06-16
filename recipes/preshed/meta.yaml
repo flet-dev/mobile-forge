@@ -1,0 +1,23 @@
+package:
+  name: preshed
+  version: 3.0.13
+
+
+build:
+  number: 1
+
+# preshed cimports sibling Cython packages (cymem, murmurhash). Their .pxd
+# files ship inside the installed packages, but preshed's setup.py doesn't put
+# them on Cython's include_path, so cythonize fails to resolve them in the
+# cross-build. The patch adds the build env site-packages to include_path.
+patches:
+  - mobile.patch
+
+# {% if sdk == 'android' %}
+requirements:
+  host:
+    # preshed compiles as C++ (and links its cymem/murmurhash deps, which are C++);
+    # on Android it needs libc++_shared.so at load time.
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
+

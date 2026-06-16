@@ -1,0 +1,14 @@
+package:
+  name: murmurhash
+  version: 1.0.15
+
+build:
+  number: 1
+
+# {% if sdk == 'android' %}
+requirements:
+  host:
+    # murmurhash wraps MurmurHash2/3 C++ via Cython; on Android it links
+    # libc++_shared.so, which the device runtime doesn't provide unless bundled.
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}

@@ -1,0 +1,18 @@
+package:
+  name: spacy
+  version: 3.8.13
+
+build:
+  number: 1
+
+patches:
+  - mobile.patch
+
+# {% if sdk == 'android' %}
+requirements:
+  host:
+    # spacy's extensions compile as C++ (-std=c++11) and link their cymem/preshed/
+    # murmurhash/thinc deps (also C++); on Android they need libc++_shared.so at
+    # load time, which the device runtime doesn't provide unless we bundle it.
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}

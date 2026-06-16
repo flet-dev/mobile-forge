@@ -1,0 +1,14 @@
+package:
+  name: cymem
+  version: 2.0.13
+
+build:
+  number: 1
+
+# {% if sdk == 'android' %}
+requirements:
+  host:
+    # cymem's Cython extension compiles as C++; on Android it links libc++_shared.so,
+    # which the device runtime doesn't provide unless we bundle it.
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
