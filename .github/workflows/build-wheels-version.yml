@@ -33,11 +33,11 @@ on:
           APK/iOS-simulator test stage. Use "ALL" to run tests for every entry in `python_versions`:
         required: false
         type: string
-        default: "3.12.13"
+        default: "3.12"
       python_build_run_id:
         description: |
           flet-dev/python-build Actions run-id whose artifacts to use as the
-          python-build support tree, instead of the v<version> release tarball:
+          python-build support tree, instead of the pinned date-keyed release tarball:
         required: false
         type: string
         default: ""
@@ -53,10 +53,10 @@ on:
         required: true
         type: choice
         options:
-          - 3.12.13
-          - 3.13.13
-          - 3.14.5
-        default: 3.12.13
+          - "3.12"
+          - "3.13"
+          - "3.14"
+        default: "3.12"
       archs:
         description: |
           Architectures (comma-separated):
@@ -79,11 +79,11 @@ on:
           Versions in `python_versions` that aren't in this list still build wheels but skip the
           APK/iOS-simulator test stage. Use "ALL" to run tests for every entry in `python_versions`:
         required: false
-        default: "3.12.13"
+        default: "3.12"
       python_build_run_id:
         description: |
           flet-dev/python-build Actions run-id whose artifacts to use as the
-          python-build support tree, instead of the v<version> release tarball:
+          python-build support tree, instead of the pinned date-keyed release tarball:
         required: false
         default: ""
 
@@ -111,7 +111,7 @@ jobs:
           ARCHS="${{ inputs.archs }}"
           PACKAGES="${{ inputs.packages }}"
           py="${{ inputs.python_version }}"
-          py_short="${py%.*}"   # 3.12.13 -> 3.12
+          py_short="$(echo "$py" | cut -d. -f1-2)"   # 3.12 or 3.12.13 -> 3.12
 
           matrix='{"include":['
           first=true
@@ -256,7 +256,7 @@ jobs:
           if [[ "$MOBILE_TEST_PYTHONS" != "ALL" ]]; then
             allowed=""
             for v in $(echo "$MOBILE_TEST_PYTHONS" | tr ',' ' '); do
-              allowed="${allowed:+$allowed }${v%.*}"
+              allowed="${allowed:+$allowed }$(echo "$v" | cut -d. -f1-2)"
             done
             if [[ ! " $allowed " == *" $PYTHON_SHORT "* ]]; then
               echo "::notice::Skipping mobile test — py${PYTHON_SHORT} not in mobile_test_pythons=${MOBILE_TEST_PYTHONS}"
