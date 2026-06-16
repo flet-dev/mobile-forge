@@ -12,3 +12,10 @@ source:
 
 build:
   number: 0
+# {% if sdk == 'android' %}
+requirements:
+  host:
+    # zbar's QR decoder #includes <iconv.h> unconditionally; Android bionic has
+    # no iconv at API 24, so provide the static GNU libiconv to compile + link.
+    - flet-libiconv 1.17
+# {% endif %}
