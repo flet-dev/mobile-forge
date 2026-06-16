@@ -33,10 +33,15 @@ build:
       -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/env
       -DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384
       -DCMAKE_MODULE_LINKER_FLAGS=-Wl,-z,max-page-size=16384
-      -DPython_EXECUTABLE={prefix}/bin/python{py_version_short}
+      -DPython_EXECUTABLE={CROSS_VENV_PYTHON}
       -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
       -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.so
 # {% else %}
+    # The `ninja` pip package crashes importing on the iOS crossenv python
+    # (sysconfig.get_preferred_scheme("user") -> 'posix_user' invalid on iOS),
+    # so use the Makefiles generator on iOS; scikit-build-core then never imports
+    # ninja. (Android keeps the Ninja generator, which works there.)
+    CMAKE_GENERATOR: Unix Makefiles
     CMAKE_ARGS: >-
       -DZMQ_PREFIX=bundled
       -DCMAKE_SYSTEM_NAME=iOS
@@ -44,7 +49,7 @@ build:
       -DCMAKE_OSX_DEPLOYMENT_TARGET={{ sdk_version }}
       -DCMAKE_OSX_ARCHITECTURES={{ arch }}
       -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/env
-      -DPython_EXECUTABLE={prefix}/bin/python{py_version_short}
+      -DPython_EXECUTABLE={CROSS_VENV_PYTHON}
       -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
       -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.dylib
 # {% endif %}
