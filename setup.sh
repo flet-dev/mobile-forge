@@ -34,10 +34,6 @@ if ! command -v uv &> /dev/null; then
 fi
 
 # Pinned flet-dev/python-build release to consume (date-keyed YYYYMMDD, PBS-style).
-# Its manifest.json maps each X.Y -> the full X.Y.Z and names the support tarballs,
-# so we fetch one consistent runtime set by date instead of per-version v<X.Y> tags
-# (which are now frozen upstream). Bump this to adopt a newer CPython set; override
-# with the PYTHON_BUILD_RELEASE env var to test an unpublished date.
 PYTHON_BUILD_RELEASE="${PYTHON_BUILD_RELEASE:-20260614}"
 
 # Resolve a full X.Y.Z from a bare X.Y minor using the pinned release's
