@@ -37,7 +37,7 @@ mobile.patch — three changes to cross-compile polars for iOS/Android.
  channel = "nightly-2025-08-29"
 +targets = [
 +    "aarch64-linux-android",
-+    "armv7-linux-androideabi",
++    "arm-linux-androideabi",
 +    "i686-linux-android",
 +    "x86_64-linux-android",
 +    "aarch64-apple-ios",
@@ -51,7 +51,7 @@ mobile.patch — three changes to cross-compile polars for iOS/Android.
  channel = "nightly-2025-08-29"
 +targets = [
 +    "aarch64-linux-android",
-+    "armv7-linux-androideabi",
++    "arm-linux-androideabi",
 +    "i686-linux-android",
 +    "x86_64-linux-android",
 +    "aarch64-apple-ios",
