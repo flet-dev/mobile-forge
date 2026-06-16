@@ -37,6 +37,13 @@ build:
       -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
       -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.so
 # {% else %}
+    # Same bundled-libsodium ./configure cross issue as Android, but iOS has no
+    # forge {HOST_TRIPLET}. `<arch>-apple-ios` is accepted by libsodium's
+    # config.sub (arm64->aarch64-apple-ios, x86_64-apple-ios) and is always
+    # `!=` the macOS build triple (ios != darwin), so configure registers as
+    # cross. The actual simulator/device codegen comes from forge's iOS CC, not
+    # this triple (libsodium's .a is retargeted by CFLAGS/-isysroot).
+    CIBW_HOST_TRIPLET: "{{ arch }}-apple-ios"
     # The `ninja` pip package crashes importing on the iOS crossenv python
     # (sysconfig.get_preferred_scheme("user") -> 'posix_user' invalid on iOS),
     # so use the Makefiles generator on iOS; scikit-build-core then never imports
