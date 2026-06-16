@@ -2,5 +2,49 @@ package:
   name: pyzmq
   version: 27.1.0
 
+requirements:
+  build:
+    # pyzmq builds via scikit-build-core + CMake (+ Ninja generator); with
+    # `python -m build --no-isolation` these must be in the build venv.
+    - cmake
+    - ninja
+# {% if sdk == 'android' %}
+  host:
+    # pyzmq bundles + builds libzmq (C++); on Android the .so links
+    # libc++_shared.so, which the device runtime doesn't provide unless bundled.
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
+
 build:
   number: 1
+  script_env:
+# {% if sdk == 'android' %}
+    # pyzmq adds `--host` to the bundled libsodium ./configure only when
+    # CMAKE_CROSSCOMPILING and CIBW_HOST_TRIPLET are set (it's wired for
+    # cibuildwheel); without it, libsodium's configure tries to run a target
+    # binary on the host and dies with "cannot run C compiled programs".
+    CIBW_HOST_TRIPLET: "{HOST_TRIPLET}"
+    CMAKE_ARGS: >-
+      -DZMQ_PREFIX=bundled
+      -DCMAKE_TOOLCHAIN_FILE={NDK_ROOT}/build/cmake/android.toolchain.cmake
+      -DANDROID_ABI={ANDROID_ABI}
+      -DANDROID_NATIVE_API_LEVEL={ANDROID_API_LEVEL}
+      -DANDROID_STL=c++_shared
+      -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/env
+      -DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DCMAKE_MODULE_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DPython_EXECUTABLE={prefix}/bin/python{py_version_short}
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.so
+# {% else %}
+    CMAKE_ARGS: >-
+      -DZMQ_PREFIX=bundled
+      -DCMAKE_SYSTEM_NAME=iOS
+      -DCMAKE_OSX_SYSROOT={{ sdk }}
+      -DCMAKE_OSX_DEPLOYMENT_TARGET={{ sdk_version }}
+      -DCMAKE_OSX_ARCHITECTURES={{ arch }}
+      -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/env
+      -DPython_EXECUTABLE={prefix}/bin/python{py_version_short}
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.dylib
+# {% endif %}
