@@ -11,7 +11,9 @@ build:
   number: 1
 
 # Cross-build fixes: Rust targets on the pinned nightly, drop the desktop-only
-# clipboard/arboard feature, and use the system allocator on iOS (jemalloc's
-# config.sub rejects the iOS triple). Rationale is in the header of mobile.patch.
+# clipboard/arboard feature, and use the system allocator on iOS + Android
+# instead of jemalloc (jemalloc's config.sub rejects the iOS triple, and on
+# Android it calls a seccomp-banned raw open(2) that SIGSYS-kills import).
+# Rationale is in the header of mobile.patch.
 patches:
   - mobile.patch

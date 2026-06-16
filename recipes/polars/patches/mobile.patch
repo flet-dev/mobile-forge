@@ -10,7 +10,8 @@ mobile.patch — three changes to cross-compile polars for iOS/Android.
    so the pinned nightly has no target std and the cross-build fails with
    `error[E0463]: can't find crate for core`. Adding the targets to the toml
    makes rustup install them when it provisions the nightly. Both copies are
-   patched since cargo uses whichever is nearest its CWD.
+   patched since cargo uses whichever is nearest its CWD. (armeabi-v7a uses the
+   `arm-linux-androideabi` triple, matching forge/CI — not `armv7-...`.)
 
 2. py-polars/Cargo.toml + crates/polars-python/Cargo.toml: drop `clipboard` from
    the `full` feature. The clipboard feature pulls `arboard`, a desktop-only
@@ -21,14 +22,21 @@ mobile.patch — three changes to cross-compile polars for iOS/Android.
    whole arboard subtree (verified clean via `cargo tree --target`).
 
 3. crates/polars-python/src/c_api/allocator.rs + Cargo.toml: use the system
-   allocator on iOS instead of jemalloc. polars selects tikv-jemallocator for
-   `unix && !macos` (which includes iOS), but jemalloc's autotools `config.sub`
-   rejects the `aarch64-apple-ios-sim` triple, so its build.rs panics
-   (`config.sub aarch64-apple-ios-sim failed`). Excluding `target_os = "ios"`
-   from both the jemalloc dependency cfg and the `#[global_allocator]` cfg leaves
-   no custom allocator on iOS, so Rust falls back to the system allocator (no
-   extra C build). Android keeps jemalloc (its triple is accepted); macOS is
-   unaffected.
+   allocator (not jemalloc) on BOTH iOS and Android. jemalloc is the source of
+   two separate mobile failures:
+     - iOS: tikv-jemalloc-sys's autotools `config.sub` rejects the
+       `aarch64-apple-ios-sim` triple, so its build.rs panics at build time.
+     - Android: jemalloc opens `/proc/sys/vm/overcommit_memory` at init via a
+       raw `syscall(SYS_open, ...)` (x86_64 syscall #2), which Android's seccomp
+       policy disallows -> `import polars` is SIGSYS-killed on the x86_64
+       emulator (and on any x86_64 android). On arm64 there is no `open` syscall
+       so it is latent, but using the system allocator everywhere keeps the
+       tested config (x86_64) identical to the shipped one (arm64).
+   polars selects tikv-jemallocator for `unix && !macos`; excluding
+   `target_os = "ios"` and `target_os = "android"` from both the dependency cfg
+   and the `#[global_allocator]` cfg leaves no custom allocator on mobile, so
+   Rust uses the system allocator (Android's is scudo; iOS's is libmalloc) -- no
+   extra C build, no banned syscalls. Desktop (macOS/Linux/Windows) is unchanged.
 
 --- a/rust-toolchain.toml
 +++ b/rust-toolchain.toml
@@ -75,7 +83,7 @@ mobile.patch — three changes to cross-compile polars for iOS/Android.
  
  # Feature background_threads is unsupported on MacOS (https://github.com/jemalloc/jemalloc/issues/843).
 -[target.'cfg(all(target_family = "unix", not(target_os = "macos"), not(target_os = "emscripten")))'.dependencies]
-+[target.'cfg(all(target_family = "unix", not(target_os = "macos"), not(target_os = "emscripten"), not(target_os = "ios")))'.dependencies]
++[target.'cfg(all(target_family = "unix", not(target_os = "macos"), not(target_os = "emscripten"), not(target_os = "ios"), not(target_os = "android")))'.dependencies]
  tikv-jemallocator = { version = "0.6.0", features = ["disable_initial_exec_tls", "background_threads"] }
  
  [target.'cfg(all(target_family = "unix", target_os = "macos"))'.dependencies]
@@ -89,11 +97,12 @@ mobile.patch — three changes to cross-compile polars for iOS/Android.
  optimizations = [
 --- a/crates/polars-python/src/c_api/allocator.rs
 +++ b/crates/polars-python/src/c_api/allocator.rs
-@@ -2,6 +2,7 @@
+@@ -2,6 +2,8 @@
      not(feature = "default_alloc"),
      target_family = "unix",
      not(target_os = "emscripten"),
 +    not(target_os = "ios"),
++    not(target_os = "android"),
  ))]
  #[global_allocator]
  static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
