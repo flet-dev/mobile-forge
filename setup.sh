@@ -3,9 +3,12 @@ usage() {
     echo
     echo "    source $1 <python version>"
     echo
+    echo "<python version> may be a minor (3.13) or full (3.13.14) version;"
+    echo "a minor is resolved to the patch from the pinned python-build release."
     echo "for example:"
     echo
     echo "    source $1 3.13"
+    echo "    source $1 3.13.14"
     echo
 }
 
@@ -30,16 +33,69 @@ if ! command -v uv &> /dev/null; then
     return
 fi
 
-PYTHON_VERSION=$1
-PYTHON_VER="${PYTHON_VERSION%.*}"
+# Pinned flet-dev/python-build release to consume (date-keyed YYYYMMDD, PBS-style).
+PYTHON_BUILD_RELEASE="${PYTHON_BUILD_RELEASE:-20260614}"
+
+# Resolve a full X.Y.Z from a bare X.Y minor using the pinned release's
+# manifest.json (downloaded + cached under downloads/). Echoes the full version;
+# returns non-zero (with a message on stderr) if the fetch or lookup fails.
+resolve_full_version() {
+    local minor="$1"
+    local mf="downloads/python-build-manifest-${PYTHON_BUILD_RELEASE}.json"
+    local murl="https://github.com/flet-dev/python-build/releases/download/${PYTHON_BUILD_RELEASE}/manifest.json"
+
+    mkdir -p downloads
+    if [ ! -f "$mf" ]; then
+        if ! curl -fsSL -o "$mf" "$murl"; then
+            echo "Failed to fetch python-build manifest ($murl)." >&2
+            rm -f "$mf"
+            return 1
+        fi
+    fi
+
+    # Prefer jq, then python3; fall back to a scoped sed/grep over the (tiny,
+    # stable-shape) manifest so this works on a bare machine with neither.
+    local full=""
+    if command -v jq >/dev/null 2>&1; then
+        full="$(jq -r --arg m "$minor" '.pythons[$m].full_version // empty' "$mf" 2>/dev/null)"
+    elif command -v python3 >/dev/null 2>&1; then
+        full="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("pythons",{}).get(sys.argv[2],{}).get("full_version",""))' "$mf" "$minor" 2>/dev/null)"
+    else
+        # Match the minor literally in the sed range: a bare `.` is a regex
+        # wildcard, so escape each dot to `[.]` (e.g. 3.13 -> 3[.]13).
+        local minor_re="${minor//./[.]}"
+        full="$(sed -n "/\"$minor_re\"[[:space:]]*:/,/}/p" "$mf" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+[A-Za-z0-9]*' | head -1)"
+    fi
+
+    if [ -z "$full" ]; then
+        echo "python-build release ${PYTHON_BUILD_RELEASE} has no Python ${minor} in its manifest." >&2
+        return 1
+    fi
+    echo "$full"
+}
+
+# Accept either a full X.Y.Z or a bare X.Y minor as $1. Derive the X.Y minor either
+# way (cut handles both forms); when only the minor is given, resolve the patch from
+# the pinned release's manifest. A full version is taken as-is (works offline and for
+# the PYTHON_BUILD_RUN_ID path, which may build versions other than the pinned set).
+PYTHON_INPUT="$1"
+PYTHON_VER="$(echo "$PYTHON_INPUT" | cut -d. -f1-2)"
 python_version_minor="${PYTHON_VER#*.}"
+
+if echo "$PYTHON_INPUT" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]'; then
+    PYTHON_VERSION="$PYTHON_INPUT"
+else
+    echo "Resolving Python $PYTHON_VER from python-build release $PYTHON_BUILD_RELEASE..."
+    PYTHON_VERSION="$(resolve_full_version "$PYTHON_VER")" || return
+fi
 
 echo "Python version: $PYTHON_VERSION"
 echo "Python short version: $PYTHON_VER"
+echo "python-build release: $PYTHON_BUILD_RELEASE"
 
 # Download (and cache) a mobile-forge Python support package, extracting it
-# into $2. Source is either the canonical v<version> release on
-# flet-dev/python-build, or a specific Actions run's artifacts when
+# into $2. Source is either the pinned date-keyed ($PYTHON_BUILD_RELEASE) release
+# on flet-dev/python-build, or a specific Actions run's artifacts when
 # $PYTHON_BUILD_RUN_ID is set (used in CI to validate unreleased
 # python-build branches against the recipe matrix). Tarballs are cached
 # under downloads/ (gitignored) and reused on subsequent runs.
@@ -49,7 +105,7 @@ echo "Python short version: $PYTHON_VER"
 #                          (requires `gh` installed and a GITHUB_TOKEN / login)
 download_support() {
     local plat="$1" dest="$2"
-    local tarball="python-${plat}-mobile-forge-${PYTHON_VER}.tar.gz"
+    local tarball="python-${plat}-mobile-forge-${PYTHON_VERSION}.tar.gz"
 
     if [ -d "$dest/support" ]; then
         return 0
@@ -62,7 +118,7 @@ download_support() {
             # (it bundles iOS + macOS together). The android lane has a 1:1 artifact name.
             local artifact_plat="$plat"
             [ "$plat" = "ios" ] && artifact_plat="darwin"
-            local artifact_name="python-${artifact_plat}-${PYTHON_VER}"
+            local artifact_name="python-${artifact_plat}-${PYTHON_VERSION}"
 
             echo "Fetching ${tarball} from python-build run ${PYTHON_BUILD_RUN_ID} (artifact: ${artifact_name})..."
             local stage
@@ -78,7 +134,7 @@ download_support() {
             mv "$stage/${tarball}" "downloads/${tarball}"
             rm -rf "$stage"
         else
-            local url="https://github.com/flet-dev/python-build/releases/download/v${PYTHON_VER}/${tarball}"
+            local url="https://github.com/flet-dev/python-build/releases/download/${PYTHON_BUILD_RELEASE}/${tarball}"
             echo "Downloading ${tarball}..."
             if ! curl -fL -o "downloads/${tarball}" "$url"; then
                 echo "Failed to download ${url}"
@@ -195,12 +251,12 @@ if [ -z "$explicit" ]; then
     for p in $(echo "$platforms" | tr ',' ' '); do
         case "$(echo "$p" | tr '[:upper:]' '[:lower:]')" in
             ios)
-                dest="$(pwd)/downloads/support/python-ios-mobile-forge-${PYTHON_VER}"
+                dest="$(pwd)/downloads/support/python-ios-mobile-forge-${PYTHON_VERSION}"
                 download_support ios "$dest" || return
                 export MOBILE_FORGE_IOS_SUPPORT_PATH="$(resolve_support_root "$dest")"
                 ;;
             android)
-                dest="$(pwd)/downloads/support/python-android-mobile-forge-${PYTHON_VER}"
+                dest="$(pwd)/downloads/support/python-android-mobile-forge-${PYTHON_VERSION}"
                 download_support android "$dest" || return
                 export MOBILE_FORGE_ANDROID_SUPPORT_PATH="$(resolve_support_root "$dest")"
                 ;;
@@ -321,4 +377,4 @@ echo "   forge iOS --all-versions lru-dict"
 echo
 
 # The script is sourced; don't leave helper functions in the user's shell.
-unset -f download_support resolve_support_root relocate_pkgconfig_prefix
+unset -f download_support resolve_support_root relocate_pkgconfig_prefix resolve_full_version
