@@ -212,7 +212,15 @@ jobs:
             # pkg-config is what meson's `py.dependency()` uses to resolve the Python C dep via
             # the `.pc` files setup.sh relocates. Without it, meson falls back to sysconfig — which on
             # Python 3.14 returns the bogus `/usr/local/...` paths and reports the dep as "not found".
-            sudo apt-get install -y sqlite3 pkg-config
+            # autoconf/automake/libtool + gettext/autopoint: recipes that autoreconf an
+            # upstream that ships only configure.ac (e.g. flet-libzbar from the zbar git archive,
+            # whose configure.ac uses AM_GNU_GETTEXT -> autopoint).
+            sudo apt-get install -y sqlite3 pkg-config autoconf automake libtool gettext autopoint
+          else
+            # iOS (macOS runner): same autotools/gettext for autoreconf recipes. gettext is
+            # keg-only on Homebrew, so put its bin (autopoint) on PATH for the build below.
+            brew install autoconf automake libtool gettext >/dev/null 2>&1 || true
+            export PATH="$(brew --prefix gettext)/bin:$PATH"
           fi
 
           # Sets up and downloads the matching mobile-forge support package for the requested platform.
@@ -224,6 +232,18 @@ jobs:
           # freshly-built libs over whatever pypi.flet.dev has published.
           if [[ -n "${PREBUILD_RECIPES:-}" ]]; then
             for lib in $(echo "$PREBUILD_RECIPES" | tr ',' ' '); do
+              # Respect each prebuild recipe's declared `platforms` (same gating the
+              # matrix applies to packages). e.g. flet-libiconv is android-only — iOS
+              # has a system libiconv — so without this the prebuild forces it onto
+              # iOS and its build.sh fails.
+              declared=""
+              if [[ -f "recipes/$lib/meta.yaml" ]]; then
+                IFS=$'\t' read -r _ _ declared <<< "$(uv run --script .ci/read_meta.py "recipes/$lib/meta.yaml")"
+              fi
+              if [[ -n "$declared" && ! " $declared " == *" $PLATFORM "* ]]; then
+                echo "::notice::Prebuild skip ${lib} on ${PLATFORM} (platforms=[$declared])"
+                continue
+              fi
               forge "$FORGE_ARCH" "$lib"
             done
           fi
