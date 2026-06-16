@@ -1,6 +1,11 @@
 package:
   name: polars
   version: 1.33.0
+  # polars uses std::sync::atomic::AtomicU64, which is absent on 32-bit ARM
+  # (arm-linux-androideabi has no 64-bit atomics), so armeabi-v7a fails to build;
+  # upstream ships no 32-bit-ARM wheels. 32-bit x86 builds fine (has cmpxchg8b),
+  # so only armeabi-v7a is excluded. Only builds on Python < 3.13 anyway.
+  excluded_arches: [armeabi-v7a]
 
 build:
   number: 1

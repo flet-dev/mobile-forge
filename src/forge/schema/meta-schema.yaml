@@ -23,8 +23,20 @@ properties:
         minItems: 1
         uniqueItems: true
         description: >-
-          Optional list of supported target platforms. 
+          Optional list of supported target platforms.
           Defaults to all platforms if not specified.
+      excluded_arches:
+        type: array
+        items:
+          type: string
+          enum: [arm64-v8a, armeabi-v7a, x86_64, x86, arm64]
+        uniqueItems: true
+        description: >-
+          Optional list of target architectures to skip for this package
+          (e.g. [armeabi-v7a, x86] for a library with no 32-bit support).
+          Other arches of the same platform still build. The 32-bit android
+          arches only build on Python < 3.13, so excluding them is a no-op on
+          newer interpreters.
     additionalProperties: false
 
   source:

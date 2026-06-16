@@ -154,6 +154,17 @@ def main():
                     sdk_version=sdk_version,
                     arch=arch,
                 )
+
+                # Skip arches the recipe declares it can't build (e.g. a library
+                # with no 32-bit support listing [armeabi-v7a, x86]). Other arches
+                # of the same platform still build.
+                if arch in package.meta["package"].get("excluded_arches", []):
+                    print(
+                        f"Skipping {arch}: {package.name} lists it in "
+                        f"package.excluded_arches"
+                    )
+                    continue
+
                 cross_venv = CrossVEnv(sdk=sdk, sdk_version=sdk_version, arch=arch)
                 builder = package.builder(cross_venv)
                 success = builder.build(clean=first)
