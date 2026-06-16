@@ -509,6 +509,19 @@ class Builder(ABC):
             # Python_INCLUDE_DIR against a path that doesn't move with
             # crossenv relocation across python-build versions.
             "HOST_PYTHON_HOME": str(self.cross_venv.host_python_home),
+            # The host-runnable Python interpreter provided by crossenv: a
+            # wrapper script that runs the build-machine Python but reports
+            # the *target* sysconfig. Use this for CMake's -DPython_EXECUTABLE
+            # (FindPython's Interpreter component). Pointing at
+            # {prefix}/bin/python (the cross-compiled target binary) makes
+            # FindPython try to exec a non-host binary; it fails and drops the
+            # Interpreter + Development.Module + Development.Embed components.
+            "CROSS_VENV_PYTHON": str(
+                self.cross_venv.venv_path
+                / "cross"
+                / "bin"
+                / f"python{self.cross_venv.sysconfig_data['py_version_short']}"
+            ),
         }
         env.update(kwargs)
 
