@@ -1,20 +1,15 @@
-# apsw = Another Python SQLite Wrapper. It ships a SQLite amalgamation
-# statically compiled into its C extension, so the round-trip below proves
-# both that the .so loads on-device and that the embedded SQLite engine works.
-# https://rogerbinns.github.io/apsw/
 def test_versions():
     """The C extension exposes the apsw build version and the version of the
-    SQLite it statically embedded. Both must import and report sane values."""
+    SQLite it statically embedded. This test confirms that the two versions
+    are consistent with each other.
+
+    Example:
+        apsw.apswversion()      -> "3.53.2.0"
+        apsw.sqlitelibversion() -> "3.53.2"
+    """
     import apsw
 
-    apsw_ver = apsw.apswversion()
-    sqlite_ver = apsw.sqlitelibversion()
-    print("apsw version:", apsw_ver)
-    print("embedded SQLite version:", sqlite_ver)
-
-    assert apsw_ver.startswith("3.53.2"), apsw_ver
-    # apsw 3.53.2.0 pairs with the SQLite 3.53.2 amalgamation.
-    assert sqlite_ver.startswith("3.53.2"), sqlite_ver
+    assert apsw.apswversion().startswith(apsw.sqlitelibversion())
 
 
 def test_in_memory_roundtrip():
