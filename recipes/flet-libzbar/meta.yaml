@@ -11,7 +11,7 @@ source:
   url: https://github.com/mchehab/zbar/archive/refs/tags/{{ version }}.tar.gz
 
 build:
-  number: 0
+  number: 1
 # {% if sdk == 'android' %}
 requirements:
   host:

@@ -4,13 +4,13 @@ package:
   name: pyzbar
   version: '{{ version }}'
 
+build:
+  number: 1
+
 source:
   # pyzbar publishes wheels but no PyPI sdist, so build from the GitHub tag
   # archive (PythonPackageBuilder honors source.url).
   url: https://github.com/NaturalHistoryMuseum/pyzbar/archive/refs/tags/v{{ version }}.tar.gz
-
-build:
-  number: 0
 
 requirements:
   host:

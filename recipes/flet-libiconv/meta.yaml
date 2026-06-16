@@ -9,8 +9,8 @@ package:
   # this recipe is never built there.
   platforms: [android]
 
+build:
+  number: 1
+
 source:
   url: https://ftp.gnu.org/gnu/libiconv/libiconv-{{ version }}.tar.gz
-
-build:
-  number: 0
