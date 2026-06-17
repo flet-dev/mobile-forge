@@ -39,11 +39,6 @@ on:
           python-build support tree, instead of the pinned date-keyed release tarball:
         required: false
         default: ""
-      publish:
-        description: "Publish built wheels to pypi.flet.dev (normally only on a push to main)."
-        type: boolean
-        required: false
-        default: false
 
   # Reusable-workflow entry point for cross-repo callers.
   workflow_call:
@@ -72,10 +67,6 @@ on:
         type: string
         required: false
         default: ""
-      publish:
-        type: boolean
-        required: false
-        default: false
     secrets:
       GEMFURY_TOKEN:
         required: false
@@ -176,6 +167,5 @@ jobs:
       prebuild_recipes: ${{ inputs.prebuild_recipes || '' }}
       mobile_test_pythons: ${{ inputs.mobile_test_pythons || '3.12' }}
       python_build_run_id: ${{ inputs.python_build_run_id || '' }}
-      publish: ${{ inputs.publish || false }}
     secrets:
       GEMFURY_TOKEN: ${{ secrets.GEMFURY_TOKEN }}
