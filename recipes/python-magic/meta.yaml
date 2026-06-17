@@ -1,0 +1,19 @@
+{% set version = "0.4.27" %}
+
+package:
+  name: python-magic
+  version: '{{ version }}'
+
+build:
+  number: 0
+
+requirements:
+  host:
+    # python-magic is a pure-Python ctypes wrapper that dlopens libmagic at
+    # runtime (loader + magic-db default patched by mobile.patch). Ship libmagic
+    # and its magic.mgc database on both platforms; fix_wheel turns this into a
+    # Requires-Dist so pip pulls it.
+    - flet-libmagic 5.46
+
+patches:
+  - mobile.patch

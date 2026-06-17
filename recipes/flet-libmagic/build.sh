@@ -19,7 +19,12 @@ common_args="\
 # native `file` first (out-of-tree) and point the cross build at it via
 # FILE_COMPILE so the DB is compiled by a host binary of the SAME version.
 mkdir -p _hostbuild
-( cd _hostbuild && ../configure --silent $common_args --disable-shared >/dev/null && make -j "$CPU_COUNT" >/dev/null )
+# Force the NATIVE build toolchain here: forge exports the cross CC/CFLAGS/etc.
+# for the target, but this `file` must run on the build machine to compile the DB.
+( cd _hostbuild && \
+    CC=cc CXX=c++ CPP="cc -E" CFLAGS= CXXFLAGS= CPPFLAGS= LDFLAGS= AR=ar RANLIB=ranlib STRIP=strip \
+    ../configure --silent $common_args --disable-shared >/dev/null && \
+    make -j "$CPU_COUNT" >/dev/null )
 HOST_FILE="$PWD/_hostbuild/src/file"
 
 if [ "$CROSS_VENV_SDK" = "android" ]; then
@@ -68,7 +73,8 @@ else
     cd - >/dev/null
 fi
 
-# Keep opt/lib/libmagic.so + opt/share/misc/magic.mgc; drop everything else.
+# Keep opt/lib/libmagic.so + opt/share/misc/magic.mgc; drop everything else
+# (the host `file` binary, headers, man pages, pkgconfig, libtool archives).
 shopt -s nullglob
-rm -rf "$PREFIX/bin" "$PREFIX/include"
+rm -rf "$PREFIX/bin" "$PREFIX/include" "$PREFIX/share/man"
 rm -rf "$PREFIX/lib/pkgconfig" "$PREFIX"/lib/*.la
