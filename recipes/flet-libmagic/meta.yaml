@@ -4,10 +4,10 @@ package:
   name: flet-libmagic
   version: '{{ version }}'
 
+build:
+  number: 1
+
 source:
   # The `file` project ships a release tarball with a pre-generated ./configure
   # (autotools), so no autoreconf is needed (unlike flet-libzbar).
   url: https://astron.com/pub/file/file-{{ version }}.tar.gz
-
-build:
-  number: 1
