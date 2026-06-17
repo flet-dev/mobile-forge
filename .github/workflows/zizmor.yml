@@ -8,7 +8,7 @@ permissions: {}
 
 jobs:
   zizmor:
-    name: zizmor
+    name: Run zizmor
     runs-on: ubuntu-latest
     permissions:
       security-events: write
