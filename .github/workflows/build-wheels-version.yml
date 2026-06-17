@@ -238,6 +238,31 @@ jobs:
           # Android deps: bzip2, libffi, openssl, sqlite, xz
           rm -f dist/bzip2-* dist/libffi-* dist/mpdecimal-* dist/openssl-* dist/sqlite-* dist/xz-*
 
+      - name: Summarize built wheels
+        if: always()
+        shell: bash
+        env:
+          JOB_NAME: ${{ matrix.job_name }}
+        run: |
+          {
+            echo "### 📦 ${JOB_NAME}"
+            echo
+            shopt -s nullglob
+            wheels=(dist/*.whl)
+            if [ ${#wheels[@]} -eq 0 ]; then
+              echo "⚠️ No wheels were built."
+            else
+              echo "**${#wheels[@]} wheel(s) built:**"
+              echo
+              echo "| Wheel | Size |"
+              echo "| --- | ---: |"
+              for w in "${wheels[@]}"; do
+                printf "| \`%s\` | %s |\n" "$(basename "$w")" "$(du -h "$w" | cut -f1)"
+              done
+            fi
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Detect test files
         id: detect-tests
         shell: bash
