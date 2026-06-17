@@ -1,0 +1,29 @@
+diff --git a/tokenizers/Cargo.toml b/tokenizers/Cargo.toml
+index b1d2fa2..ae9478e 100644
+--- a/tokenizers/Cargo.toml
++++ b/tokenizers/Cargo.toml
+@@ -68,6 +68,10 @@ harness = false
+ 
+ [dependencies]
+ rand = "0.9"
++# mobile-forge: 32-bit ARM (arm-linux-androideabi / armeabi-v7a) has no native
++# 64-bit atomics, so std::sync::atomic::AtomicU64 is absent. portable-atomic
++# supplies a fallback so the BPE NEXT_CACHE_ID below builds on armv7.
++portable-atomic = "1"
+ onig = { version = "6.5.1", default-features = false, optional = true }
+ regex = "1.10"
+ regex-syntax = "0.8"
+diff --git a/tokenizers/src/models/bpe/model.rs b/tokenizers/src/models/bpe/model.rs
+index 6cd2432..a4e2284 100644
+--- a/tokenizers/src/models/bpe/model.rs
++++ b/tokenizers/src/models/bpe/model.rs
+@@ -6,7 +6,8 @@ use ahash::AHashMap;
+ use serde_json::Value;
+ use std::borrow::Cow;
+ use std::cell::RefCell;
+-use std::sync::atomic::{AtomicU64, Ordering};
++use portable_atomic::AtomicU64;
++use std::sync::atomic::Ordering;
+ 
+ use std::collections::HashMap;
+ use std::str::from_utf8_unchecked;
