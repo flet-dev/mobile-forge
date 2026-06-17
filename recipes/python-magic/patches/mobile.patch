@@ -1,0 +1,43 @@
+diff --git a/magic/loader.py b/magic/loader.py
+index 931f161..60479a0 100644
+--- a/magic/loader.py
++++ b/magic/loader.py
+@@ -8,6 +8,16 @@ def _lib_candidates():
+ 
+   yield find_library('magic')
+ 
++  # mobile-forge: flet-libmagic ships libmagic under <site-packages>/opt/lib and
++  # serious-python surfaces it (Android jniLibs / iOS framework). find_library()
++  # returns None on iOS/Android, so also try the bundled lib + native-dir names.
++  _optlib = os.path.join(
++    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'opt', 'lib')
++  yield os.path.join(_optlib, 'libmagic.fwork')   # iOS embedded framework
++  yield os.path.join(_optlib, 'libmagic.so')      # generic shipped path
++  yield 'libmagic.so'                              # Android jniLibs
++  yield 'libmagic.dylib'                           # desktop fallback
++
+   if sys.platform == 'darwin':
+ 
+     paths = [
+diff --git a/magic/__init__.py b/magic/__init__.py
+index bab7c7b..e389603 100644
+--- a/magic/__init__.py
++++ b/magic/__init__.py
+@@ -70,6 +70,17 @@ class Magic:
+         self.cookie = magic_open(self.flags)
+         self.lock = threading.Lock()
+ 
++        # mobile-forge: on iOS/Android there is no system magic database, so
++        # default to the magic.mgc shipped by the flet-libmagic wheel at
++        # <site-packages>/opt/share/misc/magic.mgc when no explicit db is given.
++        if magic_file is None:
++            import os
++            _bundled_db = os.path.join(
++                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
++                'opt', 'share', 'misc', 'magic.mgc')
++            if os.path.exists(_bundled_db):
++                magic_file = _bundled_db
++
+         magic_load(self.cookie, magic_file)
+ 
+         # MAGIC_EXTENSION was added in 523 or 524, so bail if
