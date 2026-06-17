@@ -13,7 +13,12 @@ common_args="\
     --enable-static --disable-shared \
     --disable-odbc \
     --disable-libiconv \
+    --disable-apps --disable-server --disable-pool \
     --with-openssl=$OPENSSL_DIR"
+# pymssql links only the libraries (libsybdb + libtds). The CLI tools in
+# src/apps (tsql, fisql) need readline — absent on iOS, where cross-configure
+# otherwise mis-detects the build host's copy and fisql.c fails to compile.
+# server/pool are equally unneeded. Dropping all three avoids that and is faster.
 
 if [ "$CROSS_VENV_SDK" = "android" ]; then
     HOST=$HOST_TRIPLET
