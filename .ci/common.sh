@@ -16,12 +16,14 @@ function publish_to_pypi() {
         local name resp code body result
         name=$(basename "$wheel")
         # -w appends the HTTP status on its own final line; the rest is the body.
-        resp=$(curl -sS -w $'\n%{http_code}' -F package=@"$wheel" "https://$GEMFURY_TOKEN@push.fury.io/flet/" 2>&1)
+        # Capture stdout only: curl errors (-S) go to stderr / the CI log, so a
+        # transfer failure can't push a non-status line onto what tail parses.
+        resp=$(curl -sS -w $'\n%{http_code}' -F package=@"$wheel" "https://$GEMFURY_TOKEN@push.fury.io/flet/")
         code=$(printf '%s' "$resp" | tail -n1)
         body=$(printf '%s' "$resp" | sed '$d')
         if [ "$code" = "200" ] || [ "$code" = "201" ]; then
             result="✅ published"; published=$((published + 1))
-        elif [ "$code" = "409" ] || printf '%s' "$body" | grep -qiE "already exists|same version|denied"; then
+        elif [ "$code" = "409" ] || printf '%s' "$body" | grep -qiE "already exists|same version"; then
             result="⏭️ already exists"; duplicate=$((duplicate + 1))
         else
             result="❌ failed (HTTP ${code})"; failed=$((failed + 1))
