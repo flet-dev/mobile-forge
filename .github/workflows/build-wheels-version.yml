@@ -245,13 +245,22 @@ jobs:
           FORGE_PACKAGES: ${{ matrix.forge_packages }}
           PYTHON_SHORT: ${{ matrix.python_short }}
           MOBILE_TEST_PYTHONS: ${{ inputs.mobile_test_pythons }}
+          EVENT_NAME: ${{ github.event_name }}
+          GIT_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
           pkg_name="${FORGE_PACKAGES%%:*}"
           pkg_version="${FORGE_PACKAGES#*:}"
           [[ "$pkg_version" == "$FORGE_PACKAGES" ]] && pkg_version=""
 
-          # Gate on the caller-provided mobile_test_pythons list: only Python 
+          # Skip mobile tests on push-to-main, assuming it has already been tested in PR
+          if [[ "$EVENT_NAME" == "push" && "$GIT_REF" == "refs/heads/main" ]]; then
+            echo "::notice::Skipping mobile test — push to main (already tested in the PR)"
+            echo "has_tests=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Gate on the caller-provided mobile_test_pythons list: only Python
           # versions in that list actually run the APK/iOS-sim test step.
           if [[ "$MOBILE_TEST_PYTHONS" != "ALL" ]]; then
             allowed=""
