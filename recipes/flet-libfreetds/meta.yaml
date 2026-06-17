@@ -9,7 +9,7 @@ source:
   url: https://www.freetds.org/files/stable/freetds-{{ version }}.tar.gz
 
 build:
-  number: 0
+  number: 1
   script_env:
     # OpenSSL (for TLS) comes from the python-build support tree, surfaced by the
     # `openssl` host requirement at {platlib}/opt (same as cryptography).

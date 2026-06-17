@@ -1,11 +1,9 @@
-{% set version = "2.3.13" %}
-
 package:
   name: pymssql
-  version: '{{ version }}'
+  version: 2.3.13
 
 build:
-  number: 0
+  number: 1
   script_env:
     # pymssql's setup.py locates FreeTDS + OpenSSL via these env vars, and links
     # FreeTDS statically into the _mssql extension. Both flet-libfreetds and the
