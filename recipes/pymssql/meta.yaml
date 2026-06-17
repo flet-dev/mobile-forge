@@ -1,0 +1,22 @@
+package:
+  name: pymssql
+  version: 2.3.13
+
+build:
+  number: 1
+  script_env:
+    # pymssql's setup.py locates FreeTDS + OpenSSL via these env vars, and links
+    # FreeTDS statically into the _mssql extension. Both flet-libfreetds and the
+    # openssl host dep install their opt/ trees into {platlib}/opt.
+    PYMSSQL_FREETDS: '{platlib}/opt'
+    PYMSSQL_OPENSSL: '{platlib}/opt'
+    LINK_FREETDS_STATICALLY: 'YES'
+    # flet-libfreetds is built without Kerberos (--without --enable-krb5), so
+    # don't pull in gssapi_krb5/krb5 (unavailable on mobile, and unneeded for
+    # SQL-auth / TLS connections).
+    LINK_KRB5: 'NO'
+
+requirements:
+  host:
+    - flet-libfreetds 1.4.27
+    - openssl ^3.0.12
