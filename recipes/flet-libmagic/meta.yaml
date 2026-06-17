@@ -10,4 +10,4 @@ source:
   url: https://astron.com/pub/file/file-{{ version }}.tar.gz
 
 build:
-  number: 0
+  number: 1

@@ -56,7 +56,11 @@ else
         x86_64-apple-ios-simulator) host=x86_64-apple-darwin23 ;;
         *) echo "Unknown iOS host triplet: $HOST_TRIPLET"; exit 1 ;;
     esac
-    ./configure \
+    # iOS's simulator SDK exports pipe2 as a linkable symbol (so configure's
+    # cross AC_CHECK_FUNC sets HAVE_PIPE2) but doesn't declare it for the
+    # deployment target -> implicit-declaration error in funcs.c. Force it off
+    # so file uses its pipe()+fcntl fallback.
+    ac_cv_func_pipe2=no ./configure \
         --host=$host \
         --prefix=$PREFIX \
         --enable-static --disable-shared \
