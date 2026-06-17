@@ -146,7 +146,7 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
         *) meaning="" ;;
     esac
     {
-        echo "## recipe-tester — ${PLATFORM}"
+        echo "### 🧪 On-device test — ${PLATFORM}"
         echo
         if [[ "$EXIT_CODE" == "0" ]]; then
             echo "**Result:** ✅ exit 0"
