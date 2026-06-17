@@ -1,0 +1,70 @@
+Make apsw's sdist build safe to cross-compile for iOS / Android.
+
+apsw's PyPI sdist does NOT bundle the SQLite amalgamation. Its bundled
+`setup.apsw` config sets `fetch = True`, so the wheel build downloads the
+version-matched SQLite amalgamation (sqlite-autoconf-<ver>.tar.gz) from
+sqlite.org into a `sqlite3/` directory; `findamalgamation()` then statically
+compiles `sqlite3/sqlite3.c` straight into the extension
+(APSW_USE_SQLITE_AMALGAMATION=1) -> a self-contained .so with no external
+libsqlite3 link. That part is exactly what we want for mobile.
+
+Three default behaviours are host-tainted and must be neutralised for a
+cross-compile:
+
+  1. After fetching the amalgamation, setup.py runs `./configure` inside
+     sqlite3/ on non-Windows hosts (autosetup), generating sqlite3/sqlite_cfg.h
+     which is then consumed via _HAVE_SQLITE_CONFIG_H=1. Under crossenv that
+     configure probes/links for the BUILD machine (macOS), not the iOS/Android
+     target, baking host feature detection into the wheel. Drop the configure
+     run entirely; the SQLite amalgamation compiles fine with its built-in
+     defaults plus apsw's own SQLITE_ENABLE_* flags (from enable_all_extensions).
+
+  2. The full-source fetch (`fc.all = True`) pulls sqlite-src + vec1 + sqlar +
+     zlib zips from several hosts -- fragile and unnecessary; only the
+     amalgamation tarball is needed for findamalgamation(). Set `fc.all = False`
+     so just sqlite-autoconf-<ver>.tar.gz is downloaded.
+
+  3. APSW_FORK_CHECKER is compiled in iff the BUILD python has os.fork (always
+     true on a macOS build host). It is target-inappropriate for mobile (iOS
+     python typically lacks os.fork) and relies on pthread_atfork. Drop the
+     define so the mobile wheel matches its target rather than the build host.
+
+--- a/setup.py
++++ b/setup.py
+@@ -351,16 +351,7 @@
+                     assert info.mode & 0o777 == info.mode
+                     self.extract_entry(tarf.extractfile(info).read(), info.name, info.mtime, info.mode)
+ 
+-            if sys.platform != "win32":
+-                write("    Running configure to work out SQLite compilation flags")
+-                env = os.environ.copy()
+-                for v in "CC", "CFLAGS", "LDFLAGS":
+-                    val = sysconfig.get_config_var(v)
+-                    if val:
+-                        env[v] = val
+-                subprocess.check_call(["./configure"], cwd="sqlite3", env=env)
+ 
+-
+ # We allow enable/omit to be specified to build and then pass them to build_ext
+ build_enable = None
+ build_omit = None
+@@ -398,7 +389,7 @@
+         if self.fetch:
+             fc = fetch(self._saved_dist)
+             fc.initialize_options()
+-            fc.all = True
++            fc.all = False
+             fc.finalize_options()
+             fc.run()
+         return bparent.finalize_options(self)
+@@ -557,10 +548,6 @@
+         else:
+             ext.define_macros.append(("NDEBUG", "1"))
+ 
+-        # fork checker?
+-        if hasattr(os, "fork"):
+-            ext.define_macros.append(("APSW_FORK_CHECKER", "1"))
+-
+         # SQLite 3
+         # Look for amalgamation in sqlite3 subdirectory
+ 
