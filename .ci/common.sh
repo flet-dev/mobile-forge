@@ -1,10 +1,9 @@
 function publish_to_pypi() {
     # Upload each wheel to Gemfury, capturing the per-wheel result and writing it
     # to the GitHub job summary. Gemfury returns 200/201 on success and 409 (or a
-    # "already exists" message) for an already-published version; anything else is
-    # a real failure. Duplicates are expected on re-publish, so only real failures
-    # make this return non-zero (so the publish step no longer silently swallows
-    # upload errors).
+    # "already exists" message) for an already-published version; anything else is a
+    # real failure. Duplicates are expected on re-publish, so only real failures make
+    # this return non-zero (so the publish step doesn't silently swallows upload errors).
     local summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
     local published=0 duplicate=0 failed=0
     {
