@@ -1,0 +1,39 @@
+On Android, primp's Python extension enables the `hickory-dns` feature, and
+primp-reqwest follows reqwest's default of using Hickory whenever that feature
+is compiled in. Hickory 0.26 reads Android DNS servers through `ndk-context`;
+that crate expects a Rust/NDK app runtime to call
+`initialize_android_context()` before use.
+
+Flet loads primp as a Python extension inside serious_python, so that Rust
+global is not initialized. The first request then aborts the process from the
+DartWorker thread with:
+
+    android context was not initialized
+
+Use the getaddrinfo-backed resolver by default for the Python binding on
+mobile when the caller has not supplied an explicit resolver. Custom DNS
+resolver options exposed by primp remain available; this only changes the
+automatic default chosen for ordinary `primp.Client().get(...)` calls.
+
+--- a/crates/primp-python/src/client_builder.rs
++++ b/crates/primp-python/src/client_builder.rs
+@@ -226,6 +226,19 @@ pub fn configure_client_builder(
+     // DNS resolver (fallback chain)
+     if !dns_resolvers.is_empty() {
+         builder = builder.dns_resolver(dns_resolvers);
++    } else {
++        // flet-dev/flet#6603: hickory-dns is compiled in, which makes Hickory
++        // the default resolver. On Android, Hickory's system DNS path calls
++        // ndk_context::android_context(), but Flet/serious_python does not
++        // initialize that Rust global. With panic=abort, the first request
++        // SIGABRTs before Python can raise. getaddrinfo resolves through the
++        // platform resolver and needs no Android Context. Explicit DoH/DoT/plain
++        // resolvers still use the user-selected Hickory-backed paths.
++        #[cfg(any(target_os = "android", target_os = "ios"))]
++        {
++            let gai: Arc<dyn Resolve> = Arc::new(::primp::dns::gai::GaiResolver::new());
++            builder = builder.dns_resolver(vec![gai]);
++        }
+     }
+ 
+     Ok((builder, proxy))
