@@ -10,18 +10,30 @@ DartWorker thread with:
 
     android context was not initialized
 
-Use the getaddrinfo-backed resolver by default on Android. Custom DNS resolver
-options exposed by primp remain available; this only changes the automatic
-default chosen for ordinary `primp.Client().get(...)` calls.
+Use the getaddrinfo-backed resolver by default for the Python binding on
+mobile when the caller has not supplied an explicit resolver. Custom DNS
+resolver options exposed by primp remain available; this only changes the
+automatic default chosen for ordinary `primp.Client().get(...)` calls.
 
---- a/crates/primp-reqwest/src/async_impl/client.rs
-+++ b/crates/primp-reqwest/src/async_impl/client.rs
-@@ -406,7 +406,7 @@ impl ClientBuilder {
-                 ))]
-                 interface: None,
-                 nodelay: true,
--                hickory_dns: cfg!(feature = "hickory-dns"),
-+                hickory_dns: cfg!(all(feature = "hickory-dns", not(target_os = "android"))),
-                 #[cfg(feature = "cookies")]
-                 cookie_store: None,
-                 https_only: false,
+--- a/crates/primp-python/src/client_builder.rs
++++ b/crates/primp-python/src/client_builder.rs
+@@ -226,6 +226,19 @@ pub fn configure_client_builder(
+     // DNS resolver (fallback chain)
+     if !dns_resolvers.is_empty() {
+         builder = builder.dns_resolver(dns_resolvers);
++    } else {
++        // flet-dev/flet#6603: hickory-dns is compiled in, which makes Hickory
++        // the default resolver. On Android, Hickory's system DNS path calls
++        // ndk_context::android_context(), but Flet/serious_python does not
++        // initialize that Rust global. With panic=abort, the first request
++        // SIGABRTs before Python can raise. getaddrinfo resolves through the
++        // platform resolver and needs no Android Context. Explicit DoH/DoT/plain
++        // resolvers still use the user-selected Hickory-backed paths.
++        #[cfg(any(target_os = "android", target_os = "ios"))]
++        {
++            let gai: Arc<dyn Resolve> = Arc::new(::primp::dns::gai::GaiResolver::new());
++            builder = builder.dns_resolver(vec![gai]);
++        }
+     }
+ 
+     Ok((builder, proxy))
