@@ -1,0 +1,27 @@
+On Android, primp's Python extension enables the `hickory-dns` feature, and
+primp-reqwest follows reqwest's default of using Hickory whenever that feature
+is compiled in. Hickory 0.26 reads Android DNS servers through `ndk-context`;
+that crate expects a Rust/NDK app runtime to call
+`initialize_android_context()` before use.
+
+Flet loads primp as a Python extension inside serious_python, so that Rust
+global is not initialized. The first request then aborts the process from the
+DartWorker thread with:
+
+    android context was not initialized
+
+Use the getaddrinfo-backed resolver by default on Android. Custom DNS resolver
+options exposed by primp remain available; this only changes the automatic
+default chosen for ordinary `primp.Client().get(...)` calls.
+
+--- a/crates/primp-reqwest/src/async_impl/client.rs
++++ b/crates/primp-reqwest/src/async_impl/client.rs
+@@ -406,7 +406,7 @@ impl ClientBuilder {
+                 ))]
+                 interface: None,
+                 nodelay: true,
+-                hickory_dns: cfg!(feature = "hickory-dns"),
++                hickory_dns: cfg!(all(feature = "hickory-dns", not(target_os = "android"))),
+                 #[cfg(feature = "cookies")]
+                 cookie_store: None,
+                 https_only: false,
