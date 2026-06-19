@@ -1,0 +1,18 @@
+package:
+  name: oracledb
+  version: 4.0.1
+
+build:
+  number: 1
+
+requirements:
+  # python-oracledb compiles four Cython extensions (base_impl, thin_impl,
+  # thick_impl, arrow_impl) from .pyx via setuptools+Cython. All native deps are
+  # vendored in the sdist (ODPI-C for thick mode, nanoarrow for arrow), so there
+  # is NO external native library to link — no flet-lib* host dep needed.
+  # `cryptography` (a shipped recipe) and `typing_extensions` (pure-Python) are
+  # runtime deps carried in the wheel metadata and resolved at app-build time.
+  # Thick mode dlopens the Oracle Instant Client at runtime only (absent on
+  # mobile); the default THIN mode is pure sockets and needs no client libs.
+  build:
+    - cython
