@@ -86,8 +86,12 @@ properties:
     properties:
       number:
         type: integer
-        default: 0
-        description: Used as the wheel build tag.
+        default: 1
+        description: >-
+          The build number, which is part of the wheel tag and can be used to 
+          distinguish multiple builds of the same version. Higher numbers are newer and 
+          have higher precedence when pip chooses between multiple available wheels,
+          for a given version and platform.
       script_env:
         type: object
         default: {}

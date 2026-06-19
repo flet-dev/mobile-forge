@@ -1,0 +1,9 @@
+package:
+  name: apsw
+  version: "3.53.2.0"
+
+build:
+  number: 1
+
+patches:
+  - mobile.patch

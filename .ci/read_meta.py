@@ -10,9 +10,9 @@ Two modes:
       Print the build-matrix summary line — tab-separated:
           <version>\t<build_number>\t<space-joined-platforms>
       Examples:
-          2.2.2\t0\t                 # numpy (no platforms, no build override)
-          1.6.1\t0\tandroid          # pyjnius
-          8.11.0\t1\t                # flet-libcurl (uses Jinja `{% set %}`)
+          2.2.2\t1\t                 # numpy (no platforms)
+          1.6.1\t1\tandroid          # pyjnius
+          8.11.0\t2\t                # flet-libcurl (build bump)
       The fields here are platform-independent, so it renders with a generic
       `sdk='android'` context.
 
@@ -74,9 +74,9 @@ def summary_line(path: str) -> str:
             version = str(pkg["version"])
         if pkg.get("platforms"):
             platforms = " ".join(pkg["platforms"])
-        # build.number defaults to 0 in the schema, but raw meta.yaml may omit
+        # build.number defaults to 1 in the schema, but raw meta.yaml may omit
         # it. Match the schema default rather than treating it as unknown.
-        build_number = str((meta.get("build") or {}).get("number", 0))
+        build_number = str((meta.get("build") or {}).get("number", 1))
     except Exception:
         pass
     return f"{version}\t{build_number}\t{platforms}"

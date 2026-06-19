@@ -145,8 +145,13 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
         5) meaning=" (no tests collected)" ;;
         *) meaning="" ;;
     esac
+    case "$PLATFORM" in
+        android) test_title="Test on Android Emulator" ;;
+        ios)     test_title="Test on iOS Simulator" ;;
+        *)       test_title="Test on ${PLATFORM}" ;;
+    esac
     {
-        echo "## recipe-tester — ${PLATFORM}"
+        echo "### 🧪 ${test_title}"
         echo
         if [[ "$EXIT_CODE" == "0" ]]; then
             echo "**Result:** ✅ exit 0"

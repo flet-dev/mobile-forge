@@ -1,0 +1,20 @@
+{% set version = "1.4.27" %}
+
+package:
+  name: flet-libfreetds
+  version: '{{ version }}'
+
+source:
+  # FreeTDS ships a release tarball with a pre-generated ./configure (autotools).
+  url: https://www.freetds.org/files/stable/freetds-{{ version }}.tar.gz
+
+build:
+  number: 1
+  script_env:
+    # OpenSSL (for TLS) comes from the python-build support tree, surfaced by the
+    # `openssl` host requirement at {platlib}/opt (same as cryptography).
+    OPENSSL_DIR: '{platlib}/opt'
+
+requirements:
+  host:
+    - openssl ^3.0.12

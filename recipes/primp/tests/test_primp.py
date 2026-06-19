@@ -21,3 +21,25 @@ def test_exception_hierarchy():
     assert issubclass(primp.ConnectError, primp.RequestError)
     assert issubclass(primp.TimeoutError, primp.RequestError)
     assert issubclass(primp.StatusError, primp.PrimpError)
+
+
+def test_https_request_does_not_abort_process():
+    """A first HTTPS request should either complete or raise a Python error.
+
+    Mobile runtimes must not abort the process while initializing DNS, TLS, or
+    other native request machinery.
+    """
+    import primp
+
+    client = primp.Client(timeout=10, connect_timeout=10)
+    try:
+        response = client.get("https://example.com")
+    except primp.RequestError:
+        print("primp HTTPS request result: RequestError")
+        # Some device/CI environments have restricted outbound networking.
+        # The regression we need to catch is a native abort, not a Python-level
+        # request failure.
+        return
+
+    print(f"primp HTTPS request result: status={response.status_code}")
+    assert response.status_code < 600
