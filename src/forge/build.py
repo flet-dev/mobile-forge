@@ -576,6 +576,24 @@ class Builder(ABC):
             log(self.log_file, "=" * 80)
             log(self.log_file, f"Building {self.package} for {self.cross_venv.tag}")
             log(self.log_file, "=" * 80)
+
+            # Surface a recipe's build.before_all (host build-tool setup) locally.
+            # This is skipped on CI, where they get installed on the ephemeral runner.
+            before_all = (self.package.meta.get("build") or {}).get("before_all")
+            if before_all and not os.environ.get("GITHUB_ACTIONS"):
+                cmds = [before_all] if isinstance(before_all, str) else before_all
+                log(
+                    self.log_file,
+                    "NOTE: this recipe needs host build tools set up first",
+                )
+                log(
+                    self.log_file,
+                    "      (forge does not run these — run them yourself):",
+                )
+                for c in cmds:
+                    log(self.log_file, f"      $ {c}")
+                log(self.log_file, "-" * 80)
+
             try:
                 self.prepare(clean=clean)
                 self._build()

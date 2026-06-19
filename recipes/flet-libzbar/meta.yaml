@@ -12,6 +12,16 @@ source:
 
 build:
   number: 1
+  # zbar's GitHub archive ships only configure.ac, so build.sh runs autoreconf —
+  # which needs autotools + gettext/autopoint on the build host.
+  before_all:
+# {% if sdk == 'android' %}
+    - sudo apt-get update && sudo apt-get install -y autoconf automake libtool gettext autopoint
+# {% else %}
+    - brew install autoconf automake libtool gettext
+    - brew link --force gettext   # keg-only -> puts autopoint on PATH for autoreconf
+# {% endif %}
+
 # {% if sdk == 'android' %}
 requirements:
   host:

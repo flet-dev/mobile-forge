@@ -191,6 +191,28 @@ jobs:
         shell: bash
         run: .ci/install_ndk.sh "$FORGE_NDK_VERSION"
 
+      - name: Run recipe before_all (host build tools)
+        shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          FORGE_PACKAGES: ${{ matrix.forge_packages }}
+          PREBUILD_RECIPES: ${{ inputs.prebuild_recipes }}
+        # Each recipe declares its own host build-tool setup in build.before_all
+        # (rendered per-platform); run it for every recipe this job builds
+        # (prebuild deps + the package) so the workflow stays recipe-agnostic.
+        # apt/brew installs and `brew link` persist to the Build step that follows.
+        run: |
+          set -euo pipefail
+          for r in $(echo "${PREBUILD_RECIPES},${FORGE_PACKAGES}" | tr ',' ' '); do
+            r="${r%%:*}"
+            [ -n "$r" ] && [ -f "recipes/$r/meta.yaml" ] || continue
+            cmd="$(uv run --script .ci/read_meta.py "recipes/$r/meta.yaml" build.before_all "$PLATFORM")"
+            [ -n "$cmd" ] || continue
+            echo "::group::before_all: $r"
+            bash -euxc "$cmd"
+            echo "::endgroup::"
+          done
+
       - name: Build wheels
         shell: bash
         env:
@@ -209,18 +231,10 @@ jobs:
 
           if [[ "$PLATFORM" == "android" ]]; then
             sudo apt-get update
-            # pkg-config is what meson's `py.dependency()` uses to resolve the Python C dep via
-            # the `.pc` files setup.sh relocates. Without it, meson falls back to sysconfig — which on
-            # Python 3.14 returns the bogus `/usr/local/...` paths and reports the dep as "not found".
-            # autoconf/automake/libtool + gettext/autopoint: recipes that autoreconf an
-            # upstream that ships only configure.ac (e.g. flet-libzbar from the zbar git archive,
-            # whose configure.ac uses AM_GNU_GETTEXT -> autopoint).
-            sudo apt-get install -y sqlite3 pkg-config autoconf automake libtool gettext autopoint
-          else
-            # iOS (macOS runner): same autotools/gettext for autoreconf recipes. gettext is
-            # keg-only on Homebrew, so put its bin (autopoint) on PATH for the build below.
-            brew install autoconf automake libtool gettext >/dev/null 2>&1 || true
-            export PATH="$(brew --prefix gettext)/bin:$PATH"
+            # Baseline host tools needed broadly: sqlite3 and pkg-config (used by meson's py.dependency()
+            # to resolve the Python C dep via the .pc files setup.sh relocates; without
+            # it meson falls back to the bogus /usr/local/... sysconfig paths on 3.14).
+            sudo apt-get install -y sqlite3 pkg-config
           fi
 
           # Sets up and downloads the matching mobile-forge support package for the requested platform.

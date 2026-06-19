@@ -93,6 +93,20 @@ properties:
         default: {}
         description: >-
           Environment variables in the form KEY=value (no spaces around =).
+      before_all:
+        oneOf:
+          - type: string
+          - type: array
+            items:
+              type: string
+        description: >-
+          Shell command(s) run once per platform on the build HOST before
+          building, to set up non-Python build tools the runner doesn't already
+          have (e.g. autotools + gettext for an autoreconf'd source, or
+          `brew link` for a keg-only formula). Jinja-rendered, so it can branch
+          on `sdk`; an array is run as separate commands. The CI harness runs
+          this on the ephemeral runner — forge does NOT run it locally (it only
+          surfaces it as a hint), so keep it to host build-tool setup.
     additionalProperties: true
 
   requirements:
