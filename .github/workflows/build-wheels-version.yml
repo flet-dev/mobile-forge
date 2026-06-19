@@ -191,7 +191,7 @@ jobs:
         shell: bash
         run: .ci/install_ndk.sh "$FORGE_NDK_VERSION"
 
-      - name: Run recipe before_all (host build tools)
+      - name: Run recipe `build.before_all` hooks
         shell: bash
         env:
           PLATFORM: ${{ matrix.platform }}
@@ -246,10 +246,7 @@ jobs:
           # freshly-built libs over whatever pypi.flet.dev has published.
           if [[ -n "${PREBUILD_RECIPES:-}" ]]; then
             for lib in $(echo "$PREBUILD_RECIPES" | tr ',' ' '); do
-              # Respect each prebuild recipe's declared `platforms` (same gating the
-              # matrix applies to packages). e.g. flet-libiconv is android-only — iOS
-              # has a system libiconv — so without this the prebuild forces it onto
-              # iOS and its build.sh fails.
+              # Respect each prebuild recipe's declared `platforms`.
               declared=""
               if [[ -f "recipes/$lib/meta.yaml" ]]; then
                 IFS=$'\t' read -r _ _ declared <<< "$(uv run --script .ci/read_meta.py "recipes/$lib/meta.yaml")"

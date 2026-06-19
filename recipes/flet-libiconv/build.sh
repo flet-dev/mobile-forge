@@ -1,7 +1,7 @@
 #!/bin/bash
 # flet-libiconv: GNU libiconv as a STATIC, PIC archive for Android. It gets
 # folded into shared consumers (libzbar.so), so it must be -fPIC. Android-only
-# (iOS/macOS provide a system libiconv) — see package.platforms.
+# (iOS/macOS provide a system libiconv).
 set -eu
 
 # Static lib folded into a shared .so -> needs PIC.
