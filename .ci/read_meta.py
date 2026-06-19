@@ -9,10 +9,10 @@ tab-separated line:
 
 Examples:
 
-    2.2.2\t0\t                    # numpy (no platforms, no build override)
-    1.6.1\t0\tandroid             # pyjnius
-    1.2.3\t0\tios                 # pyobjus
-    8.11.0\t1\t                   # flet-libcurl (uses Jinja `{% set %}`)
+    2.2.2\t1\t                    # numpy (no platforms)
+    1.6.1\t1\tandroid             # pyjnius
+    1.2.3\t1\tios                 # pyobjus
+    8.11.0\t2\t                   # flet-libcurl (build bump)
 
 Used by the build-wheels.yml matrix step to (a) skip per-recipe
 (platform, pkg) combinations that the recipe opts out of, and (b)
@@ -60,10 +60,10 @@ def main(path: str) -> int:
         plat = pkg.get("platforms")
         if plat:
             platforms = " ".join(plat)
-        # build.number defaults to 0 in the schema, but raw meta.yaml may
-        # omit it. Match the schema default rather than treating it as
-        # unknown.
-        build = (meta.get("build") or {}).get("number", 0)
+
+        # build.number defaults to 1 in the schema, but raw meta.yaml may omit it.
+        # Match the schema default rather than treating it as unknown.
+        build = (meta.get("build") or {}).get("number", 1)
         build_number = str(build)
     except Exception:
         pass
