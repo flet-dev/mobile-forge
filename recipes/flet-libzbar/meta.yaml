@@ -1,0 +1,31 @@
+{% set version = "0.23.93" %}
+
+package:
+  name: flet-libzbar
+  version: '{{ version }}'
+
+source:
+  # No release tarball is published for the maintained mchehab/zbar fork; the
+  # GitHub source archive ships only configure.ac, so build.sh runs autoreconf
+  # to generate ./configure.
+  url: https://github.com/mchehab/zbar/archive/refs/tags/{{ version }}.tar.gz
+
+build:
+  number: 1
+  # zbar's GitHub archive ships only configure.ac, so build.sh runs autoreconf —
+  # which needs autotools + gettext/autopoint on the build host.
+  before_all:
+# {% if sdk == 'android' %}
+    - sudo apt-get update && sudo apt-get install -y autoconf automake libtool gettext autopoint
+# {% else %}
+    - brew install autoconf automake libtool gettext
+    - command -v autopoint >/dev/null || brew link --force gettext   # ensure autopoint (keg-only) on PATH
+# {% endif %}
+
+# {% if sdk == 'android' %}
+requirements:
+  host:
+    # zbar's QR decoder #includes <iconv.h> unconditionally; Android bionic has
+    # no iconv at API 24, so provide the static GNU libiconv to compile + link.
+    - flet-libiconv 1.17
+# {% endif %}

@@ -1,0 +1,16 @@
+{% set version = "1.17" %}
+
+package:
+  name: flet-libiconv
+  version: '{{ version }}'
+  # Android bionic only ships iconv from API 28; mobile-forge targets API 24, so
+  # Android-only consumers (e.g. flet-libzbar, whose QR decoder #includes
+  # <iconv.h> unconditionally) need this. iOS/macOS have a system libiconv, so
+  # this recipe is never built there.
+  platforms: [android]
+
+build:
+  number: 1
+
+source:
+  url: https://ftp.gnu.org/gnu/libiconv/libiconv-{{ version }}.tar.gz

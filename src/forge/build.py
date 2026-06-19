@@ -576,6 +576,24 @@ class Builder(ABC):
             log(self.log_file, "=" * 80)
             log(self.log_file, f"Building {self.package} for {self.cross_venv.tag}")
             log(self.log_file, "=" * 80)
+
+            # Surface a recipe's build.before_all (host build-tool setup) locally.
+            # This is skipped on CI, where they get installed on the ephemeral runner.
+            before_all = (self.package.meta.get("build") or {}).get("before_all")
+            if before_all and not os.environ.get("GITHUB_ACTIONS"):
+                cmds = [before_all] if isinstance(before_all, str) else before_all
+                log(
+                    self.log_file,
+                    "NOTE: this recipe needs host build tools set up first",
+                )
+                log(
+                    self.log_file,
+                    "      (forge does not run these — run them yourself):",
+                )
+                for c in cmds:
+                    log(self.log_file, f"      $ {c}")
+                log(self.log_file, "-" * 80)
+
             try:
                 self.prepare(clean=clean)
                 self._build()
@@ -978,6 +996,17 @@ class PythonPackageBuilder(Builder):
         return f"{py_tag}-{py_tag}-{self.cross_venv.tag}"
 
     def download_source_url(self):
+        # Honor an explicit source.url (e.g. a GitHub tag archive) for Python
+        # packages that publish no PyPI sdist (wheels-only, like pyzbar);
+        # otherwise resolve the sdist from PyPI.
+        source = self.package.meta.get("source")
+        if isinstance(source, dict) and "url" in source:
+            return source["url"].format(
+                version=self.package.meta["package"]["version"],
+                build=self.package.meta["build"]["number"],
+                sdk=self.cross_venv.sdk,
+                arch=self.cross_venv.arch,
+            )
         return get_pypi_source_urls(self.package.name)[self.package.version]
 
     def prepare(self, clean=True):
