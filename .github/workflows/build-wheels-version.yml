@@ -276,10 +276,13 @@ jobs:
             forge "$FORGE_ARCH" "$package"
           done
 
-          # Drop the support-tree dep wheels produced by make_dep_wheels.py
-          # iOS deps: bzip2, libffi, mpdecimal, openssl, xz
-          # Android deps: bzip2, libffi, openssl, sqlite, xz
-          rm -f dist/bzip2-* dist/libffi-* dist/mpdecimal-* dist/openssl-* dist/sqlite-* dist/xz-*
+      - name: Drop support-tree dep wheels
+        if: always()
+        shell: bash
+        # Drop the CPython support-tree dep wheels produced by make_dep_wheels.py
+        # iOS deps: bzip2, libffi, mpdecimal, openssl, xz
+        # Android deps: bzip2, libffi, openssl, sqlite, xz
+        run: rm -f dist/bzip2-* dist/libffi-* dist/mpdecimal-* dist/openssl-* dist/sqlite-* dist/xz-*
 
       - name: Summarize built wheels
         if: always()
