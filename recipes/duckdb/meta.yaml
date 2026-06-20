@@ -1,0 +1,49 @@
+package:
+  name: duckdb
+  version: 1.5.4
+
+requirements:
+  build:
+    # duckdb builds via scikit-build-core + CMake (Ninja generator); with forge's
+    # `--no-isolation` these must be in the build venv. scikit-build-core,
+    # pybind11 and setuptools_scm come from the package's own build-system.requires.
+    - cmake
+    - ninja
+# {% if sdk == 'android' %}
+  host:
+    # duckdb's _duckdb.so is C++; on Android it links libc++_shared.so, which the
+    # device runtime doesn't provide unless bundled.
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
+
+build:
+  number: 1
+  script_env:
+# {% if sdk == 'android' %}
+    CMAKE_ARGS: >-
+      -DCMAKE_TOOLCHAIN_FILE={NDK_ROOT}/build/cmake/android.toolchain.cmake
+      -DANDROID_ABI={ANDROID_ABI}
+      -DANDROID_NATIVE_API_LEVEL={ANDROID_API_LEVEL}
+      -DANDROID_STL=c++_shared
+      -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/env
+      -DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DCMAKE_MODULE_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DPython_EXECUTABLE={CROSS_VENV_PYTHON}
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.so
+# {% else %}
+    # The `ninja` pip package crashes importing on the iOS crossenv python
+    # (sysconfig.get_preferred_scheme('user') -> 'posix_user' invalid on iOS),
+    # so use the Makefiles generator on iOS; scikit-build-core then never imports
+    # ninja. (Android keeps Ninja, which works there.)
+    CMAKE_GENERATOR: Unix Makefiles
+    CMAKE_ARGS: >-
+      -DCMAKE_SYSTEM_NAME=iOS
+      -DCMAKE_OSX_SYSROOT={{ sdk }}
+      -DCMAKE_OSX_DEPLOYMENT_TARGET={{ sdk_version }}
+      -DCMAKE_OSX_ARCHITECTURES={{ arch }}
+      -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/env
+      -DPython_EXECUTABLE={CROSS_VENV_PYTHON}
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.dylib
+# {% endif %}
