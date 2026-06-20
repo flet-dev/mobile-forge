@@ -1,0 +1,40 @@
+--- a/setup.py	2026-06-17 21:43:57
++++ b/setup.py	2026-06-17 21:48:30
+@@ -79,6 +79,8 @@
+         self.build_ext = build_ext
+         self.pg_config_exe = self.build_ext.pg_config
+         if not self.pg_config_exe:
++            self.pg_config_exe = os.environ.get("PG_CONFIG")  # mobile-forge
++        if not self.pg_config_exe:
+             self.pg_config_exe = self.autodetect_pg_config_path()
+         if self.pg_config_exe is None:
+             sys.stderr.write("""
+@@ -362,6 +364,17 @@
+                 self.link_objects = []
+             self.link_objects.append(
+                 os.path.join(pg_config_helper.query("libdir"), "libpq.a"))
++            # mobile-forge: libpq.a references libpgcommon/libpgport symbols,
++            # and the whole static stack references OpenSSL (libpq TLS). Add
++            # both archives and -lssl/-lcrypto here so the link resolves on
++            # every target (the cross sys.platform matches no finalize_*).
++            for _a in ("libpgcommon.a", "libpgport.a"):
++                self.link_objects.append(
++                    os.path.join(pg_config_helper.query("libdir"), _a))
++            if self.libraries is None:
++                self.libraries = []
++            self.libraries.append("ssl")
++            self.libraries.append("crypto")
+         else:
+             self.libraries.append("pq")
+ 
+--- a/setup.cfg	2026-06-17 21:43:57
++++ b/setup.cfg	2026-06-17 21:48:30
+@@ -2,7 +2,7 @@
+ define = PSYCOPG_DEBUG
+ pg_config = 
+ have_ssl = 0
+-static_libpq = 0
++static_libpq = 1
+ libraries = 
+ 
+ [metadata]

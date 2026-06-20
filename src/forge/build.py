@@ -258,6 +258,11 @@ class Builder(ABC):
 
         log(self.log_file, f"\n[{self.cross_venv}] Install forge host requirements")
         self.install_requirements("host")
+        # host_build deps install into the cross env like host deps (so the build
+        # can link them), but are NOT promoted to the wheel's Requires-Dist (that
+        # loop below only walks "host"). For statically-linked native libs.
+        log(self.log_file, f"\n[{self.cross_venv}] Install forge host_build requirements")
+        self.install_requirements("host_build")
         self.fix_host_tool_shims()
 
         log(self.log_file, f"\n[{self.cross_venv}] Install forge build requirements")

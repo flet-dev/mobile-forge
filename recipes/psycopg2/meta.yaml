@@ -1,0 +1,28 @@
+package:
+  name: psycopg2
+  version: 2.9.12
+
+build:
+  number: 1
+  script_env:
+    # psycopg2's setup.py shells out to pg_config to locate libpq. flet-libpq
+    # ships a relocatable shim at opt/bin/pg_config; mobile.patch teaches the
+    # setup to read its path from PG_CONFIG (it otherwise only checks PATH).
+    PG_CONFIG: '{platlib}/opt/bin/pg_config'
+
+requirements:
+  host:
+    # openssl resolves libpq's TLS symbols (-lssl -lcrypto, added by setup.py's
+    # finalize_darwin since the build host is macOS). It lives in the base flet
+    # runtime, so it isn't promoted to Requires-Dist.
+    - openssl ^3.0.12
+  host_build:
+    # flet-libpq is STATICALLY folded into _psycopg.so (static_libpq=1,
+    # mobile.patch links libpq.a + libpgcommon.a + libpgport.a) — so it's a
+    # build-time-only dependency. host_build extracts it for the link without
+    # adding it to the wheel's Requires-Dist, so a psycopg2 app does not bundle
+    # the (unused) flet-libpq wheel at runtime.
+    - flet-libpq 17.5
+
+patches:
+  - mobile.patch

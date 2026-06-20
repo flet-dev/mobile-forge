@@ -1,0 +1,21 @@
+{% set version = "17.5" %}
+
+package:
+  name: flet-libpq
+  version: '{{ version }}'
+
+source:
+  # PostgreSQL ships a release tarball with a pre-generated ./configure
+  # (autotools); we build only src/interfaces/libpq (the client library).
+  url: https://ftp.postgresql.org/pub/source/v{{ version }}/postgresql-{{ version }}.tar.gz
+
+build:
+  number: 1
+  script_env:
+    # OpenSSL (libpq TLS) comes from the python-build support tree, surfaced by
+    # the `openssl` host requirement at {platlib}/opt (same as cryptography).
+    OPENSSL_DIR: '{platlib}/opt'
+
+requirements:
+  host:
+    - openssl ^3.0.12

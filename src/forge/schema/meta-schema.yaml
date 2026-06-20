@@ -124,12 +124,14 @@ properties:
         items:
           type: string
         description: |-
-          Requirements which must be installed in the build environment.
-          One of the following:
-            * `<package> <version>`: A Python package.
-            * `cmake`: indicates that CMake is used in the build. A
-              `chaquopy.toolchain.cmake` file will be generated in the
-              build directory for use with `-DCMAKE_TOOLCHAIN_FILE`.
+          Build-time tools, installed into the BUILD environment — the
+          host-runnable side of the cross venv (via `build-pip`) — for programs
+          that must RUN on the build machine to produce the wheel, e.g. `cython`,
+          `cmake`, `ninja`, `meson`, `setuptools`. Source distributions are
+          allowed here (this environment is native to the build host). These are
+          NEVER recorded as runtime dependencies of the wheel (not added to
+          Requires-Dist). The package's own PEP 517 `build-system.requires` (from
+          its pyproject.toml) are installed automatically in addition to these.
 
       host:
         type: array
@@ -137,19 +139,37 @@ properties:
         items:
           type: string
         description: |-
-          Requirements which must be available at runtime. One of the
-          following:
-            * `<package> <version>`: a native Python package. A
-              compatible wheel file must exist in pypi/dist, and will be
-              extracted into $SRC_DIR/../requirements before the build
-              is run. A requirement specification for >= this version
-              will also be added to the final wheel.
-            * `python`: indicates that this is a Python package. This is
-              implied if `source` is `pypi` or unspecified. Python
-              includes and libraries will be added to the CFLAGS and
-              LDFLAGS, and the wheel build tag will be set accordingly.
-            * `openssl` / `sqlite`: the corresponding library will be
-              added to CFLAGS and LDFLAGS.
+          Native (cross-compiled) libraries the package links against, installed
+          into the CROSS/target environment — target binary wheels only
+          (`--only-binary`; a matching wheel must resolve from `dist/` or
+          pypi.flet.dev). Each unpacks an `opt/` tree under the cross env
+          (`install_root`); its `opt/include` and `opt/lib` are added
+          automatically to the build's CFLAGS/LDFLAGS, and `opt/lib/pkgconfig` to
+          the pkg-config search path. A recipe can also reach specific files via
+          the `{platlib}`/`{prefix}` placeholders in `build.script_env`
+          (e.g. `{platlib}/opt/bin/pg_config`). A `flet-*` host requirement is
+          ALSO written into the wheel's `Requires-Dist` (pinned `==` to its
+          version), so the consuming app bundles it at runtime — use `host` when
+          the package DYNAMICALLY links or `ctypes`-loads the lib at runtime
+          (e.g. psycopg v3 -> flet-libpq, pyzbar -> flet-libzbar). Non-`flet-*`
+          entries (e.g. `openssl`, part of the base Flet runtime) are used for the
+          build link only and are NOT promoted to Requires-Dist. For a lib that is
+          STATICALLY linked into the package instead, use `host_build`.
+
+      host_build:
+        type: array
+        default: []
+        items:
+          type: string
+        description: |-
+          Like `host` — a native target library installed into the cross
+          environment, with its `opt/include`/`opt/lib` wired into the build's
+          CFLAGS/LDFLAGS/pkg-config — but BUILD-TIME ONLY: it is NOT added to
+          the wheel's Requires-Dist. Use for a `flet-*` lib the package STATICALLY
+          links and folds into its own `.so` (e.g. psycopg2 -> flet-libpq,
+          pymssql -> flet-libfreetds): the lib is baked into the extension at
+          build time, so the consuming app must not also bundle the (unused)
+          `flet-*` wheel at runtime.
 
     additionalProperties: false
 
