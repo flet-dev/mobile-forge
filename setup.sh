@@ -354,6 +354,17 @@ if [ ! -z "$MOBILE_FORGE_ANDROID_SUPPORT_PATH" ]; then
     echo "MOBILE_FORGE_ANDROID_SUPPORT_PATH: $MOBILE_FORGE_ANDROID_SUPPORT_PATH"
 fi
 
+# In GitHub Actions, persist the resolved support-tree paths to the job environment so
+# later workflow steps can read them — exports from a `source`d script don't survive
+# across steps. Consumed by the "Drop support-tree dep wheels" step, which reads each
+# tree's VERSIONS manifest to know which wheels to drop. No-op locally ($GITHUB_ENV unset).
+if [ -n "${GITHUB_ENV:-}" ]; then
+    {
+        echo "MOBILE_FORGE_IOS_SUPPORT_PATH=$MOBILE_FORGE_IOS_SUPPORT_PATH"
+        echo "MOBILE_FORGE_ANDROID_SUPPORT_PATH=$MOBILE_FORGE_ANDROID_SUPPORT_PATH"
+    } >> "$GITHUB_ENV"
+fi
+
 echo
 echo "You can now build packages with forge; e.g.:"
 echo

@@ -279,10 +279,37 @@ jobs:
       - name: Drop support-tree dep wheels
         if: always()
         shell: bash
-        # Drop the CPython support-tree dep wheels produced by make_dep_wheels.py
-        # iOS deps: bzip2, libffi, mpdecimal, openssl, xz
-        # Android deps: bzip2, libffi, openssl, sqlite, xz
-        run: rm -f dist/bzip2-* dist/libffi-* dist/mpdecimal-* dist/openssl-* dist/sqlite-* dist/xz-*
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          PYTHON_SHORT: ${{ matrix.python_short }}
+        # The CPython support tree bundles native libs (openssl, xz, zstd, …) that
+        # make_dep_wheels.py wraps into `<lib>-<ver>-py3-none-<plat>.whl` so forge can
+        # resolve them as build deps — they must not be published as recipe wheels.
+        # Derive the set to drop from the support tree's VERSIONS manifest (the same
+        # source make_dep_wheels.py reads).
+        run: |
+          set -euo pipefail
+          if [[ "$PLATFORM" == "android" ]]; then
+            os_name="android"; support="${MOBILE_FORGE_ANDROID_SUPPORT_PATH:-}"
+          else
+            os_name="iOS"; support="${MOBILE_FORGE_IOS_SUPPORT_PATH:-}"
+          fi
+          versions="${support}/support/${PYTHON_SHORT}/${os_name}/VERSIONS"
+          if [[ ! -f "$versions" ]]; then
+            echo "::warning::No VERSIONS at '$versions' — skipping support-wheel drop"
+            exit 0
+          fi
+          echo "Dropping support-tree dep wheels declared in $versions"
+          while IFS= read -r line || [[ -n "$line" ]]; do
+            [[ "$line" == *:* ]] || continue
+            key="$(printf '%s' "${line%%:*}" | tr '[:upper:]' '[:lower:]' | xargs)"
+            case "$key" in
+              "python version"|"build"|"min "*) continue ;;
+            esac
+            [[ -n "$key" ]] || continue
+            echo "  - dropping dist/${key}-*"
+            rm -f "dist/${key}-"*
+          done < "$versions"
 
       - name: Summarize built wheels
         if: always()
