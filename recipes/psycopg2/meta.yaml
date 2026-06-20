@@ -12,11 +12,17 @@ build:
 
 requirements:
   host:
-    # static_libpq=1 (mobile.patch) folds libpq.a + libpgcommon.a + libpgport.a
-    # into _psycopg.so; openssl resolves libpq's TLS symbols (-lssl -lcrypto,
-    # added by setup.py's finalize_darwin since the build host is macOS).
-    - flet-libpq 17.5
+    # openssl resolves libpq's TLS symbols (-lssl -lcrypto, added by setup.py's
+    # finalize_darwin since the build host is macOS). It lives in the base flet
+    # runtime, so it isn't promoted to Requires-Dist.
     - openssl ^3.0.12
+  host_build:
+    # flet-libpq is STATICALLY folded into _psycopg.so (static_libpq=1,
+    # mobile.patch links libpq.a + libpgcommon.a + libpgport.a) — so it's a
+    # build-time-only dependency. host_build extracts it for the link without
+    # adding it to the wheel's Requires-Dist, so a psycopg2 app does not bundle
+    # the (unused) flet-libpq wheel at runtime.
+    - flet-libpq 17.5
 
 patches:
   - mobile.patch
