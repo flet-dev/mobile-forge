@@ -1,0 +1,22 @@
+package:
+  name: psycopg2
+  version: 2.9.12
+
+build:
+  number: 1
+  script_env:
+    # psycopg2's setup.py shells out to pg_config to locate libpq. flet-libpq
+    # ships a relocatable shim at opt/bin/pg_config; mobile.patch teaches the
+    # setup to read its path from PG_CONFIG (it otherwise only checks PATH).
+    PG_CONFIG: '{platlib}/opt/bin/pg_config'
+
+requirements:
+  host:
+    # static_libpq=1 (mobile.patch) folds libpq.a + libpgcommon.a + libpgport.a
+    # into _psycopg.so; openssl resolves libpq's TLS symbols (-lssl -lcrypto,
+    # added by setup.py's finalize_darwin since the build host is macOS).
+    - flet-libpq 17.5
+    - openssl ^3.0.12
+
+patches:
+  - mobile.patch
