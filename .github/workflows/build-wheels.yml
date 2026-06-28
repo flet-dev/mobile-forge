@@ -126,6 +126,11 @@ jobs:
           echo "Detected pythons: $pythons -> $json"
           echo "pythons_json=$json" >> "$GITHUB_OUTPUT"
 
+          # Canonical leg = first listed Python. build.sh (py3-none) recipes are
+          # identical on every leg, so they build only on the canonical one.
+          canonical="$(echo "$pythons" | tr ',' ' ' | awk '{print $1}' | cut -d. -f1-2)"
+          echo "canonical_python=$canonical" >> "$GITHUB_OUTPUT"
+
       - id: detect-packages
         shell: bash
         env:

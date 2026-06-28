@@ -10,10 +10,8 @@ on:
         type: string
       canonical_python:
         description: |
-          The single Python version on which Python-independent recipes (those with a
-          build.sh -> py3-none-<plat> wheel) are built. On any other leg those recipes
-          are skipped, since their wheels are identical across versions and the extra
-          legs only emit publish-time duplicates. Empty = no gating (build everything).
+          Python version on which build.sh (py3-none) recipes are built; other legs
+          skip them as identical duplicates. Empty = no gating (build everything).
         required: false
         type: string
         default: ""
@@ -68,9 +66,8 @@ on:
         default: "3.12"
       canonical_python:
         description: |
-          The single Python version on which Python-independent recipes (those with a
-          build.sh -> py3-none-<plat> wheel) are built. Leave empty for a standalone
-          dispatch (no gating — build every recipe on this version):
+          Python version on which build.sh (py3-none) recipes are built; other legs
+          skip them. Leave empty for a standalone dispatch (no gating):
         required: false
         default: ""
       archs:
@@ -117,6 +114,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has_jobs: ${{ steps.set-matrix.outputs.has_jobs }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -132,16 +130,32 @@ jobs:
           INPUT_ARCHS: ${{ inputs.archs }}
           INPUT_PACKAGES: ${{ inputs.packages }}
           INPUT_PYTHON_VERSION: ${{ inputs.python_version }}
+          INPUT_CANONICAL_PYTHON: ${{ inputs.canonical_python }}
         run: |
           ARCHS="$INPUT_ARCHS"
           PACKAGES="$INPUT_PACKAGES"
           py="$INPUT_PYTHON_VERSION"
           py_short="$(echo "$py" | cut -d. -f1-2)"   # 3.12 or 3.12.13 -> 3.12
+          canonical="$INPUT_CANONICAL_PYTHON"        # empty => no gating
+
+          # build.sh recipes -> py3-none wheels, identical on every leg, so build them
+          # only on the canonical one. Decided once per package, before the arch x platform
+          # expansion (so each skip logs once; the survivors may be empty).
+          build_packages=""
+          for pkg in $(echo "$PACKAGES" | tr ',' ' '); do
+            pkg_name="${pkg%%:*}"
+            if [[ -n "$canonical" && "$py_short" != "$canonical" \
+                  && -f "recipes/$pkg_name/build.sh" ]]; then
+              echo "::notice::Skip py${py_short}: ${pkg_name} — py3-none recipe, built only on py${canonical}"
+              continue
+            fi
+            build_packages="${build_packages:+$build_packages }$pkg"
+          done
 
           matrix='{"include":['
           first=true
           for arch in $(echo "$ARCHS" | tr ',' ' '); do
-            for pkg in $(echo "$PACKAGES" | tr ',' ' '); do
+            for pkg in $build_packages; do
               pkg_name="${pkg%%:*}"
               if [[ "$arch" == "android" ]]; then
                 runner="ubuntu-latest"
@@ -179,8 +193,17 @@ jobs:
           matrix+=']}'
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
+          # An all-py3-none non-canonical leg yields an empty include; flag it so the
+          # build job is skipped rather than fed an empty matrix.
+          if [[ "$matrix" == '{"include":[]}' ]]; then
+            echo "has_jobs=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_jobs=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     needs: setup
+    if: ${{ needs.setup.outputs.has_jobs == 'true' }}  # Skip legs with no jobs (e.g. an all-py3-none non-canonical leg).
     name: ${{ matrix.job_name }}
     runs-on: ${{ matrix.runner }}
     strategy:
