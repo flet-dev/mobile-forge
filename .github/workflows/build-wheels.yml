@@ -91,6 +91,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       pythons_json: ${{ steps.detect-pythons.outputs.pythons_json }}
+      canonical_python: ${{ steps.detect-pythons.outputs.canonical_python }}
       packages: ${{ steps.detect-packages.outputs.packages }}
     steps:
       - name: Checkout
@@ -167,6 +168,7 @@ jobs:
     uses: ./.github/workflows/build-wheels-version.yml
     with:
       python_version: ${{ matrix.python_version }}
+      canonical_python: ${{ needs.detect.outputs.canonical_python }}
       archs: ${{ inputs.archs || 'android,iOS' }}
       packages: ${{ needs.detect.outputs.packages }}
       prebuild_recipes: ${{ inputs.prebuild_recipes || '' }}
