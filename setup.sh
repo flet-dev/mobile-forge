@@ -34,7 +34,7 @@ if ! command -v uv &> /dev/null; then
 fi
 
 # Pinned flet-dev/python-build release to consume (date-keyed YYYYMMDD, PBS-style).
-PYTHON_BUILD_RELEASE="${PYTHON_BUILD_RELEASE:-20260614}"
+PYTHON_BUILD_RELEASE="${PYTHON_BUILD_RELEASE:-20260629}"
 
 # Resolve a full X.Y.Z from a bare X.Y minor using the pinned release's
 # manifest.json (downloaded + cached under downloads/). Echoes the full version;
@@ -74,6 +74,45 @@ resolve_full_version() {
     echo "$full"
 }
 
+# Echo the space-separated Android ABI set for a bare X.Y minor, read from the same
+# pinned-release manifest (`pythons.<minor>.android_abis`) — the single source of truth
+# shared with python-build's own build-all.sh / packaging. Same 3-tier parser as
+# resolve_full_version (jq -> python3 -> scoped sed) so it works on a bare machine.
+# Returns non-zero (empty) if the fetch or lookup fails.
+resolve_android_abis() {
+    local minor="$1"
+    local mf="downloads/python-build-manifest-${PYTHON_BUILD_RELEASE}.json"
+    local murl="https://github.com/flet-dev/python-build/releases/download/${PYTHON_BUILD_RELEASE}/manifest.json"
+
+    mkdir -p downloads
+    if [ ! -f "$mf" ]; then
+        if ! curl -fsSL -o "$mf" "$murl"; then
+            echo "Failed to fetch python-build manifest ($murl)." >&2
+            rm -f "$mf"
+            return 1
+        fi
+    fi
+
+    local abis=""
+    if command -v jq >/dev/null 2>&1; then
+        abis="$(jq -r --arg m "$minor" '.pythons[$m].android_abis // [] | join(" ")' "$mf" 2>/dev/null)"
+    elif command -v python3 >/dev/null 2>&1; then
+        abis="$(python3 -c 'import json,sys; print(" ".join(json.load(open(sys.argv[1])).get("pythons",{}).get(sys.argv[2],{}).get("android_abis",[])))' "$mf" "$minor" 2>/dev/null)"
+    else
+        # Scope to the minor's block, then to the android_abis array, and collect the
+        # quoted ABI tokens (dropping the "android_abis" key token itself).
+        local minor_re="${minor//./[.]}"
+        abis="$(sed -n "/\"$minor_re\"[[:space:]]*:/,/}/p" "$mf" \
+            | sed -n '/"android_abis"/,/]/p' \
+            | grep -oE '"[a-z0-9_-]+"' | tr -d '"' \
+            | grep -vx 'android_abis' | tr '\n' ' ')"
+    fi
+
+    [ -n "$abis" ] || return 1
+    # Trim trailing whitespace.
+    echo "$abis" | xargs
+}
+
 # Accept either a full X.Y.Z or a bare X.Y minor as $1. Derive the X.Y minor either
 # way (cut handles both forms); when only the minor is given, resolve the patch from
 # the pinned release's manifest. A full version is taken as-is (works offline and for
@@ -92,6 +131,17 @@ fi
 echo "Python version: $PYTHON_VERSION"
 echo "Python short version: $PYTHON_VER"
 echo "python-build release: $PYTHON_BUILD_RELEASE"
+
+# Android ABI set for this minor, from the python-build manifest. Overridable via env (e.g. CI validating
+# a python-build branch via PYTHON_BUILD_RUN_ID whose ABI set differs from the pinned release). cross.py and
+# make_dep_wheels.py read $ANDROID_ABIS and fall back to the same default if it's unset.
+ANDROID_ABIS="${ANDROID_ABIS:-$(resolve_android_abis "$PYTHON_VER")}"
+if [ -z "$ANDROID_ABIS" ]; then
+    ANDROID_ABIS="arm64-v8a x86_64 armeabi-v7a"
+    echo "Warning: manifest has no android_abis for $PYTHON_VER; defaulting to: $ANDROID_ABIS" >&2
+fi
+export ANDROID_ABIS
+echo "Android ABIs: $ANDROID_ABIS"
 
 # Download (and cache) a mobile-forge Python support package, extracting it
 # into $2. Source is either the pinned date-keyed ($PYTHON_BUILD_RELEASE) release
@@ -327,29 +377,15 @@ if [ ! -z "$MOBILE_FORGE_IOS_SUPPORT_PATH" ]; then
     echo "MOBILE_FORGE_IOS_SUPPORT_PATH: $MOBILE_FORGE_IOS_SUPPORT_PATH"
 fi
 
-# configure Android paths
+# configure Android paths — every ABI the manifest declares for this
+# minor must have a device binary in the support tree
 if [ ! -z "$MOBILE_FORGE_ANDROID_SUPPORT_PATH" ]; then
-    if [ ! -e $MOBILE_FORGE_ANDROID_SUPPORT_PATH/install/android/arm64-v8a/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
-        echo "MOBILE_FORGE_ANDROID_SUPPORT_PATH does not appear to contain a Python $PYTHON_VERSION Android arm64-v8a device binary."
-        return
-    fi
-
-    if [ ! -e $MOBILE_FORGE_ANDROID_SUPPORT_PATH/install/android/x86_64/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
-        echo "MOBILE_FORGE_ANDROID_SUPPORT_PATH does not appear to contain a Python $PYTHON_VERSION Android x86_64 device binary."
-        return
-    fi
-
-    if [ "$python_version_minor" -lt 13 ]; then
-        if [ ! -e $MOBILE_FORGE_ANDROID_SUPPORT_PATH/install/android/armeabi-v7a/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
-            echo "MOBILE_FORGE_ANDROID_SUPPORT_PATH does not appear to contain a Python $PYTHON_VERSION Android armeabi-v7a device binary."
+    for abi in $ANDROID_ABIS; do
+        if [ ! -e "$MOBILE_FORGE_ANDROID_SUPPORT_PATH/install/android/$abi/python-$PYTHON_VERSION/bin/python$PYTHON_VER" ]; then
+            echo "MOBILE_FORGE_ANDROID_SUPPORT_PATH does not appear to contain a Python $PYTHON_VERSION Android $abi device binary."
             return
         fi
-
-        if [ ! -e $MOBILE_FORGE_ANDROID_SUPPORT_PATH/install/android/x86/python-$PYTHON_VERSION/bin/python$PYTHON_VER ]; then
-            echo "MOBILE_FORGE_ANDROID_SUPPORT_PATH does not appear to contain a Python $PYTHON_VERSION Android x86 device binary."
-            return
-        fi
-    fi
+    done
 
     echo "MOBILE_FORGE_ANDROID_SUPPORT_PATH: $MOBILE_FORGE_ANDROID_SUPPORT_PATH"
 fi
@@ -362,6 +398,7 @@ if [ -n "${GITHUB_ENV:-}" ]; then
     {
         echo "MOBILE_FORGE_IOS_SUPPORT_PATH=$MOBILE_FORGE_IOS_SUPPORT_PATH"
         echo "MOBILE_FORGE_ANDROID_SUPPORT_PATH=$MOBILE_FORGE_ANDROID_SUPPORT_PATH"
+        echo "ANDROID_ABIS=$ANDROID_ABIS"
     } >> "$GITHUB_ENV"
 fi
 
