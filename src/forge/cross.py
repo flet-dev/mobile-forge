@@ -20,10 +20,12 @@ class CrossVEnv:
         "watchOS": "4.0",
     }
 
+    # setup.sh reads the ABI set from the pinned python-build release's manifest and exports it
+    # as env var; while falling back to all 3 abis when forge is invoked without sourcing setup.sh.
     ANDROID_HOST_ARCHS = (
-        ("arm64-v8a", "x86_64")
-        if sys.version_info[:2] >= (3, 13)
-        else ("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+        tuple(os.environ["ANDROID_ABIS"].split())
+        if os.environ.get("ANDROID_ABIS")
+        else ("arm64-v8a", "armeabi-v7a", "x86_64")
     )
 
     HOST_SDKS = {

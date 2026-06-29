@@ -56,9 +56,12 @@ def get_dependencies(os_name):
 
 def get_targets(os_name):
     if os_name == "android":
-        if sys.version_info[:2] >= (3, 13):
-            return ["arm64-v8a", "x86_64"]
-        return ["arm64-v8a", "armeabi-v7a", "x86_64", "x86"]
+        # setup.sh reads the ABI set from the pinned python-build release's manifest and exports it
+        # as env var; while falling back to all 3 abis when forge is invoked without sourcing setup.sh.
+        abis = os.environ.get("ANDROID_ABIS")
+        if abis:
+            return abis.split()
+        return ["arm64-v8a", "armeabi-v7a", "x86_64"]
     return [
         "iphoneos.arm64",
         "iphonesimulator.arm64",
@@ -84,7 +87,9 @@ def make_wheel(package, os_name, target):
     package_version_build = re.search(
         rf"^{package}: (.*)", versions, re.MULTILINE | re.IGNORECASE
     )[1]
-    min_version = re.search(rf"^Min {os_name} version: (.*)", versions, re.MULTILINE | re.IGNORECASE)[1]
+    min_version = re.search(
+        rf"^Min {os_name} version: (.*)", versions, re.MULTILINE | re.IGNORECASE
+    )[1]
 
     package_version, package_build = package_version_build.split("-")
 
