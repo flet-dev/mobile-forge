@@ -160,7 +160,7 @@ jobs:
               if [[ "$arch" == "android" ]]; then
                 runner="ubuntu-latest"
                 platform="android"
-                rust_targets="aarch64-linux-android,arm-linux-androideabi,x86_64-linux-android,i686-linux-android"
+                rust_targets="aarch64-linux-android,arm-linux-androideabi,x86_64-linux-android"
               else
                 runner="macos-26"
                 platform="ios"
