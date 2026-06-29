@@ -20,9 +20,8 @@ class CrossVEnv:
         "watchOS": "4.0",
     }
 
-    # The Android ABI set is python-build's manifest. setup.sh reads it from the pinned
-    # release's manifest and exports it as $ANDROID_ABIS; this falls back to all 3 abis
-    # when forge is invoked without sourcing setup.sh.
+    # setup.sh reads the ABI set from the pinned python-build release's manifest and exports it
+    # as env var; while falling back to all 3 abis when forge is invoked without sourcing setup.sh.
     ANDROID_HOST_ARCHS = (
         tuple(os.environ["ANDROID_ABIS"].split())
         if os.environ.get("ANDROID_ABIS")

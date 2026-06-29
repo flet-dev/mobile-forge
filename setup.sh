@@ -75,10 +75,7 @@ resolve_full_version() {
 }
 
 # Echo the space-separated Android ABI set for a bare X.Y minor, read from the same
-# pinned-release manifest (`pythons.<minor>.android_abis`) — the single source of truth
-# shared with python-build's own build-all.sh / packaging. Same 3-tier parser as
-# resolve_full_version (jq -> python3 -> scoped sed) so it works on a bare machine.
-# Returns non-zero (empty) if the fetch or lookup fails.
+# pinned python-build release manifest. Returns non-zero (empty) if the fetch or lookup fails.
 resolve_android_abis() {
     local minor="$1"
     local mf="downloads/python-build-manifest-${PYTHON_BUILD_RELEASE}.json"
@@ -132,9 +129,8 @@ echo "Python version: $PYTHON_VERSION"
 echo "Python short version: $PYTHON_VER"
 echo "python-build release: $PYTHON_BUILD_RELEASE"
 
-# Android ABI set for this minor, from the python-build manifest. Overridable via env (e.g. CI validating
-# a python-build branch via PYTHON_BUILD_RUN_ID whose ABI set differs from the pinned release). cross.py and
-# make_dep_wheels.py read $ANDROID_ABIS and fall back to the same default if it's unset.
+# Android ABI set for this minor, from the python-build manifest.
+# Overridable by setting ANDROID_ABIS env var.
 ANDROID_ABIS="${ANDROID_ABIS:-$(resolve_android_abis "$PYTHON_VER")}"
 if [ -z "$ANDROID_ABIS" ]; then
     ANDROID_ABIS="arm64-v8a x86_64 armeabi-v7a"

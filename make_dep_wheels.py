@@ -56,8 +56,8 @@ def get_dependencies(os_name):
 
 def get_targets(os_name):
     if os_name == "android":
-        # ABIs come from python-build's manifest via $ANDROID_ABIS (exported by setup.sh).
-        # Fall back to the all abis when invoked without setup.sh's environment.
+        # setup.sh reads the ABI set from the pinned python-build release's manifest and exports it
+        # as env var; while falling back to all 3 abis when forge is invoked without sourcing setup.sh.
         abis = os.environ.get("ANDROID_ABIS")
         if abis:
             return abis.split()
