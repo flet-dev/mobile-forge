@@ -1,0 +1,11 @@
+{% set version = "0.3.33" %}
+
+package:
+  name: flet-libopenblas
+  version: '{{ version }}'
+
+build:
+  number: 0
+
+source:
+  url: https://github.com/OpenMathLib/OpenBLAS/releases/download/v{{ version }}/OpenBLAS-{{ version }}.tar.gz

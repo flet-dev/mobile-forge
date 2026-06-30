@@ -11,12 +11,15 @@ requirements:
   host:
     - numpy 2.4.6
     - pybind11
+    - flet-libopenblas 0.3.33
 # {% if sdk == 'android' %}
     - flet-libcpp-shared >=27.2.12479018
 # {% endif %}
 
 patches:
-  - accelerate-ios.patch
+  - android-bionic-clog-cpow.patch
+  - android-ducc-no-affinity.patch
+  - android-x86_64-boost-longdouble.patch
 
 build:
   number: 1
@@ -24,10 +27,16 @@ build:
     # scipy 1.18 builds without a Fortran compiler — only the deprecated
     # scipy.odr is dropped. Removes the cross-Fortran blocker entirely.
     - -Csetup-args=-D_without-fortran=true
-# {% if sdk in ['iphoneos', 'iphonesimulator'] %}
-    # iOS has no OpenBLAS; Apple's Accelerate framework provides BLAS/LAPACK.
-    - -Csetup-args=-Dblas=accelerate
-    - -Csetup-args=-Dlapack=accelerate
+    # BLAS/LAPACK from flet-libopenblas (OpenBLAS, NOFORTRAN f2c-LAPACK) on both
+    # platforms, resolved via its openblas.pc. Standard Fortran mangling.
+    - -Csetup-args=-Dblas=openblas
+    - -Csetup-args=-Dlapack=openblas
+# {% if sdk == 'android' %}
+    # pythran 0.18.1's pythonic/types/ndarray.hpp has an ill-formed ref-qualifier
+    # overload that the newer NDK clang rejects (Apple clang accepts it, so iOS
+    # keeps pythran). pythran is an optional scipy build dep — disable it on
+    # Android; the affected modules fall back to their cython/numpy versions.
+    - -Csetup-args=-Duse-pythran=false
 # {% endif %}
     - -Csetup-args=--cross-file
     - -Csetup-args={MESON_CROSS_FILE}

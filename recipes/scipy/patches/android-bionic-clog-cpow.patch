@@ -1,0 +1,28 @@
+# Android bionic only exposes the C99 complex functions clog() and cpow() from
+# API level 26 (verified via llvm-nm: API 24's libm has cabs/carg/cexp/csin/
+# ccos/csqrt but not clog/cpow). scipy.special's _complexstuff.h assumes libc
+# provides them. Define them for __ANDROID_API__ < 26 using functions present
+# since API 24. No-op on iOS and Android >= 26 (so harmless to apply always).
+--- a/scipy/special/_complexstuff.h
++++ b/scipy/special/_complexstuff.h
+@@ -16,6 +16,20 @@
+ #include <numpy/npy_common.h>
+ #include "scipy_complex_support.h"
+ 
++/* bionic (Android libc) only declares the C99 complex log/pow from API level
++ * 26; scipy.special assumes libc provides them. Supply them for older Android
++ * targets in terms of functions bionic has had since API 24 (log/cabs/carg/
++ * cexp). The guard makes this a no-op on iOS and on Android API >= 26. */
++#if defined(__ANDROID__) && __ANDROID_API__ < 26
++#include <math.h>
++static inline double complex clog(double complex z) {
++    return log(cabs(z)) + carg(z) * I;
++}
++static inline double complex cpow(double complex x, double complex y) {
++    return cexp(y * clog(x));
++}
++#endif
++
+ #if defined(_MSC_VER)
+     typedef _Dcomplex _scipy_dz;
+ #else
