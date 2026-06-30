@@ -15,12 +15,11 @@ requirements:
     - flet-libcpp-shared >=27.2.12479018
 # {% endif %}
 
+patches:
+  - accelerate-ios.patch
+
 build:
   number: 1
-  script_env:
-    # meson introspects numpy via the cross-python from scipy's source dir;
-    # drop the implicit cwd from sys.path so it doesn't shadow stdlib (cf. pandas).
-    PYTHONSAFEPATH: "1"
   backend-args:
     # scipy 1.18 builds without a Fortran compiler — only the deprecated
     # scipy.odr is dropped. Removes the cross-Fortran blocker entirely.
