@@ -1,0 +1,34 @@
+package:
+  name: scipy
+  version: '1.18.0'
+
+requirements:
+  build:
+    - ninja
+    - meson
+    - cython
+    - pythran
+  host:
+    - numpy 2.4.6
+    - pybind11
+# {% if sdk == 'android' %}
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
+
+build:
+  number: 1
+  script_env:
+    # meson introspects numpy via the cross-python from scipy's source dir;
+    # drop the implicit cwd from sys.path so it doesn't shadow stdlib (cf. pandas).
+    PYTHONSAFEPATH: "1"
+  backend-args:
+    # scipy 1.18 builds without a Fortran compiler — only the deprecated
+    # scipy.odr is dropped. Removes the cross-Fortran blocker entirely.
+    - -Csetup-args=-D_without-fortran=true
+# {% if sdk in ['iphoneos', 'iphonesimulator'] %}
+    # iOS has no OpenBLAS; Apple's Accelerate framework provides BLAS/LAPACK.
+    - -Csetup-args=-Dblas=accelerate
+    - -Csetup-args=-Dlapack=accelerate
+# {% endif %}
+    - -Csetup-args=--cross-file
+    - -Csetup-args={MESON_CROSS_FILE}

@@ -458,9 +458,19 @@ class Builder(ABC):
                     / "site-packages"
                 )
                 if site_dir.is_dir():
-                    for share_pkgconfig in site_dir.glob("*/share/pkgconfig"):
-                        if share_pkgconfig.is_dir():
-                            pkg_config_paths.append(str(share_pkgconfig))
+                    # Wheels bundle their .pc files in assorted spots under
+                    # site-packages: pybind11 -> <pkg>/share/pkgconfig, while
+                    # numpy ships numpy/_core/lib/pkgconfig/numpy.pc. Search the
+                    # known locations so meson's pkg-config method resolves them
+                    # (e.g. scipy's `dependency('numpy')`, which uses numpy.pc).
+                    for pattern in (
+                        "*/share/pkgconfig",
+                        "*/lib/pkgconfig",
+                        "*/_core/lib/pkgconfig",
+                    ):
+                        for wheel_pc in site_dir.glob(pattern):
+                            if wheel_pc.is_dir():
+                                pkg_config_paths.append(str(wheel_pc))
         pkg_config_path = ":".join(pkg_config_paths)
 
         env = {
