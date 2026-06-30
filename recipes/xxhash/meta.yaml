@@ -1,0 +1,6 @@
+package:
+  name: xxhash
+  version: '3.8.0'
+
+build:
+  number: 1
