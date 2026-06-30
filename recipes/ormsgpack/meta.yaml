@@ -1,0 +1,8 @@
+package:
+  name: ormsgpack
+  version: '1.12.2'
+
+build:
+  number: 1
+  script_env:
+    _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
