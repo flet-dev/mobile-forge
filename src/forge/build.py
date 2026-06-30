@@ -800,6 +800,32 @@ class Builder(ABC):
             for so in wheel_dir.glob("**/*.so"):
                 self._check_elf_alignment(so)
 
+        # Normalize a dotted distribution name (e.g. "zope.interface" -> "zope-interface")
+        # to its PEP 503 canonical form in the wheel METADATA. pypi.flet.dev (Gemfury)
+        # returns 409 "version already exists" for every wheel after the first when the
+        # METADATA Name contains dots, so a dotted-name package could otherwise only ever
+        # publish ONE platform wheel per version. We rewrite just the `Name:` header (a
+        # targeted text edit that preserves the rest of METADATA, including the
+        # long-description body that the message round-trip below would drop); the wheel
+        # filename, .dist-info dir and import name are already dot-free, and pip treats the
+        # dotted and normalized names as equivalent so dependents resolve transparently.
+        metadata_path = next(wheel_dir.glob("*.dist-info")) / "METADATA"
+        metadata_text = metadata_path.read_text(encoding="utf-8")
+        name_match = re.search(r"(?m)^Name:[ \t]*(.+?)[ \t]*$", metadata_text)
+        if name_match and "." in name_match[1]:
+            normalized = canonicalize_name(name_match[1])
+            log(
+                self.log_file,
+                f"[{self.cross_venv}] Normalizing dotted dist name "
+                f"{name_match[1]!r} -> {normalized!r} in METADATA",
+            )
+            metadata_path.write_text(
+                metadata_text[: name_match.start()]
+                + f"Name: {normalized}"
+                + metadata_text[name_match.end() :],
+                encoding="utf-8",
+            )
+
         # add missing requirements from "host"
         if len(self.package.meta["requirements"]["host"]):
             metadata_path = next(wheel_dir.glob("*.dist-info")) / "METADATA"
