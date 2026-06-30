@@ -18,3 +18,17 @@
  endif
  
  _args_blas_lp64 = []
+--- a/scipy/_build_utils/src/scipy_blas_defines.h
++++ b/scipy/_build_utils/src/scipy_blas_defines.h
+@@ -16,8 +16,10 @@
+ 
+ 
+ #ifdef ACCELERATE_NEW_LAPACK
+-    #if __MAC_OS_X_VERSION_MAX_ALLOWED < 130300
++    #if defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && __MAC_OS_X_VERSION_MAX_ALLOWED < 130300
+         #error "Accelerate support is only available with macOS 13.3 SDK or later"
++    #elif defined(__IPHONE_OS_VERSION_MAX_ALLOWED) && __IPHONE_OS_VERSION_MAX_ALLOWED < 160400
++        #error "Accelerate support is only available with iOS 16.4 SDK or later"
+     #else
+         /* New Accelerate suffix is always $NEWLAPACK or $NEWLAPACK$ILP64 (no underscore appended) */
+         #ifdef HAVE_BLAS_ILP64
