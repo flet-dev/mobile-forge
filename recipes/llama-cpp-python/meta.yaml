@@ -1,0 +1,85 @@
+package:
+  name: llama-cpp-python
+  version: "0.3.32"
+
+requirements:
+  build:
+    # llama-cpp-python builds via scikit-build-core + CMake; with forge's
+    # `--no-isolation` these must be in the build venv. scikit-build-core comes
+    # from the package's own build-system.requires. Android keeps Ninja; iOS
+    # uses the Makefiles generator (see CMAKE_GENERATOR below).
+    - cmake
+    - ninja
+# {% if sdk == 'android' %}
+  host:
+    # llama.cpp/ggml is C++; the bundled libllama.so / libggml*.so link
+    # libc++_shared.so, which the device runtime doesn't provide unless bundled.
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
+
+build:
+  number: 0
+  script_env:
+# {% if sdk == 'android' %}
+    CMAKE_ARGS: >-
+      -DCMAKE_TOOLCHAIN_FILE={NDK_ROOT}/build/cmake/android.toolchain.cmake
+      -DANDROID_ABI={ANDROID_ABI}
+      -DANDROID_NATIVE_API_LEVEL={ANDROID_API_LEVEL}
+      -DANDROID_STL=c++_shared
+      -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/env
+      -DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DCMAKE_MODULE_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DLLAVA_BUILD=OFF
+      -DCMAKE_INSTALL_LIBDIR=llama_cpp/lib
+      -DGGML_NATIVE=OFF
+      -DGGML_OPENMP=OFF
+      -DGGML_LLAMAFILE=OFF
+      -DGGML_BLAS=OFF
+      -DGGML_ACCELERATE=OFF
+      -DGGML_METAL=OFF
+      -DGGML_CUDA=OFF
+      -DGGML_HIP=OFF
+      -DGGML_VULKAN=OFF
+      -DGGML_OPENCL=OFF
+      -DGGML_RPC=OFF
+# {% else %}
+    # The `ninja` pip package crashes importing on the iOS crossenv python
+    # (sysconfig.get_preferred_scheme('user') -> 'posix_user' invalid on iOS),
+    # so use the Makefiles generator on iOS; scikit-build-core then never imports
+    # ninja. (Android keeps Ninja, which works there.)
+    CMAKE_GENERATOR: Unix Makefiles
+    CMAKE_ARGS: >-
+      -DCMAKE_SYSTEM_NAME=iOS
+      -DCMAKE_OSX_SYSROOT={{ sdk }}
+      -DCMAKE_OSX_DEPLOYMENT_TARGET={{ sdk_version }}
+      -DCMAKE_OSX_ARCHITECTURES={{ arch }}
+      -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/env
+      -DLLAVA_BUILD=OFF
+      -DCMAKE_INSTALL_LIBDIR=llama_cpp/lib
+      -DGGML_NATIVE=OFF
+      -DGGML_OPENMP=OFF
+      -DGGML_LLAMAFILE=OFF
+      -DGGML_BLAS=OFF
+      -DGGML_ACCELERATE=OFF
+      -DGGML_METAL=OFF
+      -DGGML_METAL_EMBED_LIBRARY=OFF
+      -DGGML_CUDA=OFF
+      -DGGML_HIP=OFF
+      -DGGML_VULKAN=OFF
+      -DGGML_OPENCL=OFF
+      -DGGML_RPC=OFF
+# {% endif %}
+
+patches:
+  # mobile.patch does four things:
+  #  1. Stops llama-cpp-python's CMakeLists from FORCE-enabling GGML_METAL on all
+  #     Apple platforms (it would override our -DGGML_METAL=OFF for the iOS cross
+  #     build, which has no Metal toolchain).
+  #  2. Skips building llama.cpp's unused `common` helper lib (~5 MB).
+  #  3. Drops SONAME versioning from the shipped libs (ggml-base/ggml/ggml-cpu/
+  #     llama) so the wheel carries single unversioned files instead of a
+  #     lib*.dylib -> .0 -> .0.15.3 symlink triplet that forge dereferences into
+  #     three copies (and three colliding frameworks on iOS).
+  #  4. Teaches the ctypes loader to find the bundled lib under its iOS framework
+  #     name (lib<name>.fwork) and on the "ios" platform.
+  - mobile.patch
