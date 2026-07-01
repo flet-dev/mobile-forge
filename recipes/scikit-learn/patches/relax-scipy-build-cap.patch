@@ -1,0 +1,16 @@
+# scikit-learn 1.9.0 pins its build-time scipy to <1.18.0 — a conservative upper
+# bound set before scipy 1.18 was released, not a real incompatibility. mobile-forge
+# ships scipy 1.18.0; without this the build env would install an older desktop scipy
+# whose cython_blas.pxd could diverge from the 1.18.0 the target links against.
+# Bump the cap to <1.19.0 so both use 1.18.
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -102,7 +102,7 @@
+     "meson-python>=0.17.1,<0.20.0",
+     "cython>=3.1.2,<3.3.0",
+     "numpy>=2,<2.5.0",
+-    "scipy>=1.10.0,<1.18.0",
++    "scipy>=1.10.0,<1.19.0",
+ ]
+ 
+ [tool.pytest.ini_options]
