@@ -1,0 +1,23 @@
+# On iOS, Apple clang reports OpenMP as found (its -fopenmp probe compiles), but
+# there is no libomp to link, so scikit-learn's OpenMP extensions fail at link.
+# Gate openmp_dep to Android only (where the NDK ships libomp and flet-libomp
+# bundles it at runtime); non-Android targets build single-threaded — the same
+# fallback scikit-learn already supports on plain macOS.
+--- a/sklearn/meson.build
+--- a/sklearn/meson.build
++++ b/sklearn/meson.build
+@@ -102,6 +102,14 @@
+ np_dep = declare_dependency(include_directories: inc_np, compile_args: numpy_no_deprecated_api)
+ 
+ openmp_dep = dependency('OpenMP', language: 'c', required: false)
++
++if host_machine.system() != 'android'
++  # mobile-forge: Apple clang's -fopenmp detection passes on iOS, but there is no
++  # libomp to link against there, so the OpenMP extensions fail to link. Force
++  # single-threaded on non-Android targets. Android keeps OpenMP (the NDK ships
++  # libomp, bundled at runtime by the flet-libomp recipe).
++  openmp_dep = dependency('openmp-force-off-non-android', required: false)
++endif
+ 
+ if not openmp_dep.found()
+   warn_about_missing_openmp = true
