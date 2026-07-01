@@ -1,0 +1,14 @@
+package:
+  name: flet-libomp
+  version: 27.3.13750724
+  # libomp.so is the LLVM OpenMP runtime, extracted from the NDK's clang and repackaged so Android
+  # apps can bundle it. Any OpenMP C-extension (e.g. scikit-learn) links `-lomp` → a `libomp.so`
+  # DT_NEEDED that must be present at runtime. Meaningless on iOS — Apple clang ships no OpenMP,
+  # so those builds fall back to single-threaded and never reference libomp.
+  platforms: [android]
+
+build:
+  number: 1
+
+source:
+  url: https://github.com/flet-dev/awesome-flet/archive/refs/heads/main.zip
