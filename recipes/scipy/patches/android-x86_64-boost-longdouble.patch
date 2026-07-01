@@ -1,0 +1,24 @@
+# Android x86_64 (bionic) uses 128-bit IEEE-quad long double (LDBL_MANT_DIG==113),
+# unlike desktop x86_64's 80-bit extended. scipy's vendored boost.math selects its
+# long-double bit layout by CPU macro: the `defined(__x86_64__)` branch assumes the
+# 80-bit format and hard-asserts LDBL_MANT_DIG==64, which fails on android x86_64.
+# boost already has the correct path right below it — `#elif (LDBL_MANT_DIG == 113)`
+# ("all other processors", IEEE binary128). Gate the x86 branch on ==64 so android
+# x86_64 falls through to that 113 path. Desktop x86_64 (==64) is unaffected; arm/iOS
+# never match the x86 branch. (arm64 long double is also 113 but takes the native
+# path; armeabi-v7a long double is 64-bit/double → the ==53 branch.)
+--- a/subprojects/boost_math/math/include/boost/math/special_functions/detail/fp_traits.hpp
++++ b/subprojects/boost_math/math/include/boost/math/special_functions/detail/fp_traits.hpp
+@@ -305,9 +305,10 @@
+ 
+ // long double (>64 bits), x86 and x64 -----------------------------------------
+ 
+-#elif defined(__i386) || defined(__i386__) || defined(_M_IX86) \
++#elif (defined(__i386) || defined(__i386__) || defined(_M_IX86) \
+     || defined(__amd64) || defined(__amd64__)  || defined(_M_AMD64) \
+-    || defined(__x86_64) || defined(__x86_64__) || defined(_M_X64)
++    || defined(__x86_64) || defined(__x86_64__) || defined(_M_X64)) \
++    && (LDBL_MANT_DIG == 64)
+ 
+ // Intel extended double precision format (80 bits)
+ 
