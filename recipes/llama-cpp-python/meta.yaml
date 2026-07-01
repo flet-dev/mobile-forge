@@ -2,23 +2,8 @@ package:
   name: llama-cpp-python
   version: "0.3.32"
 
-requirements:
-  build:
-    # llama-cpp-python builds via scikit-build-core + CMake; with forge's
-    # `--no-isolation` these must be in the build venv. scikit-build-core comes
-    # from the package's own build-system.requires. Android keeps Ninja; iOS
-    # uses the Makefiles generator (see CMAKE_GENERATOR below).
-    - cmake
-    - ninja
-# {% if sdk == 'android' %}
-  host:
-    # llama.cpp/ggml is C++; the bundled libllama.so / libggml*.so link
-    # libc++_shared.so, which the device runtime doesn't provide unless bundled.
-    - flet-libcpp-shared >=27.2.12479018
-# {% endif %}
-
 build:
-  number: 0
+  number: 1
   script_env:
 # {% if sdk == 'android' %}
     CMAKE_ARGS: >-
@@ -68,6 +53,21 @@ build:
       -DGGML_VULKAN=OFF
       -DGGML_OPENCL=OFF
       -DGGML_RPC=OFF
+# {% endif %}
+
+requirements:
+  build:
+    # llama-cpp-python builds via scikit-build-core + CMake; with forge's
+    # `--no-isolation` these must be in the build venv. scikit-build-core comes
+    # from the package's own build-system.requires. Android keeps Ninja; iOS
+    # uses the Makefiles generator (see CMAKE_GENERATOR below).
+    - cmake
+    - ninja
+# {% if sdk == 'android' %}
+  host:
+    # llama.cpp/ggml is C++; the bundled libllama.so / libggml*.so link
+    # libc++_shared.so, which the device runtime doesn't provide unless bundled.
+    - flet-libcpp-shared >=27.2.12479018
 # {% endif %}
 
 patches:

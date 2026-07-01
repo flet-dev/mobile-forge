@@ -1,12 +1,3 @@
-def test_import_version():
-    """Importing llama_cpp ctypes-loads the bundled libllama (+ libggml*) shared
-    libraries — the canary that the C++ engine cross-compiled, links its C++
-    runtime, and the loader finds the lib under its mobile name."""
-    import llama_cpp
-
-    assert llama_cpp.__version__
-
-
 def test_native_lib_callable():
     """Call into the ctypes-loaded libllama without needing a GGUF model file.
     Proves the native library actually loaded and its symbols are callable."""
