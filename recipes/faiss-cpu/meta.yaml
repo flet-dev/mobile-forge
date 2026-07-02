@@ -32,6 +32,13 @@
 # variants are skipped). C++20 → Android links libc++_shared.so (flet-libcpp-shared).
 # SWIG (host tool, from the pyproject build-system.requires) generates the bindings.
 #
+# BUILD_SHARED_LIBS=OFF: upstream defaults to ON and EXCLUDES libfaiss from the
+# wheel (wheel.exclude drops lib/**), relying on auditwheel/delocate to bundle it —
+# which forge does not run, leaving _swigfaiss.so with a dangling @rpath/libfaiss
+# load. Building static instead embeds libfaiss (+ the openblas/omp static libs)
+# straight into _swigfaiss.so → one self-contained extension, no runtime .so deps
+# beyond flet-libomp/flet-libcpp-shared on Android.
+#
 # armeabi-v7a (32-bit ARM) is excluded for now — start with the 64-bit ABIs and
 # revisit 32-bit atomics/NEON if there's demand (polars precedent).
 package:
@@ -94,6 +101,7 @@ build:
       -DFAISS_ENABLE_PYTHON=ON
       -DFAISS_OPT_LEVEL=generic
       -DBUILD_TESTING=OFF
+      -DBUILD_SHARED_LIBS=OFF
       -DBLAS_LIBRARIES={platlib}/opt/lib/libopenblas.a
       -DLAPACK_LIBRARIES={platlib}/opt/lib/libopenblas.a
       -DOpenMP_CXX_FLAGS=-fopenmp
@@ -119,6 +127,7 @@ build:
       -DFAISS_ENABLE_PYTHON=ON
       -DFAISS_OPT_LEVEL=generic
       -DBUILD_TESTING=OFF
+      -DBUILD_SHARED_LIBS=OFF
       -DBLAS_LIBRARIES={platlib}/opt/lib/libopenblas.a
       -DLAPACK_LIBRARIES={platlib}/opt/lib/libopenblas.a
       -DOpenMP_CXX_FLAGS=-I{platlib}/opt/include
