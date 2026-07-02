@@ -5,9 +5,10 @@ package:
   # Only 64-bit slices are shipped: Arrow's CMake configs carry a 32/64-bit gate
   # (ArrowConfigVersion.cmake marks PACKAGE_VERSION_UNSUITABLE unless
   # sizeof(void*)==8), so a 32-bit pyarrow could not consume this libarrow anyway.
-  # pyarrow excludes the same arches; building libarrow for them would just be
-  # unconsumable CI work, so drop them here too.
-  excluded_arches: [armeabi-v7a, x86]
+  # pyarrow excludes the same arch; building libarrow for it would just be
+  # unconsumable CI work, so drop it here too. (armeabi-v7a is the only shipped
+  # 32-bit Android ABI; x86 is no longer supported.)
+  excluded_arches: [armeabi-v7a]
 
 build:
   number: 1

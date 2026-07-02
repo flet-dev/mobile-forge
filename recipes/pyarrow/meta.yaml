@@ -9,8 +9,9 @@ package:
   version: 24.0.0
   # Arrow's CMake configs carry a 32/64-bit gate (ArrowConfigVersion.cmake:
   # PACKAGE_VERSION_UNSUITABLE unless sizeof(void*)==8), so a 64-bit flet-libarrow
-  # cannot be consumed by a 32-bit pyarrow. Drop the 32-bit Android ABIs.
-  excluded_arches: [armeabi-v7a, x86]
+  # cannot be consumed by a 32-bit pyarrow. Drop armeabi-v7a — the only shipped
+  # 32-bit Android ABI (x86/i686 is no longer in the supported ABI set).
+  excluded_arches: [armeabi-v7a]
 
 requirements:
   build:
