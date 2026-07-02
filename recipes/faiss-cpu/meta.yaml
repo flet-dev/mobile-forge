@@ -41,13 +41,15 @@
 #
 # armeabi-v7a (32-bit ARM) is excluded for now — start with the 64-bit ABIs and
 # revisit 32-bit atomics/NEON if there's demand (polars precedent).
+{% set version = "1.14.3" %}
+
 package:
   name: faiss-cpu
-  version: 1.14.3
+  version: '{{ version }}'
   excluded_arches: [armeabi-v7a]
 
 source:
-  url: https://github.com/facebookresearch/faiss/archive/refs/tags/v1.14.3.tar.gz
+  url: https://github.com/facebookresearch/faiss/archive/refs/tags/v{{ version }}.tar.gz
 
 # Apple-only correctness fix (no-op on Android): faiss gates -DSWIGWORDSIZE64 on
 # CMAKE_SYSTEM_NAME != "Darwin", but we cross-compile with CMAKE_SYSTEM_NAME=iOS,
