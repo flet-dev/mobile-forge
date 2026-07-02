@@ -9,5 +9,5 @@ package:
 build:
   number: 10
 
-source:
-  url: https://github.com/flet-dev/awesome-flet/archive/refs/heads/main.zip
+# No upstream archive: build.sh copies libc++_shared.so out of the NDK toolchain.
+source: null

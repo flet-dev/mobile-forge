@@ -1,0 +1,39 @@
+Cross-compile: only define SWIGWORDSIZE64 where int64_t really is `long` (LP64).
+
+swigfaiss.swig maps int64_t to `long` when SWIGWORDSIZE64 is defined, else to
+`long long`. That flag must match the target's actual <cstdint> definition of
+int64_t, which depends on the ABI:
+
+  * LP64 Linux/Android (arm64-v8a, x86_64):  long is 64-bit, int64_t == long
+        -> define SWIGWORDSIZE64
+  * Apple LP64 (iOS/macOS, arm64/x86_64):    int64_t == long long (Apple choice)
+        -> do NOT define
+  * ILP32 (armeabi-v7a, x86 Android):        long is 32-bit, int64_t == long long
+        -> do NOT define
+  * Windows LLP64:                           long is 32-bit, int64_t == long long
+        -> do NOT define
+
+faiss's guard, `NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin" AND NOT WIN32`, only
+excludes macOS and Windows. It wrongly defines SWIGWORDSIZE64 for:
+  - iOS  (CMAKE_SYSTEM_NAME=iOS, not "Darwin"), and
+  - 32-bit Android ABIs (ILP32, where int64_t is long long),
+so SWIG generates `std::vector<long>` / `const long*` while faiss's real
+`idx_t = int64_t` is `long long` -> the wrapper fails to compile
+("vector<long long> cannot bind to vector<long>"). faiss only ever ships 64-bit
+Linux wheels, so upstream never hits either case.
+
+Replace the guard with `NOT APPLE AND NOT WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8`,
+which is true for exactly the LP64-Linux ABIs where int64_t is `long` — correct on
+Android arm64-v8a / x86_64 (defined), and correctly OFF on iOS and 32-bit Android.
+
+--- a/faiss/python/CMakeLists.txt
++++ b/faiss/python/CMakeLists.txt
+@@ -23,7 +23,7 @@
+     CPLUSPLUS ON
+     USE_TARGET_INCLUDE_DIRECTORIES TRUE
+   )
+-  if(NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin" AND NOT WIN32)
++  if(NOT APPLE AND NOT WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+     set_source_files_properties(${source} PROPERTIES
+       SWIG_FLAGS -DSWIGWORDSIZE64
+     )

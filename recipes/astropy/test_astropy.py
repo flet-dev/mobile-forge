@@ -2,14 +2,18 @@ import os
 import tempfile
 
 
-# astropy eagerly creates a config dir (~/.astropy) on import; on iOS/Android HOME
-# may be unset or non-writable, so point the config/cache dirs at a writable temp
-# location before importing astropy.
-_cfg = os.path.join(tempfile.gettempdir(), "astropy_cfg")
-os.makedirs(_cfg, exist_ok=True)
-os.environ.setdefault("XDG_CONFIG_HOME", _cfg)
-os.environ.setdefault("XDG_CACHE_HOME", _cfg)
-os.environ.setdefault("HOME", _cfg)
+# Point astropy's config + cache dirs at Flet's writable app storage before
+# importing astropy (it resolves them at import). Flet sets FLET_APP_STORAGE_DATA
+# (persistent) and FLET_APP_STORAGE_TEMP (cache); fall back to the system temp dir
+# outside Flet. astropy 8 only honors these dirs if they already exist -> mkdir.
+_data = os.getenv("FLET_APP_STORAGE_DATA")
+_temp = os.getenv("FLET_APP_STORAGE_TEMP") or tempfile.gettempdir()
+_config_dir = os.path.join(_data or _temp, "astropy", "config")
+_cache_dir = os.path.join(_temp, "astropy", "cache")
+os.makedirs(_config_dir, exist_ok=True)
+os.makedirs(_cache_dir, exist_ok=True)
+os.environ.setdefault("ASTROPY_CONFIG_DIR", _config_dir)
+os.environ.setdefault("ASTROPY_CACHE_DIR", _cache_dir)
 
 
 def test_time_scale_conversion():

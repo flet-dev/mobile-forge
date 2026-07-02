@@ -1,0 +1,90 @@
+{% set version = "1.14.3" %}
+
+package:
+  name: faiss-cpu
+  version: '{{ version }}'
+
+source:
+  url: https://github.com/facebookresearch/faiss/archive/refs/tags/v{{ version }}.tar.gz
+
+build:
+  number: 1
+  script_env:
+    # scikit-build-core honors the CMAKE_ARGS env var (appended to its cmake call),
+    # same as recipes/duckdb. faiss defines + BLAS + OpenMP are shared across
+    # platforms; the toolchain / Python-path block is per-platform.
+# {% if sdk == 'android' %}
+    CMAKE_ARGS: >-
+      -DCMAKE_TOOLCHAIN_FILE={NDK_ROOT}/build/cmake/android.toolchain.cmake
+      -DANDROID_ABI={ANDROID_ABI}
+      -DANDROID_NATIVE_API_LEVEL={ANDROID_API_LEVEL}
+      -DANDROID_STL=c++_shared
+      -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/env
+      -DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DCMAKE_MODULE_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DPython_EXECUTABLE={CROSS_VENV_PYTHON}
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.so
+      -DFAISS_ENABLE_GPU=OFF
+      -DFAISS_ENABLE_MKL=OFF
+      -DFAISS_ENABLE_C_API=OFF
+      -DFAISS_ENABLE_PYTHON=ON
+      -DFAISS_OPT_LEVEL=generic
+      -DBUILD_TESTING=OFF
+      -DBUILD_SHARED_LIBS=OFF
+      -DBLAS_LIBRARIES={platlib}/opt/lib/libopenblas.a
+      -DLAPACK_LIBRARIES={platlib}/opt/lib/libopenblas.a
+      -DOpenMP_CXX_FLAGS=-fopenmp
+      -DOpenMP_CXX_LIB_NAMES=omp
+      -DOpenMP_omp_LIBRARY={platlib}/opt/lib/libomp.so
+# {% else %}
+    # The `ninja` pip package crashes importing on the iOS crossenv python, so use
+    # the Makefiles generator (scikit-build-core then never imports ninja). Same as
+    # recipes/duckdb.
+    CMAKE_GENERATOR: Unix Makefiles
+    CMAKE_ARGS: >-
+      -DCMAKE_SYSTEM_NAME=iOS
+      -DCMAKE_OSX_SYSROOT={{ sdk }}
+      -DCMAKE_OSX_DEPLOYMENT_TARGET={{ sdk_version }}
+      -DCMAKE_OSX_ARCHITECTURES={{ arch }}
+      -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/env
+      -DPython_EXECUTABLE={CROSS_VENV_PYTHON}
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.dylib
+      -DFAISS_ENABLE_GPU=OFF
+      -DFAISS_ENABLE_MKL=OFF
+      -DFAISS_ENABLE_C_API=OFF
+      -DFAISS_ENABLE_PYTHON=ON
+      -DFAISS_OPT_LEVEL=generic
+      -DBUILD_TESTING=OFF
+      -DBUILD_SHARED_LIBS=OFF
+      -DBLAS_LIBRARIES={platlib}/opt/lib/libopenblas.a
+      -DLAPACK_LIBRARIES={platlib}/opt/lib/libopenblas.a
+      -DOpenMP_CXX_FLAGS=-I{platlib}/opt/include
+      -DOpenMP_CXX_LIB_NAMES=omp
+      -DOpenMP_omp_LIBRARY={platlib}/opt/lib/libomp.a
+# {% endif %}
+
+patches:
+  - swig-int64-wordsize.patch
+
+requirements:
+  build:
+    - cmake
+    - ninja
+    - swig
+  host:
+    - numpy 2.4.6
+# {% if sdk == 'android' %}
+    # Real OpenMP runtime (libomp.so DT_NEEDED) + C++ runtime — both bundled at runtime.
+    - flet-libomp 27.3.13750724
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
+  host_build:
+    # Static libs linked INTO libfaiss / _swigfaiss.so — needed to build/link but
+    # never dlopened at runtime, so kept OUT of the wheel's Requires-Dist.
+    - flet-libopenblas 0.3.33
+# {% if sdk != 'android' %}
+    # iOS serial-stub libomp.a (+ omp.h) — static-linked.
+    - flet-libomp 27.3.13750724
+# {% endif %}
