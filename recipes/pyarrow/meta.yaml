@@ -1,9 +1,3 @@
-# Map the slice arch to Arrow's CPU flag. Under CMAKE_SYSTEM_NAME=iOS (and even
-# under the NDK toolchain) Arrow's SetupCxxFlags can see an empty
-# CMAKE_SYSTEM_PROCESSOR and FATAL_ERROR "Unknown system processor"; setting
-# ARROW_CPU_FLAG directly bypasses that. 32-bit arches are excluded, so x86_64 ->
-# x86 and arm64/arm64-v8a -> aarch64 covers every shipped slice.
-# {% set arrow_cpu = 'x86' if 'x86' in arch else 'aarch64' %}
 package:
   name: pyarrow
   version: 24.0.0
@@ -13,38 +7,13 @@ package:
   # 32-bit Android ABI (x86/i686 is no longer in the supported ABI set).
   excluded_arches: [armeabi-v7a]
 
-requirements:
-  build:
-    # pyarrow builds via scikit-build-core + CMake; with forge's --no-isolation
-    # these must be in the build venv. scikit-build-core, cython>=3.1, libcst,
-    # numpy and setuptools_scm come from pyarrow's own build-system.requires.
-    - cmake
-    - ninja
-  host:
-    # Build needs the cross-target NumPy headers (arrow_python links Python3::NumPy);
-    # numpy is import-guarded at runtime (optional), so it is NOT promoted to
-    # Requires-Dist (forge only promotes flet-* host deps).
-    - numpy ^2.0.0
-    # flet-libarrow ships libarrow + libarrow_compute in opt/lib. It's a real
-    # runtime dep on BOTH platforms -> requirements.host (promoted to Requires-Dist,
-    # ABI-pinned to the libarrow.2400 SONAME) so flet actually installs it into the
-    # app. Android: serious_python copies opt/lib/*.so into the APK jniLibs, resolved
-    # by DT_NEEDED basename. iOS: flet relocates each opt/lib dylib into its own
-    # per-platform *.fwork framework; pyarrow's __init__ preload shim (mobile.patch)
-    # CDLLs them before importing pyarrow.lib so the ext modules' @rpath link binds
-    # by install-name. (host_build would NOT ship the wheel -> dylibs never reach
-    # jniLibs/.fwork, which is why the old iOS bundle approach was needed and failed.)
-    - flet-libarrow ==24
-# {% if sdk == 'android' %}
-    # pyarrow's + libarrow's .so are C++ -> need libc++_shared.so at runtime
-    # (iOS uses the system libc++, no flet-lib needed).
-    - flet-libcpp-shared >=27.2.12479018
-# {% endif %}
-
-patches:
-  - mobile.patch
-  - arrow-python-optlib.patch
-
+# Map the slice arch to Arrow's CPU flag. Under CMAKE_SYSTEM_NAME=iOS (and even
+# under the NDK toolchain) Arrow's SetupCxxFlags can see an empty
+# CMAKE_SYSTEM_PROCESSOR and FATAL_ERROR "Unknown system processor"; setting
+# ARROW_CPU_FLAG directly bypasses that. 'x86' in arch is a family test (matches
+# the shipped x86_64 slice, not the excluded 32-bit armeabi-v7a), so
+# x86_64 -> x86 and arm64/arm64-v8a -> aarch64 covers every shipped slice.
+# {% set arrow_cpu = 'x86' if 'x86' in arch else 'aarch64' %}
 build:
   number: 1
   script_env:
@@ -71,8 +40,7 @@ build:
     # Runtime libs all resolve by DT_NEEDED basename from the APK jniLibs: libarrow /
     # libarrow_compute come from flet-libarrow, and pyarrow's own libarrow_python.so
     # is relocated into opt/lib by android-arrow-python-optlib.patch so it lands there
-    # too (no $ORIGIN runpath needed — CMake can't emit one on Android). On-device
-    # verified (5/5 steps).
+    # too (no $ORIGIN runpath needed — CMake can't emit one on Android).
     CMAKE_ARGS: >-
       -DPYARROW_CPP_HOME={purelib}/opt
       -DCMAKE_PREFIX_PATH={purelib}/opt
@@ -108,4 +76,36 @@ build:
       -DPython3_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
       -DPython3_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.dylib
       -DPython3_NumPy_INCLUDE_DIR={purelib}/numpy/_core/include
+# {% endif %}
+
+patches:
+  - mobile.patch
+  - arrow-python-optlib.patch
+
+requirements:
+  build:
+    # pyarrow builds via scikit-build-core + CMake; with forge's --no-isolation
+    # these must be in the build venv. scikit-build-core, cython>=3.1, libcst,
+    # numpy and setuptools_scm come from pyarrow's own build-system.requires.
+    - cmake
+    - ninja
+  host:
+    # Build needs the cross-target NumPy headers (arrow_python links Python3::NumPy);
+    # numpy is import-guarded at runtime (optional), so it is NOT promoted to
+    # Requires-Dist (forge only promotes flet-* host deps).
+    - numpy ^2.0.0
+    # flet-libarrow ships libarrow + libarrow_compute in opt/lib. It's a real
+    # runtime dep on BOTH platforms -> requirements.host (promoted to Requires-Dist,
+    # ABI-pinned to the libarrow.2400 SONAME) so flet actually installs it into the
+    # app. Android: serious_python copies opt/lib/*.so into the APK jniLibs, resolved
+    # by DT_NEEDED basename. iOS: flet relocates each opt/lib dylib into its own
+    # per-platform *.fwork framework; pyarrow's __init__ preload shim (mobile.patch)
+    # CDLLs them before importing pyarrow.lib so the ext modules' @rpath link binds
+    # by install-name. (host_build would NOT ship the wheel -> dylibs never reach
+    # jniLibs/.fwork, which is why the old iOS bundle approach was needed and failed.)
+    - flet-libarrow ==24
+# {% if sdk == 'android' %}
+    # pyarrow's + libarrow's .so are C++ -> need libc++_shared.so at runtime
+    # (iOS uses the system libc++, no flet-lib needed).
+    - flet-libcpp-shared >=27.2.12479018
 # {% endif %}
