@@ -7,12 +7,8 @@ package:
 source:
   url: https://github.com/facebookresearch/faiss/archive/refs/tags/v{{ version }}.tar.gz
 
-# Apple-only correctness fix (no-op on Android): faiss gates -DSWIGWORDSIZE64 on
-# CMAKE_SYSTEM_NAME != "Darwin", but we cross-compile with CMAKE_SYSTEM_NAME=iOS,
-# so SWIG wrongly maps int64_t to `long` while faiss's idx_t is `long long`.
-# Switch the guard to CMake's APPLE variable (true for macOS + iOS).
 patches:
-  - apple-swig-int64.patch
+  - swig-int64-wordsize.patch
 
 requirements:
   build:
