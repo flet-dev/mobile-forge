@@ -2,12 +2,11 @@
 package:
   name: flet-libarrow
   version: '{{ version }}'
-  # Only 64-bit slices are shipped: Arrow's CMake configs carry a 32/64-bit gate
-  # (ArrowConfigVersion.cmake marks PACKAGE_VERSION_UNSUITABLE unless
-  # sizeof(void*)==8), so a 32-bit pyarrow could not consume this libarrow anyway.
-  # pyarrow excludes the same arch; building libarrow for it would just be
-  # unconsumable CI work, so drop it here too.
-  excluded_arches: [armeabi-v7a]
+  # No excluded_arches: like every other flet-lib*, this foundation library
+  # builds for every available arch. The pyarrow consumer declares the 32-bit
+  # exclusion itself (Arrow's ArrowConfigVersion.cmake refuses a 32-bit
+  # find_package), so the armeabi-v7a libarrow just goes unconsumed there —
+  # not worth diverging from the flet-lib* convention to skip it.
 
 build:
   number: 1
