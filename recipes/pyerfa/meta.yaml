@@ -1,27 +1,3 @@
-# pyerfa — Python wrapper for the ERFA (Essential Routines for Fundamental
-# Astronomy) C library; the compiled foundation of astropy.time / coordinates.
-#
-# Recipe shape: minimal setuptools numpy-consumer C-extension with vendored C
-# source — the recipes/blis archetype (numpy in requirements.host; forge auto-
-# installs the pyproject build-system.requires — setuptools/setuptools_scm/
-# wheel/jinja2/numpy — into the build env, so nothing goes in requirements.build).
-#
-# setup.py builds ONE extension, `erfa.ufunc`, whose sources are the pre-
-# generated numpy-ufunc glue (erfa/ufunc.c, shipped in the sdist) plus the whole
-# vendored liberfa C library (liberfa/erfa/src/*.c, minus t_*.c tests). It is
-# PURE C (Extension language="c"; zero .cpp) — so, unlike most numpy consumers,
-# it needs NO flet-libcpp-shared on Android. All C is compiled in-tree; there is
-# no external native library to point at, hence no script_env.
-#
-# numpy is needed at COMPILE time (NumpyExtension appends numpy.get_include()),
-# and is a runtime dep carried in pyerfa's own wheel metadata. The wheel is built
-# abi3 (Py_LIMITED_API 0x30900f0 -> cp39-abi3 tag); forge's fix_wheel re-tags it
-# to the per-arch cp312 platform tag, so abi3 needs no recipe handling.
-#
-# Spike-first: no patches asserted. setup.py runs liberfa/erfa/./configure on the
-# build host to write a version-only config.h, with a pure-Python configure.ac
-# fallback wrapped in try/except — benign for cross builds; add a patch only if
-# it misbehaves.
 package:
   name: pyerfa
   version: 2.0.1.5

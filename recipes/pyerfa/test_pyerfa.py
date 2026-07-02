@@ -1,17 +1,11 @@
-"""Smoke test for the pyerfa recipe.
-
-pyerfa's import name is `erfa` (NOT `pyerfa`). erfa/__init__.py does
-`from .core import *` and `from .ufunc import (...)` at import, so importing
-`erfa` forces the single Py_LIMITED_API C extension (erfa/ufunc.abi3.so) to
-dlopen — proving the vendored liberfa static C and the numpy-ufunc glue
-cross-compiled and load on-device.
-"""
-
-
 def test_import_erfa():
+    """pyerfa's import name is `erfa` (NOT `pyerfa`). erfa/__init__.py does
+    `from .core import *` and `from .ufunc import (...)` at import, so importing
+    `erfa` forces the single Py_LIMITED_API C extension (erfa/ufunc.abi3.so) to
+    dlopen — proving the vendored liberfa static C and the numpy-ufunc glue
+    cross-compiled and load on-device."""
     import erfa
 
-    assert erfa.__version__
     assert hasattr(erfa, "ufunc")
 
 

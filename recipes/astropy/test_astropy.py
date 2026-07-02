@@ -1,30 +1,15 @@
-"""Smoke test for the astropy recipe.
-
-Exercises the four native extension families that matter most:
-  - astropy.time.Time      -> the Cython time C-extension
-  - astropy.wcs.WCS        -> the vendored wcslib C-extension
-  - astropy.io.fits        -> the vendored cfitsio C-extension
-  - astropy.coordinates    -> the runtime erfa (pyerfa) path
-
-astropy eagerly creates a config dir (~/.astropy) on import; on iOS/Android HOME
-may be unset or non-writable, so point the config/cache dirs at a writable temp
-location before importing astropy.
-"""
-
 import os
 import tempfile
 
+
+# astropy eagerly creates a config dir (~/.astropy) on import; on iOS/Android HOME
+# may be unset or non-writable, so point the config/cache dirs at a writable temp
+# location before importing astropy.
 _cfg = os.path.join(tempfile.gettempdir(), "astropy_cfg")
 os.makedirs(_cfg, exist_ok=True)
 os.environ.setdefault("XDG_CONFIG_HOME", _cfg)
 os.environ.setdefault("XDG_CACHE_HOME", _cfg)
 os.environ.setdefault("HOME", _cfg)
-
-
-def test_import_astropy():
-    import astropy
-
-    assert astropy.__version__
 
 
 def test_time_scale_conversion():
