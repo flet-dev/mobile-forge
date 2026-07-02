@@ -1,0 +1,28 @@
+{% set version = "24.0.0" %}
+package:
+  name: flet-libarrow
+  version: '{{ version }}'
+  # No excluded_arches: like every other flet-lib*, this foundation library
+  # builds for every available arch. The pyarrow consumer declares the 32-bit
+  # exclusion itself (Arrow's ArrowConfigVersion.cmake refuses a 32-bit
+  # find_package), so the armeabi-v7a libarrow just goes unconsumed there —
+  # not worth diverging from the flet-lib* convention to skip it.
+
+build:
+  number: 1
+
+source:
+  # Apache Arrow C++ (curated source release; build dir = its cpp/). pyarrow
+  # links this shared libarrow. MINIMAL CORE for now — IPC only, no compute /
+  # parquet / compression (see build.sh + the feasibility notes).
+  url: https://archive.apache.org/dist/arrow/arrow-{{ version }}/apache-arrow-{{ version }}.tar.gz
+
+requirements:
+  build:
+    - cmake
+    - ninja
+# {% if sdk == 'android' %}
+  host:
+    # libarrow.so is C++; on Android it links libc++_shared.so.
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}

@@ -1,0 +1,42 @@
+arrow-python-optlib.patch — install libarrow_python into the wheel's opt/lib
+
+pyarrow builds its own libarrow_python C++ library. By default its CMake installs
+it into the package dir with a versioned SONAME. On mobile we instead install a
+single unversioned libarrow_python into the wheel's opt/lib (via scikit-build's
+SKBUILD_PLATLIB_DIR staging dir) so it rides the same per-platform routing as
+libarrow / libarrow_compute: APK jniLibs on Android, per-slice *.framework bundles
+on iOS. This avoids needing a $ORIGIN runpath (CMake can't emit one on Android).
+Guarded by SKBUILD_PLATLIB_DIR (set on both mobile platforms); unchanged on desktop.
+
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -530,12 +530,23 @@
+ if(CMAKE_CONFIGURATION_TYPES)
+   target_compile_definitions(arrow_python PRIVATE PYARROW_BUILD_TYPE="$<CONFIG>")
+ endif()
+-set_target_properties(arrow_python PROPERTIES VERSION "${PYARROW_FULL_SO_VERSION}"
+-                                              SOVERSION "${PYARROW_SO_VERSION}")
+-install(TARGETS arrow_python
+-        ARCHIVE DESTINATION .
+-        LIBRARY DESTINATION .
+-        RUNTIME DESTINATION .)
++# mobile-forge: no SO version -> a single unversioned libarrow_python.dylib
++# (versioned dylib + symlinks break flet's iOS lipo framework relocation;
++# matches the flet-lib* single-lib shape). And route the install into the
++# wheel's opt/lib (sibling of the pyarrow package via scikit-build's platlib
++# staging dir) so it rides the same per-platform routing as libarrow /
++# libarrow_compute: APK jniLibs on Android, *.fwork frameworks on iOS.
++if(SKBUILD_PLATLIB_DIR)
++  install(TARGETS arrow_python
++          ARCHIVE DESTINATION "${SKBUILD_PLATLIB_DIR}/opt/lib"
++          LIBRARY DESTINATION "${SKBUILD_PLATLIB_DIR}/opt/lib"
++          RUNTIME DESTINATION "${SKBUILD_PLATLIB_DIR}/opt/lib")
++else()
++  install(TARGETS arrow_python
++          ARCHIVE DESTINATION .
++          LIBRARY DESTINATION .
++          RUNTIME DESTINATION .)
++endif()
+ 
+ set(PYARROW_CPP_ENCRYPTION_SRCS ${PYARROW_CPP_SOURCE_DIR}/parquet_encryption.cc)
+ if(NOT PYARROW_BUILD_PARQUET_ENCRYPTION)

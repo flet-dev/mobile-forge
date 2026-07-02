@@ -236,7 +236,7 @@ jobs:
         with:
           toolchain: stable
           target: ${{ matrix.rust_targets }}
-          # Disable cache on tag/release builds to avoid restoring poisoned cache.
+          # Avoid release-time cache poisoning.
           cache: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
       - name: Install NDK ${{ env.FORGE_NDK_VERSION }} for forge on Android
