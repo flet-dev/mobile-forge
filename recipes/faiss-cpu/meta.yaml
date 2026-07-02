@@ -1,0 +1,127 @@
+# faiss-cpu — Facebook AI Similarity Search (efficient dense-vector search /
+# clustering), flet#5688. Useful for on-device RAG / semantic search.
+#
+# Recipe shape: scikit-build-core + CMake C++ — the recipes/duckdb archetype
+# (CMAKE_ARGS toolchain injection, iOS Unix-Makefiles generator, CROSS_VENV_PYTHON
+# FindPython) — plus the recipes/scipy BLAS wiring (flet-libopenblas) and an
+# OpenMP story split across platforms. faiss-cpu 1.14.3 has NO PyPI sdist, so the
+# recipe pulls the upstream GitHub archive via source.url (PythonPackageBuilder
+# honors it). Package name is faiss-cpu; the import name is `faiss`.
+#
+# The upstream pyproject already sets FAISS_ENABLE_GPU/MKL/C_API/EXTRAS OFF and
+# exposes an OpenMP override hook (OpenMP_CXX_FLAGS / OpenMP_CXX_LIB_NAMES /
+# OpenMP_omp_LIBRARY) so find_package(OpenMP REQUIRED) accepts a user-supplied
+# libomp without a probe. We reuse that hook per platform — no faiss patch needed.
+#
+# OpenMP:
+#   Android — real multi-threaded libomp.so from flet-libomp; -fopenmp compiles the
+#     `#pragma omp` regions for genuine parallelism. libomp.so is DT_NEEDED at
+#     runtime, so flet-libomp is a real Requires-Dist (in `host`).
+#   iOS — Apple clang ships no OpenMP. flet-libomp's iOS variant provides a serial
+#     STUB libomp.a (+omp.h). We deliberately DROP -fopenmp so clang ignores the
+#     pragmas (serial) instead of emitting __kmpc_* runtime calls; the stub only
+#     satisfies faiss's direct omp_*() calls. Static-linked, so it's a host_build
+#     dep (not a runtime Requires-Dist).
+#
+# BLAS/LAPACK: flet-libopenblas ships a single static libopenblas.a that bundles
+# f2c-LAPACK. faiss/CMakeLists.txt:713 short-circuits find_package(BLAS/LAPACK)
+# when both -DBLAS_LIBRARIES and -DLAPACK_LIBRARIES are set → point both at the .a.
+# Static → linked into libfaiss, so flet-libopenblas is a host_build dep too.
+#
+# SIMD: FAISS_OPT_LEVEL=generic (NEON is baseline on arm64/iOS-arm64; the AVX/SVE
+# variants are skipped). C++20 → Android links libc++_shared.so (flet-libcpp-shared).
+# SWIG (host tool, from the pyproject build-system.requires) generates the bindings.
+#
+# armeabi-v7a (32-bit ARM) is excluded for now — start with the 64-bit ABIs and
+# revisit 32-bit atomics/NEON if there's demand (polars precedent).
+package:
+  name: faiss-cpu
+  version: 1.14.3
+  excluded_arches: [armeabi-v7a]
+
+source:
+  url: https://github.com/facebookresearch/faiss/archive/refs/tags/v1.14.3.tar.gz
+
+# Apple-only correctness fix (no-op on Android): faiss gates -DSWIGWORDSIZE64 on
+# CMAKE_SYSTEM_NAME != "Darwin", but we cross-compile with CMAKE_SYSTEM_NAME=iOS,
+# so SWIG wrongly maps int64_t to `long` while faiss's idx_t is `long long`.
+# Switch the guard to CMake's APPLE variable (true for macOS + iOS).
+patches:
+  - apple-swig-int64.patch
+
+requirements:
+  build:
+    - cmake
+    - ninja
+    - swig
+  host:
+    - numpy 2.4.6
+# {% if sdk == 'android' %}
+    # Real OpenMP runtime (libomp.so DT_NEEDED) + C++ runtime — both bundled at runtime.
+    - flet-libomp 27.3.13750724
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
+  host_build:
+    # Static libs linked INTO libfaiss / _swigfaiss.so — needed to build/link but
+    # never dlopened at runtime, so kept OUT of the wheel's Requires-Dist.
+    - flet-libopenblas 0.3.33
+# {% if sdk != 'android' %}
+    # iOS serial-stub libomp.a (+ omp.h) — static-linked.
+    - flet-libomp 27.3.13750724
+# {% endif %}
+
+build:
+  number: 1
+  script_env:
+    # scikit-build-core honors the CMAKE_ARGS env var (appended to its cmake call),
+    # same as recipes/duckdb. faiss defines + BLAS + OpenMP are shared across
+    # platforms; the toolchain / Python-path block is per-platform.
+# {% if sdk == 'android' %}
+    CMAKE_ARGS: >-
+      -DCMAKE_TOOLCHAIN_FILE={NDK_ROOT}/build/cmake/android.toolchain.cmake
+      -DANDROID_ABI={ANDROID_ABI}
+      -DANDROID_NATIVE_API_LEVEL={ANDROID_API_LEVEL}
+      -DANDROID_STL=c++_shared
+      -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/env
+      -DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DCMAKE_MODULE_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DPython_EXECUTABLE={CROSS_VENV_PYTHON}
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.so
+      -DFAISS_ENABLE_GPU=OFF
+      -DFAISS_ENABLE_MKL=OFF
+      -DFAISS_ENABLE_C_API=OFF
+      -DFAISS_ENABLE_PYTHON=ON
+      -DFAISS_OPT_LEVEL=generic
+      -DBUILD_TESTING=OFF
+      -DBLAS_LIBRARIES={platlib}/opt/lib/libopenblas.a
+      -DLAPACK_LIBRARIES={platlib}/opt/lib/libopenblas.a
+      -DOpenMP_CXX_FLAGS=-fopenmp
+      -DOpenMP_CXX_LIB_NAMES=omp
+      -DOpenMP_omp_LIBRARY={platlib}/opt/lib/libomp.so
+# {% else %}
+    # The `ninja` pip package crashes importing on the iOS crossenv python, so use
+    # the Makefiles generator (scikit-build-core then never imports ninja). Same as
+    # recipes/duckdb.
+    CMAKE_GENERATOR: Unix Makefiles
+    CMAKE_ARGS: >-
+      -DCMAKE_SYSTEM_NAME=iOS
+      -DCMAKE_OSX_SYSROOT={{ sdk }}
+      -DCMAKE_OSX_DEPLOYMENT_TARGET={{ sdk_version }}
+      -DCMAKE_OSX_ARCHITECTURES={{ arch }}
+      -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/env
+      -DPython_EXECUTABLE={CROSS_VENV_PYTHON}
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.dylib
+      -DFAISS_ENABLE_GPU=OFF
+      -DFAISS_ENABLE_MKL=OFF
+      -DFAISS_ENABLE_C_API=OFF
+      -DFAISS_ENABLE_PYTHON=ON
+      -DFAISS_OPT_LEVEL=generic
+      -DBUILD_TESTING=OFF
+      -DBLAS_LIBRARIES={platlib}/opt/lib/libopenblas.a
+      -DLAPACK_LIBRARIES={platlib}/opt/lib/libopenblas.a
+      -DOpenMP_CXX_FLAGS=-I{platlib}/opt/include
+      -DOpenMP_CXX_LIB_NAMES=omp
+      -DOpenMP_omp_LIBRARY={platlib}/opt/lib/libomp.a
+# {% endif %}

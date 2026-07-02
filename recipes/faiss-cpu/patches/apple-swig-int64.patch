@@ -1,0 +1,28 @@
+iOS: don't define SWIGWORDSIZE64 on Apple platforms (int64_t is long long).
+
+swigfaiss.swig maps int64_t to `long` when SWIGWORDSIZE64 is defined, else to
+`long long`. faiss/python/CMakeLists.txt gates that flag on
+`NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin"` — which correctly skips it on macOS
+(where int64_t is `long long`), but mobile-forge cross-compiles with
+CMAKE_SYSTEM_NAME=iOS, which does NOT match "Darwin", so the flag gets defined
+and SWIG generates `std::vector<long>` / `const long*` where faiss's real
+`idx_t = int64_t` is `long long`. The SWIG wrapper then fails to compile with
+errors like "vector<long long> cannot bind to vector<long>".
+
+iOS (like macOS) is an Apple LP64 platform where <cstdint> defines int64_t as
+`long long`, so it must NOT define SWIGWORDSIZE64. Switch the guard to CMake's
+`APPLE` variable, which is true for macOS AND iOS. This is a no-op on Android /
+Linux (there APPLE is false, so SWIGWORDSIZE64 stays defined — correct, since
+their arm64/x86_64 int64_t is `long`).
+
+--- a/faiss/python/CMakeLists.txt
++++ b/faiss/python/CMakeLists.txt
+@@ -23,7 +23,7 @@
+     CPLUSPLUS ON
+     USE_TARGET_INCLUDE_DIRECTORIES TRUE
+   )
+-  if(NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin" AND NOT WIN32)
++  if(NOT APPLE AND NOT WIN32)
+     set_source_files_properties(${source} PROPERTIES
+       SWIG_FLAGS -DSWIGWORDSIZE64
+     )
