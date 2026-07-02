@@ -1,52 +1,8 @@
-# faiss-cpu — Facebook AI Similarity Search (efficient dense-vector search /
-# clustering), flet#5688. Useful for on-device RAG / semantic search.
-#
-# Recipe shape: scikit-build-core + CMake C++ — the recipes/duckdb archetype
-# (CMAKE_ARGS toolchain injection, iOS Unix-Makefiles generator, CROSS_VENV_PYTHON
-# FindPython) — plus the recipes/scipy BLAS wiring (flet-libopenblas) and an
-# OpenMP story split across platforms. faiss-cpu 1.14.3 has NO PyPI sdist, so the
-# recipe pulls the upstream GitHub archive via source.url (PythonPackageBuilder
-# honors it). Package name is faiss-cpu; the import name is `faiss`.
-#
-# The upstream pyproject already sets FAISS_ENABLE_GPU/MKL/C_API/EXTRAS OFF and
-# exposes an OpenMP override hook (OpenMP_CXX_FLAGS / OpenMP_CXX_LIB_NAMES /
-# OpenMP_omp_LIBRARY) so find_package(OpenMP REQUIRED) accepts a user-supplied
-# libomp without a probe. We reuse that hook per platform — no faiss patch needed.
-#
-# OpenMP:
-#   Android — real multi-threaded libomp.so from flet-libomp; -fopenmp compiles the
-#     `#pragma omp` regions for genuine parallelism. libomp.so is DT_NEEDED at
-#     runtime, so flet-libomp is a real Requires-Dist (in `host`).
-#   iOS — Apple clang ships no OpenMP. flet-libomp's iOS variant provides a serial
-#     STUB libomp.a (+omp.h). We deliberately DROP -fopenmp so clang ignores the
-#     pragmas (serial) instead of emitting __kmpc_* runtime calls; the stub only
-#     satisfies faiss's direct omp_*() calls. Static-linked, so it's a host_build
-#     dep (not a runtime Requires-Dist).
-#
-# BLAS/LAPACK: flet-libopenblas ships a single static libopenblas.a that bundles
-# f2c-LAPACK. faiss/CMakeLists.txt:713 short-circuits find_package(BLAS/LAPACK)
-# when both -DBLAS_LIBRARIES and -DLAPACK_LIBRARIES are set → point both at the .a.
-# Static → linked into libfaiss, so flet-libopenblas is a host_build dep too.
-#
-# SIMD: FAISS_OPT_LEVEL=generic (NEON is baseline on arm64/iOS-arm64; the AVX/SVE
-# variants are skipped). C++20 → Android links libc++_shared.so (flet-libcpp-shared).
-# SWIG (host tool, from the pyproject build-system.requires) generates the bindings.
-#
-# BUILD_SHARED_LIBS=OFF: upstream defaults to ON and EXCLUDES libfaiss from the
-# wheel (wheel.exclude drops lib/**), relying on auditwheel/delocate to bundle it —
-# which forge does not run, leaving _swigfaiss.so with a dangling @rpath/libfaiss
-# load. Building static instead embeds libfaiss (+ the openblas/omp static libs)
-# straight into _swigfaiss.so → one self-contained extension, no runtime .so deps
-# beyond flet-libomp/flet-libcpp-shared on Android.
-#
-# armeabi-v7a (32-bit ARM) is excluded for now — start with the 64-bit ABIs and
-# revisit 32-bit atomics/NEON if there's demand (polars precedent).
 {% set version = "1.14.3" %}
 
 package:
   name: faiss-cpu
   version: '{{ version }}'
-  excluded_arches: [armeabi-v7a]
 
 source:
   url: https://github.com/facebookresearch/faiss/archive/refs/tags/v{{ version }}.tar.gz
