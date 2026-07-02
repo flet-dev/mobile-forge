@@ -1,3 +1,15 @@
+mobile.patch — iOS: preload the Arrow C++ dylibs before importing pyarrow.lib
+
+flet relocates pyarrow's extension modules (pyarrow/*.so) into per-module
+*.framework bundles, but the Arrow C++ dylibs they link via @rpath (libarrow,
+libarrow_compute, libarrow_python) ship as plain dylibs in site-packages/opt/lib,
+and nothing on the ext modules' rpath resolves them. This shim preloads the three
+dylibs with RTLD_GLOBAL (in dependency order) before importing pyarrow.lib —
+directly from opt/lib, or by following a "<name>.fwork" marker when a serious_python
+build has relocated them into a framework (serious-python#223) — so dyld binds each
+@rpath reference by the already-loaded image's install-id. No-op on Android
+(DT_NEEDED resolves the libs by basename from the APK jniLibs) and on desktop.
+
 --- a/pyarrow/__init__.py
 +++ b/pyarrow/__init__.py
 @@ -55,6 +55,50 @@

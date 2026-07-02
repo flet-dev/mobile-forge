@@ -1,20 +1,3 @@
-"""On-device smoke tests for a compute-only pyarrow (libarrow + libarrow_compute;
-no parquet / dataset / acero / flight / re2 / utf8proc, and numpy is absent on the
-device). Everything here uses pure-Python value paths (.to_pylist() / .as_py());
-nothing calls .to_numpy()/.to_pandas() or any re2/utf8proc string kernel.
-
-Tests are ordered so a failure pinpoints the layer: import first (core libarrow),
-the compute kernels last (the separate libarrow_compute .so + its rpath)."""
-
-
-def test_import_version():
-    """Canary: importing pyarrow loads the `pyarrow.lib` Cython module, which
-    dynamically links the bundled/sibling libarrow — proof the C++ core resolved."""
-    import pyarrow as pa
-
-    assert pa.__version__
-
-
 def test_array_and_table():
     """Arrays + a columnar Table round-trip through pure-python value paths."""
     import pyarrow as pa
@@ -73,7 +56,12 @@ def test_compute_kernels():
     arr = pa.array([1, 2, 3, 4])
     assert pc.sum(arr).as_py() == 10
     assert pc.add(arr, pa.scalar(10)).to_pylist() == [11, 12, 13, 14]
-    assert pc.equal(arr, pa.array([1, 9, 3, 9])).to_pylist() == [True, False, True, False]
+    assert pc.equal(arr, pa.array([1, 9, 3, 9])).to_pylist() == [
+        True,
+        False,
+        True,
+        False,
+    ]
 
     mm = pc.min_max(arr)
     assert mm["min"].as_py() == 1

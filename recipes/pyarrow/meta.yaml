@@ -41,16 +41,7 @@ requirements:
 # {% endif %}
 
 patches:
-  # Both platforms: preload the Arrow C++ dylibs from opt/lib (RTLD_GLOBAL) before
-  # importing pyarrow.lib, so dyld resolves the extension modules' @rpath link by
-  # install-name after flet relocates each opt/lib dylib into its own *.fwork
-  # framework on iOS. No-op on Android (jniLibs already resolves) / desktop.
   - mobile.patch
-  # Install pyarrow's own libarrow_python into the wheel's opt/lib (not the package
-  # dir) so it rides the same routing as libarrow / libarrow_compute: APK jniLibs on
-  # Android, per-platform *.fwork frameworks on iOS. Avoids a $ORIGIN runpath (CMake
-  # can't emit one on Android). Guarded by SKBUILD_PLATLIB_DIR (both mobile
-  # platforms); no-op on desktop.
   - arrow-python-optlib.patch
 
 build:
