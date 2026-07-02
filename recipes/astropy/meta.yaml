@@ -1,0 +1,15 @@
+package:
+  name: astropy
+  version: 8.0.0
+
+build:
+  number: 1
+
+requirements:
+  host:
+    - numpy ^2.0.0
+
+# {% if sdk == 'android' %}
+patches:
+  - android-cython-cpow.patch
+# {% endif %}

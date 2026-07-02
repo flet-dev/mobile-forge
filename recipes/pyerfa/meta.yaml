@@ -1,0 +1,10 @@
+package:
+  name: pyerfa
+  version: 2.0.1.5
+
+build:
+  number: 1
+
+requirements:
+  host:
+    - numpy ^2.0.0
