@@ -1,0 +1,56 @@
+# astropy — core astronomy library (the native half of the astroquery request,
+# flet-dev/flet#3520; also the foundation of the whole scientific-astronomy stack).
+#
+# Recipe shape: setuptools + Cython + vendored-C numpy-consumer — the recipes/blis
+# (numpy host + vendored C) / recipes/oracledb (Cython) archetype. astropy 8.0.0 is
+# PURE C + Cython (10 .pyx, ~65 .c, ZERO C++) so it needs NO flet-libcpp-shared on
+# Android. All three native libraries (cfitsio, expat, wcslib) are VENDORED under
+# cextern/ and default to BUNDLED (ASTROPY_USE_SYSTEM_* unset -> no pkg-config /
+# system probing), so there is no external flet-lib* to link and no script_env.
+#
+# Build backend = setuptools; setup.py -> extension_helpers.get_extensions() builds
+# ~18 C extensions. numpy is the only external COMPILE input (every setup_package
+# appends numpy.get_include(); the C-API headers are arch-independent) -> numpy in
+# requirements.host. forge auto-installs the pyproject build-system.requires
+# (setuptools, setuptools_scm, cython, numpy, extension-helpers, pyerfa) into the
+# BUILD env, so requirements.build stays empty.
+#
+# pyerfa is NOT a build-time dep of astropy — no extension #includes or cimports
+# erfa (verified: zero build-time erfa refs; astropy.time._parse_times uses only
+# numpy headers). erfa is imported only at RUNTIME, so pyerfa is carried in
+# astropy's own wheel METADATA (Requires-Dist: pyerfa>=2.0.1.3) and resolved from
+# the peer recipes/pyerfa target wheel at app-build time. It must NOT go in
+# requirements.host.
+#
+# extension-helpers never calls add_openmp_flags_if_available() in 8.0.0, so the
+# compile-AND-run OpenMP probe (which would fail under cross) never fires;
+# convolution OpenMP is #ifdef _OPENMP gated and left serial -> no flet-libomp.
+# Limited-API is off -> normal cp312 wheels. Version 8.0.0 is baked in
+# astropy/_version.py + PKG-INFO, so setuptools_scm needs no .git.
+#
+# One Android-only patch (android-cython-cpow.patch): the cosmology
+# scalar_inv_efuncs Cython kernel raises (1+z) to a floating exponent, which
+# Cython 3's default cpow=False lowers to the C complex-power function cpow().
+# bionic declares cpow only from API 26 (<complex.h> __INTRODUCED_IN(26)) but
+# forge targets API 24, so NDK clang 18 errors on the implicit declaration (and
+# the symbol is absent from the API-24 libm stub, so declaring it would fail at
+# link). The base is always positive, so `cpow=True` (real C pow semantics) is
+# numerically identical and removes the cpow() call. iOS/macOS SDKs declare cpow,
+# so the iOS slices build clean without the patch — hence the android-only gate.
+# (The -Werror -Wall on cosmology._src.signature_deprecations turned out benign on
+# both NDK and iOS clang.)
+package:
+  name: astropy
+  version: 8.0.0
+
+build:
+  number: 1
+
+requirements:
+  host:
+    - numpy ^2.0.0
+
+# {% if sdk == 'android' %}
+patches:
+  - android-cython-cpow.patch
+# {% endif %}
