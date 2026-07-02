@@ -1,0 +1,38 @@
+--- a/pyarrow/__init__.py
++++ b/pyarrow/__init__.py
+@@ -56,6 +56,35 @@
+     except ImportError:
+         __version__ = None
+
++# mobile-forge (iOS): flet moves each opt/lib arrow dylib into a signed framework
++# under the app bundle and leaves a "<name>.fwork" TEXT marker at opt/lib/<name>.fwork
++# whose content is the app-relative framework path (e.g.
++# "Frameworks/opt.lib.libarrow.framework/opt.lib.libarrow"). Because flet only
++# rewrites the install-id for .so (not .dylib), the arrow frameworks keep their
++# original @rpath/libarrow*.dylib install-id, so RTLD_GLOBAL-preloading each
++# framework binary before importing pyarrow.lib lets the ext modules' direct
++# @rpath load-commands bind by install-name. No-op on Android/desktop (no markers).
++try:
++    import ctypes as _ctypes
++    _optlib = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "opt", "lib")
++    for _base in ("libarrow", "libarrow_compute", "libarrow_python"):
++        _fwork = _os.path.join(_optlib, _base + ".fwork")
++        if not _os.path.exists(_fwork):
++            continue
++        _rel = open(_fwork).read().strip()
++        _dir = _optlib
++        for _ in range(12):
++            _dir = _os.path.dirname(_dir)
++            _fb = _os.path.join(_dir, _rel)
++            if _os.path.exists(_fb):
++                try:
++                    _ctypes.CDLL(_fb, mode=_ctypes.RTLD_GLOBAL)
++                except OSError:
++                    pass
++                break
++except Exception:
++    pass
++
+ from pyarrow.lib import (BuildInfo, CppBuildInfo, RuntimeInfo, set_timezone_db_path,
+                          MonthDayNano, VersionInfo, build_info, cpp_build_info,
+                          cpp_version, cpp_version_info, runtime_info,
