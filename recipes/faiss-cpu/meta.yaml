@@ -7,30 +7,6 @@ package:
 source:
   url: https://github.com/facebookresearch/faiss/archive/refs/tags/v{{ version }}.tar.gz
 
-patches:
-  - swig-int64-wordsize.patch
-
-requirements:
-  build:
-    - cmake
-    - ninja
-    - swig
-  host:
-    - numpy 2.4.6
-# {% if sdk == 'android' %}
-    # Real OpenMP runtime (libomp.so DT_NEEDED) + C++ runtime — both bundled at runtime.
-    - flet-libomp 27.3.13750724
-    - flet-libcpp-shared >=27.2.12479018
-# {% endif %}
-  host_build:
-    # Static libs linked INTO libfaiss / _swigfaiss.so — needed to build/link but
-    # never dlopened at runtime, so kept OUT of the wheel's Requires-Dist.
-    - flet-libopenblas 0.3.33
-# {% if sdk != 'android' %}
-    # iOS serial-stub libomp.a (+ omp.h) — static-linked.
-    - flet-libomp 27.3.13750724
-# {% endif %}
-
 build:
   number: 1
   script_env:
@@ -87,4 +63,28 @@ build:
       -DOpenMP_CXX_FLAGS=-I{platlib}/opt/include
       -DOpenMP_CXX_LIB_NAMES=omp
       -DOpenMP_omp_LIBRARY={platlib}/opt/lib/libomp.a
+# {% endif %}
+
+patches:
+  - swig-int64-wordsize.patch
+
+requirements:
+  build:
+    - cmake
+    - ninja
+    - swig
+  host:
+    - numpy 2.4.6
+# {% if sdk == 'android' %}
+    # Real OpenMP runtime (libomp.so DT_NEEDED) + C++ runtime — both bundled at runtime.
+    - flet-libomp 27.3.13750724
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
+  host_build:
+    # Static libs linked INTO libfaiss / _swigfaiss.so — needed to build/link but
+    # never dlopened at runtime, so kept OUT of the wheel's Requires-Dist.
+    - flet-libopenblas 0.3.33
+# {% if sdk != 'android' %}
+    # iOS serial-stub libomp.a (+ omp.h) — static-linked.
+    - flet-libomp 27.3.13750724
 # {% endif %}

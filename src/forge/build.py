@@ -234,23 +234,36 @@ class Builder(ABC):
                 )
                 shutil.rmtree(self.build_path)
 
-        # Re-download sources if caching is disabled or no cached tarball exists.
-        # By default, the cached tarball is reused across arch builds to avoid downloading
-        # the same source multiple times. Disable caching when testing source-tarball patches,
-        # since each arch reuses and re-unpacks the same cached archive.
-        if (
-            os.getenv("MOBILE_FORGE_CACHE_DOWNLOADS_OFF")
-            or not self.source_archive_path.is_file()
-        ):
-            log(self.log_file, f"\n[{self.cross_venv}] Download package sources")
-            self.download_source()
+        if self.package.meta.get("source") is None:
+            # A `source: null` recipe has no upstream archive to download: its build.sh
+            # produces its own sources (e.g. copying a library out of the NDK, or
+            # generating one inline). Skip the download/unpack and just create an empty
+            # build directory for build.sh to work in.
+            if not self.build_path.is_dir():
+                log(
+                    self.log_file,
+                    f"\n[{self.cross_venv}] No source to download; "
+                    "creating empty build directory",
+                )
+                self.build_path.mkdir(parents=True, exist_ok=True)
+        else:
+            # Re-download sources if caching is disabled or no cached tarball exists.
+            # By default, the cached tarball is reused across arch builds to avoid downloading
+            # the same source multiple times. Disable caching when testing source-tarball patches,
+            # since each arch reuses and re-unpacks the same cached archive.
+            if (
+                os.getenv("MOBILE_FORGE_CACHE_DOWNLOADS_OFF")
+                or not self.source_archive_path.is_file()
+            ):
+                log(self.log_file, f"\n[{self.cross_venv}] Download package sources")
+                self.download_source()
 
-        if not self.build_path.is_dir():
-            log(self.log_file, f"\n[{self.cross_venv}] Unpack sources")
-            self.unpack_source()
+            if not self.build_path.is_dir():
+                log(self.log_file, f"\n[{self.cross_venv}] Unpack sources")
+                self.unpack_source()
 
-            log(self.log_file, f"\n[{self.cross_venv}] Apply patches")
-            self.patch_source()
+                log(self.log_file, f"\n[{self.cross_venv}] Apply patches")
+                self.patch_source()
 
         # Create a clean cross environment.
         log(self.log_file, f"\n[{self.cross_venv}] Create clean build environment")
