@@ -4,7 +4,7 @@ package:
   # bindings hard-require an exact major.minor match with libgdal —
   # any bump here must come with flet-libgdal bumped to the same
   # version, plus fiona / rasterio / pyogrio re-pinned in lockstep.
-  version: 3.13.1
+  version: "3.13.1"
 
 requirements:
   host:

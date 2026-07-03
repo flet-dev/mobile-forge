@@ -1,6 +1,6 @@
 package:
   name: srsly
-  version: 2.5.3
+  version: "2.5.3"
 
 build:
   number: 1

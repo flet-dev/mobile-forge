@@ -1,6 +1,6 @@
 package:
   name: yarl
-  version: 1.24.2
+  version: "1.24.2"
 
 build:
   number: 1

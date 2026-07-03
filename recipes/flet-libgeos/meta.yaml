@@ -1,6 +1,6 @@
 package:
   name: flet-libgeos
-  version: 3.13.1
+  version: "3.13.1"
 
 build:
   number: 1

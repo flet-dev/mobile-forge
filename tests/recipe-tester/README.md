@@ -4,8 +4,8 @@ A generic Flet app that runs a recipe's pytest tests on a mobile
 device/emulator/simulator and emits an EXIT sentinel to `console.log` for
 the CI host to pick up.
 
-This is the *runner*; the *tests* live in each recipe's `test_<name>.py`
-(or `test/test_<name>.py` for recipes with assets). At build time,
+This is the *runner*; the *tests* live in each recipe's `tests/` directory
+(`tests/test_<name>.py`, plus any asset files). At build time,
 [`stage_recipe.sh`](./stage_recipe.sh) copies the recipe's test files into
 `./recipe_tests/` and writes a `pyproject.toml` (from the `.tpl` template)
 pinning the recipe under test. The same script is used by CI and local devs

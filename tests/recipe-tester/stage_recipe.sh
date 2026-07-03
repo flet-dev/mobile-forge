@@ -37,15 +37,11 @@ fi
 rm -rf "$TEST_DIR"
 mkdir -p "$TEST_DIR"
 
-# Look for test files at known locations.
+# Look for test files in the recipe's tests/ directory
 if [ -d "$RECIPE_DIR/tests" ]; then
     cp -r "$RECIPE_DIR/tests/." "$TEST_DIR/"
-elif [ -d "$RECIPE_DIR/test" ]; then
-    cp -r "$RECIPE_DIR/test/." "$TEST_DIR/"
-elif compgen -G "$RECIPE_DIR/test_*.py" > /dev/null; then
-    cp "$RECIPE_DIR"/test_*.py "$TEST_DIR/"
 else
-    echo "::error::No test file(s) found at $RECIPE_DIR/tests/, $RECIPE_DIR/test/ or $RECIPE_DIR/test_*.py" >&2
+    echo "::error::No tests/ directory found in $RECIPE_DIR/" >&2
     exit 1
 fi
 

@@ -1,6 +1,6 @@
 package:
   name: greenlet
-  version: 3.5.1
+  version: "3.5.1"
 
 # {% if sdk == 'android' %}
 requirements:

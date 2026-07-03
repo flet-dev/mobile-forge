@@ -1,6 +1,6 @@
 package:
   name: pysodium
-  version: 0.7.18
+  version: "0.7.18"
 
 build:
   number: 10

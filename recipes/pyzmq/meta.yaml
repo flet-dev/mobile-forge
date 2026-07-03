@@ -1,6 +1,6 @@
 package:
   name: pyzmq
-  version: 27.1.0
+  version: "27.1.0"
 
 requirements:
   build:

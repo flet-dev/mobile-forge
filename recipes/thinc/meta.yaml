@@ -1,6 +1,6 @@
 package:
   name: thinc
-  version: 8.3.13
+  version: "8.3.13"
 
 build:
   number: 1
