@@ -1,0 +1,26 @@
+# libomp is the LLVM OpenMP runtime.
+#
+# ANDROID: the real, multi-threaded libomp.so is extracted from the NDK's clang
+# and repackaged so apps can bundle it. Any OpenMP C-extension (e.g. scikit-learn)
+# links `-lomp` → a libomp.so DT_NEEDED that must be present at runtime.
+#
+# iOS: Apple clang ships no OpenMP runtime. Libraries whose OpenMP use is purely
+# `#pragma omp` fall back to single-threaded and never reference libomp (they don't
+# need this recipe on iOS). But some C++ libraries (e.g. faiss) make DIRECT omp_*()
+# runtime calls — omp_get_max_threads(), the omp_lock_t family, etc. — that must
+# resolve at link even when the parallel regions run serially. For those, this
+# recipe builds a tiny SERIAL STUB libomp.a (the omp_* API as single-threaded
+# no-ops) plus a matching omp.h, so the library links and runs single-threaded.
+# Point the consumer's CMake OpenMP_omp_LIBRARY at this .a (WITHOUT -fopenmp, so
+# the pragmas are ignored rather than emitting __kmpc_* runtime calls).
+
+package:
+  name: flet-libomp
+  version: 27.3.13750724
+
+build:
+  number: 2
+
+# No upstream archive: build.sh produces its own libomp — copied from the NDK on
+# Android, generated as a serial stub on iOS.
+source: null

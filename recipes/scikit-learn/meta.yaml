@@ -1,0 +1,32 @@
+package:
+  name: scikit-learn
+  version: '1.9.0'
+
+build:
+  number: 1
+  backend-args:
+    # scikit-learn borrows BLAS via scipy.linalg.cython_blas (no external BLAS
+    # link, no Fortran); OpenMP is optional (required:false → single-threaded).
+    - -Csetup-args=--cross-file
+    - -Csetup-args={MESON_CROSS_FILE}
+
+requirements:
+  build:
+    - ninja
+    - meson
+    - cython
+  host:
+    - numpy 2.4.6
+    - scipy 1.18.0
+# {% if sdk == 'android' %}
+    # scikit-learn vendors C++ (libsvm/liblinear/newrand) → libc++_shared.so, and
+    # links OpenMP → libomp.so; both are NDK runtime libs the app must bundle.
+    # (iOS has no OpenMP, so it builds single-threaded and needs neither)
+    - flet-libcpp-shared >=27.2.12479018
+    - flet-libomp 27.3.13750724
+# {% endif %}
+
+patches:
+  - relax-scipy-build-cap.patch
+  - disable-openmp-non-android.patch
+  - ios-guard-multiprocessing-import.patch

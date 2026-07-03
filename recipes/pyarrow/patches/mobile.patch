@@ -1,0 +1,65 @@
+mobile.patch — iOS: preload the Arrow C++ dylibs before importing pyarrow.lib
+
+flet relocates pyarrow's extension modules (pyarrow/*.so) into per-module
+*.framework bundles, but the Arrow C++ dylibs they link via @rpath (libarrow,
+libarrow_compute, libarrow_python) ship as plain dylibs in site-packages/opt/lib,
+and nothing on the ext modules' rpath resolves them. This shim preloads the three
+dylibs with RTLD_GLOBAL (in dependency order) before importing pyarrow.lib —
+directly from opt/lib, or by following a "<name>.fwork" marker when a serious_python
+build has relocated them into a framework (serious-python#223) — so dyld binds each
+@rpath reference by the already-loaded image's install-id. No-op on Android
+(DT_NEEDED resolves the libs by basename from the APK jniLibs) and on desktop.
+
+--- a/pyarrow/__init__.py
++++ b/pyarrow/__init__.py
+@@ -55,6 +55,50 @@
+                                                  parse=parse_git)
+     except ImportError:
+         __version__ = None
++
++# mobile-forge (iOS): pyarrow's extension modules (pyarrow/*.so) get relocated by
++# flet into per-module *.framework bundles, but the Arrow C++ dylibs they link via
++# @rpath (libarrow / libarrow_compute / libarrow_python) ship as plain dylibs in
++# site-packages/opt/lib and are NOT relocated. Nothing on the ext modules' rpath
++# resolves them, so `import pyarrow.lib` otherwise dies with
++# "Library not loaded: @rpath/libarrow*.dylib". Preload the three Arrow dylibs
++# (RTLD_GLOBAL, dependency order) before importing pyarrow.lib: once loaded, dyld
++# satisfies each ext module's @rpath reference by matching the already-loaded
++# image's @rpath install-id. They live at ../opt/lib relative to this package.
++# If a future flet build DOES relocate them into a *.framework (leaving a
++# "<name>.fwork" text marker with the app-relative framework path), follow the
++# marker instead. No-op on Android (libs resolve by DT_NEEDED from jniLibs) and on
++# desktop (no opt/lib arrow dylibs present).
++try:
++    import ctypes as _ctypes
++    _optlib = _os.path.join(
++        _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "opt", "lib"
++    )
++    for _base in ("libarrow", "libarrow_compute", "libarrow_python"):
++        _dylib = _os.path.join(_optlib, _base + ".dylib")
++        if _os.path.exists(_dylib):
++            try:
++                _ctypes.CDLL(_dylib, mode=_ctypes.RTLD_GLOBAL)
++            except OSError:
++                pass
++            continue
++        # Fallback: flet relocated the dylib into a framework and left a marker.
++        _fwork = _os.path.join(_optlib, _base + ".fwork")
++        if not _os.path.exists(_fwork):
++            continue
++        _rel = open(_fwork).read().strip()
++        _dir = _optlib
++        for _ in range(12):
++            _dir = _os.path.dirname(_dir)
++            _fb = _os.path.join(_dir, _rel)
++            if _os.path.exists(_fb):
++                try:
++                    _ctypes.CDLL(_fb, mode=_ctypes.RTLD_GLOBAL)
++                except OSError:
++                    pass
++                break
++except Exception:
++    pass
+ 
+ from pyarrow.lib import (BuildInfo, CppBuildInfo, RuntimeInfo, set_timezone_db_path,
+                          MonthDayNano, VersionInfo, build_info, cpp_build_info,

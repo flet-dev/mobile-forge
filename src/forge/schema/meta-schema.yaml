@@ -29,31 +29,44 @@ properties:
         type: array
         items:
           type: string
-          enum: [arm64-v8a, armeabi-v7a, x86_64, x86, arm64]
+          enum: [arm64-v8a, armeabi-v7a, x86_64, arm64]
         uniqueItems: true
         description: >-
           Optional list of target architectures to skip for this package
-          (e.g. [armeabi-v7a, x86] for a library with no 32-bit support).
-          Other arches of the same platform still build. The 32-bit android
-          arches only build on Python < 3.13, so excluding them is a no-op on
-          newer interpreters.
+          (e.g. [armeabi-v7a] for a library with no 32-bit support). Other
+          arches of the same platform still build.
     additionalProperties: false
 
   source:
     default: pypi
+    description: >-
+      How forge obtains the source tree the build runs in. This key is OPTIONAL;
+      when omitted it defaults to `pypi`, so a bare recipe downloads the package's
+      PyPI sdist. To declare that a recipe has NO upstream source, set this property to `null`.
     oneOf:
       - type: "null"
-        description: The build script will get its own source.
+        description: >-
+          No upstream archive. forge skips the download+unpack step and just hands
+          the recipe's build.sh an empty build directory to work in; the build
+          script produces its own source (e.g. copying a library out of the NDK, or
+          generating one inline). Use for build.sh recipes that have no real upstream
+          tarball — e.g. flet-libomp, flet-libcpp-shared.
       - type: string
         const: pypi
-        description: Download an sdist from PyPI.
+        description: >-
+          Download the package's sdist from PyPI, matched by package.name + package.version. 
+          The usual choice for Python-package recipes.
       - type: object
         required: [url]
         properties:
           url:
             type: string
         additionalProperties: false
-        description: Download an archive from a URL.
+        description: >-
+          Download and unpack an archive from a URL. Use when there is no PyPI
+          sdist (e.g. a GitHub release/tag tarball) or for native libraries. The
+          URL may contain `{version}`, `{build}`, `{sdk}` and `{arch}` format
+          placeholders, substituted per build.
       - type: object
         required: [git_url, git_rev]
         properties:
@@ -62,14 +75,14 @@ properties:
           git_rev:
             type: [string, number]
         additionalProperties: false
-        description: Clone a Git repository.
+        description: Clone a Git repository at the given revision (branch, tag or commit SHA).
       - type: object
         required: [path]
         properties:
           path:
             type: string
         additionalProperties: false
-        description: Copy a local directory.
+        description: Copy a local directory into the build tree (for local development / testing).
 
   patches:
     type: array

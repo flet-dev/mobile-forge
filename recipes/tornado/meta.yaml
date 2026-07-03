@@ -1,0 +1,14 @@
+package:
+  name: tornado
+  version: 6.5.7
+
+build:
+  number: 1
+  script_env:
+    # tornado's only native piece is the optional `tornado.speedups` C
+    # extension (websocket_mask). setup.py marks it
+    # `optional=(TORNADO_EXTENSION != "1")`, so on any compile failure it
+    # silently falls back to a pure-Python wheel with no .so — a green build
+    # that ships nothing native. Force it so a failure aborts the build loudly
+    # and the on-device test can prove the .so actually loaded.
+    TORNADO_EXTENSION: "1"

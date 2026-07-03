@@ -1,0 +1,30 @@
+Android: force real-pow (Cython cpow=True) in the cosmology efuncs kernel.
+
+astropy/cosmology/_src/flrw/scalar_inv_efuncs.pyx raises a (1+z)-based value to a
+floating exponent, e.g. `opz**(3. * (1.0 + w0))`. Under Cython 3's default
+`cpow=False` (Python `**` semantics, where a negative base with a fractional
+exponent returns a complex number), Cython emits a complex power via the C
+library function `cpow()`.
+
+Android's bionic declares `cpow` (and `clog`) only from API level 26
+(`__INTRODUCED_IN(26)` in <complex.h>), but mobile-forge targets API 24. NDK r27
+clang 18 then treats the call as an implicit function declaration — a hard error
+(`call to undeclared library function 'cpow'`). Simply declaring it is not an
+option: the symbol is absent from the API-24 libm link stub, so it would fail at
+link time instead. iOS/macOS declare `cpow` in their SDK, which is why only the
+Android slices break.
+
+Here the base `opz = 1 + z` is always positive for physical inputs, so the
+result is always real. Setting `cpow=True` makes `**` follow C `pow()` semantics
+(real), eliminating the `cpow()` call entirely with no change in numerical result
+for valid inputs. This is the only astropy extension that emits `cpow` (every
+other .pyx compiles clean on Android), so the fix is scoped to this one file.
+
+--- a/astropy/cosmology/_src/flrw/scalar_inv_efuncs.pyx
++++ b/astropy/cosmology/_src/flrw/scalar_inv_efuncs.pyx
+@@ -1,4 +1,4 @@
+-#cython: language_level=3, boundscheck=False
++#cython: language_level=3, boundscheck=False, cpow=True
+ """ Cython inverse efuncs for cosmology integrals"""
+
+ cimport cython
