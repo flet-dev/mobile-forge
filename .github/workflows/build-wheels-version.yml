@@ -413,10 +413,8 @@ jobs:
             fi
           fi
 
-          # Check for the presence of any test files at known locations.
-          if [[ -d "recipes/$pkg_name/tests" ]] \
-              || [[ -d "recipes/$pkg_name/test" ]] \
-              || compgen -G "recipes/$pkg_name/test_*.py" > /dev/null; then
+          # Check for the presence of any test files in the recipe's tests/ directory
+          if [[ -d "recipes/$pkg_name/tests" ]]; then
             echo "Found tests for $pkg_name"
             echo "has_tests=true" >> "$GITHUB_OUTPUT"
             echo "pkg_name=$pkg_name" >> "$GITHUB_OUTPUT"

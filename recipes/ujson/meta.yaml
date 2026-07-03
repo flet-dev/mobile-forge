@@ -1,6 +1,6 @@
 package:
   name: ujson
-  version: 5.12.1
+  version: "5.12.1"
 
 build:
   number: 10

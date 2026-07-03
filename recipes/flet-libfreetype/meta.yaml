@@ -1,6 +1,6 @@
 package:
   name: flet-libfreetype
-  version: 2.13.3
+  version: "2.13.3"
 
 build:
   number: 10

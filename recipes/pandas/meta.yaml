@@ -1,6 +1,6 @@
 package:
   name: pandas
-  version: 3.0.3
+  version: "3.0.3"
 
 # {% if not version or version >= (2,1) %}
 # pandas >= 2.1.0

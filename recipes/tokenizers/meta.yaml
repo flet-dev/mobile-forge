@@ -1,6 +1,6 @@
 package:
   name: tokenizers
-  version: 0.23.1
+  version: "0.23.1"
 
 # {% if sdk == 'android' %}
 requirements:

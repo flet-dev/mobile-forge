@@ -1,6 +1,6 @@
 package:
   name: psutil
-  version: 7.2.2
+  version: "7.2.2"
   # Android only. psutil's iOS path would route through its macOS extension
   # (`_psutil_osx`), which links the `IOKit` framework and uses macOS-only
   # syscalls (libproc, host_processor_info, sysctl entries) that iOS does not

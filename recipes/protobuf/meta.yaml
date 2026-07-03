@@ -1,6 +1,6 @@
 package:
   name: protobuf
-  version: 7.35.0
+  version: "7.35.0"
 
 build:
   number: 1

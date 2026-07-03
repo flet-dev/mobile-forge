@@ -1,6 +1,6 @@
 package:
   name: shapely
-  version: 2.1.2
+  version: "2.1.2"
 
 build:
   number: 1

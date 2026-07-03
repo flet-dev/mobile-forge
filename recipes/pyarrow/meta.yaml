@@ -1,6 +1,6 @@
 package:
   name: pyarrow
-  version: 24.0.0
+  version: "24.0.0"
   # Arrow's CMake configs carry a 32/64-bit gate (ArrowConfigVersion.cmake:
   # PACKAGE_VERSION_UNSUITABLE unless sizeof(void*)==8), so a 64-bit flet-libarrow
   # cannot be consumed by a 32-bit pyarrow. Drop armeabi-v7a — the only shipped
