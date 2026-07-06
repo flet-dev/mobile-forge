@@ -1,0 +1,17 @@
+package:
+  name: pywavelets
+  version: "1.9.0"
+
+requirements:
+  build:
+    - ninja
+    - meson
+    - cython
+  host:
+    - numpy ^2.0.0
+
+build:
+  number: 1
+  backend-args:
+    - -Csetup-args=--cross-file
+    - -Csetup-args={MESON_CROSS_FILE}
