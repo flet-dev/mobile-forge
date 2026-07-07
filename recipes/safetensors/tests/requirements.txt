@@ -1,0 +1,3 @@
+# safe_open + the numpy glue is the model2vec path; numpy is an upstream extra,
+# not a Requires-Dist, so it must come in as a test-only dep.
+numpy
