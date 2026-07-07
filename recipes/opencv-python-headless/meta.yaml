@@ -1,0 +1,62 @@
+package:
+  name: opencv-python-headless
+  version: "4.12.0.88"
+
+requirements:
+  build:
+    # opencv-python's setup.py invokes its own dependency check (via scikit-build) which
+    # hard-requires cmake>=3.5 on PATH. macOS runners pre-install cmake but iOS lane's
+    # cross-venv strips it from the shimmed PATH, so add the pip-installable shim that
+    # ships a cmake binary into the build venv.
+    - cmake
+  host:
+    - numpy ^2.0.0
+
+patches:
+  - mobile.patch
+
+build:
+  number: 1
+  script_env:
+# {% if sdk == 'android' %}
+    CMAKE_ARGS: >-
+      -DANDROID=ON
+      -DWITH_IPP=OFF
+      -DWITH_ITT=OFF
+      -DBUILD_ANDROID_PROJECTS=OFF
+      -DBUILD_ANDROID_EXAMPLES=OFF
+      -DBUILD_TESTS=OFF
+      -DBUILD_PERF_TESTS=OFF
+      -DENABLE_TESTING=OFF
+      -DBUILD_EXAMPLES=OFF
+      -DANDROID_ABI={ANDROID_ABI}
+      -DANDROID_STANDALONE_TOOLCHAIN={NDK_ROOT}
+      -DANDROID_NATIVE_API_LEVEL={ANDROID_API_LEVEL}
+      -DANDROID_ALLOW_UNDEFINED_VERSION_SCRIPT_SYMBOLS=1
+      -DCMAKE_TOOLCHAIN_FILE={NDK_ROOT}/build/cmake/android.toolchain.cmake
+      -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-z,max-page-size=16384"
+      -DCMAKE_MODULE_LINKER_FLAGS="-Wl,-z,max-page-size=16384"
+      -DOPENCV_FORCE_PYTHON_LIBS=ON
+      -DPYTHON3_INCLUDE_PATH={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPYTHON3_LIBRARIES={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.so
+      -DPYTHON3_NUMPY_INCLUDE_DIRS={platlib}/numpy/_core/include
+# {% else %}
+    CMAKE_ARGS: >-
+      -DAPPLE_FRAMEWORK=ON
+      -DCMAKE_SYSTEM_NAME=iOS
+      -DCMAKE_SYSTEM_PROCESSOR=aarch64
+      -DCMAKE_OSX_SYSROOT={{ sdk }}
+      -DCMAKE_OSX_DEPLOYMENT_TARGET={{ sdk_version }}
+      -DCMAKE_OSX_ARCHITECTURES={{ arch }}
+      -DWITH_IPP=OFF
+      -DWITH_ITT=OFF
+      -DBUILD_TESTS=OFF
+      -DBUILD_PERF_TESTS=OFF
+      -DENABLE_TESTING=OFF
+      -DBUILD_EXAMPLES=OFF
+      -DWITH_OPENCL=OFF
+      -DOPENCV_FORCE_PYTHON_LIBS=ON
+      -DPYTHON3_INCLUDE_PATH={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPYTHON3_LIBRARIES={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.dylib
+      -DPYTHON3_NUMPY_INCLUDE_DIRS={platlib}/numpy/_core/include
+# {% endif %}
