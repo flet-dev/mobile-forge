@@ -572,6 +572,18 @@ class Builder(ABC):
             "sysconfigdata_name": self.cross_venv.sysconfigdata_name,
         }
 
+        # `**sysconfig_data` above re-shadows the compiler/binutils keys with the
+        # values python-build baked into `_sysconfigdata`, which on some support
+        # trees (e.g. Android 3.14) are absolute paths into an embedded NDK that
+        # isn't present on this host. `env` already re-pointed those to the real
+        # installed toolchain (see the NDK_HOME fix-up above), so re-assert the
+        # env values here — otherwise a recipe that references `{CC}`/`{CXX}`/...
+        # in `script_env` (e.g. to hand a cross compiler to a sub-`make`) would
+        # receive the stale embedded path and fail with "clang: not found".
+        for _tool in ("CC", "CXX", "AR", "RANLIB", "STRIP"):
+            if _tool in env:
+                script_vars[_tool] = env[_tool]
+
         # Set up any additional environment variables needed in the script environment.
         for key, value in self.package.meta["build"]["script_env"].items():
             if key in ["LDFLAGS", "CFLAGS", "CPPFLAGS"]:
