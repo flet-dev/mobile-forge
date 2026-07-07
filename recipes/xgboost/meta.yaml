@@ -1,0 +1,58 @@
+package:
+  name: xgboost
+  version: "3.3.0"
+  # 32-bit ARM: upstream assumes 64-bit size_t (common/quantile.cc narrows
+  # unsigned long long -> 32-bit size_t, -Wc++11-narrowing hard error);
+  # xgboost ships no 32-bit builds anywhere. lightgbm covers armeabi-v7a.
+  excluded_arches:
+    - armeabi-v7a
+
+build:
+  number: 1
+  script_env:
+    _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
+    # The custom hatchling backend reads no CMAKE_ARGS; the mobile.patch
+    # adds FORGE_CMAKE_ARGS (appended last -> overrides, incl. its own
+    # -DUSE_OPENMP) + FORGE_LIB_NAME (host-platform lib naming would look
+    # for .dylib on a macOS-hosted cross build) and disables the backend's
+    # silent retry-without-OpenMP whenever FORGE_CMAKE_ARGS is set.
+    # libxgboost is a plain C++ C-API lib loaded via ctypes -> no Python_*
+    # pins needed. iOS: USE_OPENMP=OFF (AppleClang has no -fopenmp;
+    # single-threaded is an upstream-supported config); Android keeps real
+    # NDK OpenMP (dynamic libomp.so, like lightgbm -> flet-libomp below).
+    FORGE_LIB_NAME: libxgboost.so
+# {% if sdk == 'android' %}
+    FORGE_CMAKE_ARGS: >-
+      -DCMAKE_TOOLCHAIN_FILE={NDK_ROOT}/build/cmake/android.toolchain.cmake
+      -DANDROID_ABI={ANDROID_ABI}
+      -DANDROID_NATIVE_API_LEVEL={ANDROID_API_LEVEL}
+      -DANDROID_STL=c++_shared
+      -DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DCMAKE_MODULE_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DUSE_OPENMP=ON
+# {% else %}
+    FORGE_CMAKE_ARGS: >-
+      -DCMAKE_SYSTEM_NAME=iOS
+      -DCMAKE_OSX_SYSROOT={{ sdk }}
+      -DCMAKE_OSX_DEPLOYMENT_TARGET={{ sdk_version }}
+      -DCMAKE_OSX_ARCHITECTURES={{ arch }}
+      -DUSE_OPENMP=OFF
+# {% endif %}
+
+requirements:
+  build:
+    # --no-isolation: the sdist's backend needs hatchling; cmake/ninja are
+    # the usual shims (the backend prefers the ninja BINARY via which()).
+    - hatchling
+    - cmake
+    - ninja
+# {% if sdk == 'android' %}
+  host:
+    # C++ -> libc++_shared.so; OpenMP links DYNAMICALLY (DT_NEEDED
+    # libomp.so, same as lightgbm) -> bundle the NDK OpenMP runtime.
+    - flet-libcpp-shared >=27.2.12479018
+    - flet-libomp 27.3.13750724
+# {% endif %}
+
+patches:
+  - mobile.patch

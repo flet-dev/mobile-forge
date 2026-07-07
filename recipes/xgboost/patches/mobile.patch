@@ -1,0 +1,101 @@
+xgboost's custom hatchling backend (packager/) drives CMake itself and
+takes arguments only from its BuildConfiguration -- it reads no CMAKE_ARGS
+-- and its python package loads libxgboost via ctypes from a plain-named
+shared lib. Four mobile adjustments, all inert on desktop builds (they
+activate only via FORGE_* env vars or on iOS/android platforms):
+
+1. packager/nativelib.py: append FORGE_CMAKE_ARGS (recipe-provided
+   toolchain/ABI/OpenMP args) after the backend's own CMake args, so ours
+   win on conflicts.
+2. packager/nativelib.py: _lib_name() switches on the BUILD HOST's
+   platform, so a macOS-hosted Android/iOS cross-build would look for
+   libxgboost.dylib while CMake produced libxgboost.so -- FORGE_LIB_NAME
+   overrides it.
+3. packager/nativelib.py: on any cmake failure the backend silently
+   retries WITHOUT OpenMP -- a broken cross setup would "succeed" as a
+   silently degraded build. With FORGE_CMAKE_ARGS set, re-raise instead.
+4. cpp_src/CMakeLists.txt + xgboost/libpath.py: the lightgbm ctypes-on-iOS
+   treatment -- on iOS name the lib .so (serious_python framework-izes
+   *.so; loose dylibs miss the device/sim merge) and drop the
+   VERSION/SOVERSION symlink chain (forge's wheel packer would dereference
+   it into duplicate copies); teach libpath.py the ios and android
+   sys.platform values (absent upstream -- flet iOS reports "ios",
+   CPython 3.13+ Android reports "android") plus the .fwork pointer form.
+
+diff -ruN xa/cpp_src/CMakeLists.txt xb/cpp_src/CMakeLists.txt
+--- a/cpp_src/CMakeLists.txt	2020-02-02 01:00:00
++++ b/cpp_src/CMakeLists.txt	2026-07-08 00:41:09
+@@ -399,6 +399,13 @@
+   set_target_properties(xgboost PROPERTIES
+     VERSION ${PROJECT_VERSION}
+     SOVERSION ${PROJECT_VERSION_MAJOR})
++  if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
++    # mobile-forge: plain-named .so so the app packager's shared-object
++    # handling (framework-ization + signing) applies; no version symlinks.
++    set_target_properties(xgboost PROPERTIES SUFFIX ".so")
++    set_property(TARGET xgboost PROPERTY VERSION)
++    set_property(TARGET xgboost PROPERTY SOVERSION)
++  endif()
+ endif()
+ target_link_libraries(xgboost PRIVATE objxgboost)
+ target_include_directories(xgboost
+diff -ruN xa/packager/nativelib.py xb/packager/nativelib.py
+--- a/packager/nativelib.py	2020-02-02 01:00:00
++++ b/packager/nativelib.py	2026-07-08 00:41:09
+@@ -16,6 +16,11 @@
+ 
+ def _lib_name() -> str:
+     """Return platform dependent shared object name."""
++    # mobile-forge: when cross-compiling, the TARGET's lib name differs from
++    # the build host's convention (macOS host -> Android/iOS target, both .so).
++    forge_name = os.environ.get("FORGE_LIB_NAME")
++    if forge_name:
++        return forge_name
+     if system() in ["Linux", "OS400"] or system().upper().endswith("BSD"):
+         name = "libxgboost.so"
+     elif system() == "Darwin":
+@@ -52,6 +57,9 @@
+             "-DKEEP_BUILD_ARTIFACTS_IN_BINARY_DIR=ON",
+         ]
+         cmake_cmd.extend(build_config.get_cmake_args())
++        # mobile-forge: cross-compile args from the recipe; appended last so
++        # they override the defaults above (e.g. -DUSE_OPENMP).
++        cmake_cmd.extend(os.environ.get("FORGE_CMAKE_ARGS", "").split())
+ 
+         logger.info("CMake args: %s", str(cmake_cmd))
+         subprocess.check_call(cmake_cmd, cwd=build_dir)
+@@ -100,6 +108,10 @@
+         try:
+             _build(generator=generator)
+         except subprocess.CalledProcessError as e:
++            if os.environ.get("FORGE_CMAKE_ARGS"):
++                # mobile-forge: never mask a cross-compile failure with the
++                # no-OpenMP retry — surface the real error.
++                raise
+             logger.info("Failed to build with OpenMP. Exception: %s", str(e))
+             build_config.use_openmp = False
+             _build(generator=generator)
+diff -ruN xa/xgboost/libpath.py xb/xgboost/libpath.py
+--- a/xgboost/libpath.py	2020-02-02 01:00:00
++++ b/xgboost/libpath.py	2026-07-08 00:41:09
+@@ -49,10 +49,17 @@
+             ]
+         )
+         dll_path = [os.path.join(p, "xgboost.dll") for p in dll_path]
+-    elif sys.platform.startswith(("linux", "freebsd", "emscripten")):
+-        dll_path = [os.path.join(p, "libxgboost.so") for p in dll_path]
++    elif sys.platform.startswith(("linux", "freebsd", "emscripten", "android")):
++        # mobile-forge: the app packager may replace the .so with a .fwork
++        # pointer, which ctypes resolves through CPython's dlopen.
++        names = ("libxgboost.so", "libxgboost.fwork")
++        dll_path = [os.path.join(p, n) for p in dll_path for n in names]
+     elif sys.platform == "darwin":
+-        dll_path = [os.path.join(p, "libxgboost.dylib") for p in dll_path]
++        names = ("libxgboost.dylib", "libxgboost.so", "libxgboost.fwork")
++        dll_path = [os.path.join(p, n) for p in dll_path for n in names]
++    elif sys.platform == "ios":
++        names = ("libxgboost.so", "libxgboost.fwork")
++        dll_path = [os.path.join(p, n) for p in dll_path for n in names]
+     elif sys.platform == "cygwin":
+         dll_path = [os.path.join(p, "cygxgboost.dll") for p in dll_path]
+     if platform.system() == "OS400":
