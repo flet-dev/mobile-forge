@@ -11,6 +11,27 @@ This is the *runner*; the *tests* live in each recipe's `tests/` directory
 pinning the recipe under test. The same script is used by CI and local devs
 — one staging mechanism, one source of truth.
 
+## Test-only dependencies
+
+The app installs `flet + pytest + <recipe>`, so the only third-party
+packages on the device are the recipe's own `Requires-Dist`. If a recipe's
+tests need something the recipe itself doesn't require (e.g. `numpy` for
+`safetensors`, whose numpy integration is an upstream extra), declare it in
+an optional `recipes/<name>/tests/requirements.txt`:
+
+```
+# one PEP 508 spec per line; blanks and #-comments are skipped
+numpy
+```
+
+`stage_recipe.sh` injects those into the generated `pyproject.toml`. Each
+dep must be installable for the *mobile* target — pure-Python from PyPI, or
+a recipe already published on `pypi.flet.dev` (or seeded into `dist/` via
+the workflow's `prebuild_recipes` input) — the same constraint a real app
+faces. Keep it minimal: prefer `pytest.importorskip` for genuinely optional
+integrations, and use this file only when skipping would hide the coverage
+that matters on-device.
+
 ## Local quick-start
 
 You'll need:
