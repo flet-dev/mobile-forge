@@ -1,6 +1,8 @@
+{% set version = "1.27.0" %}
+
 package:
   name: onnxruntime
-  version: "1.27.0"
+  version: '{{ version }}'
   # Termux's python-onnxruntime was the Android existence proof and patch
   # donor; the iOS lane (zero prior art anywhere) rides the same shim with
   # apple toolchain args -- the single statically-linked pybind module is
@@ -16,7 +18,7 @@ source:
   # ~45 FetchContent deps come from cmake/deps.txt (SHA1-pinned) at
   # configure time, incl. a HOST protoc (protoc_mac_universal v21.12) when
   # cross-compiling with no ONNX_CUSTOM_PROTOC_EXECUTABLE set.
-  url: https://github.com/microsoft/onnxruntime/archive/refs/tags/v1.27.0.tar.gz
+  url: https://github.com/microsoft/onnxruntime/archive/refs/tags/v{{ version }}.tar.gz
 
 build:
   number: 1
