@@ -1,10 +1,10 @@
 package:
   name: onnxruntime
   version: "1.27.0"
-  # Android-first, like pyarrow was: Termux's python-onnxruntime is the
-  # existence proof and patch donor; iOS python bindings have zero prior
-  # art anywhere and stay a separate spike.
-  platforms: [android]
+  # Termux's python-onnxruntime was the Android existence proof and patch
+  # donor; the iOS lane (zero prior art anywhere) rides the same shim with
+  # apple toolchain args -- the single statically-linked pybind module is
+  # exactly the wheel shape that already works on iOS (pywhispercpp/ncnn).
   # Termux builds 32-bit arm, but only with BUILD_UNIT_TESTS=OFF dodging
   # -Wshorten-64-to-32 errors; upstream ships no 32-bit builds and the
   # test surface there is unowned. Keep the matrix honest.
@@ -31,6 +31,7 @@ build:
     # that requires XNNPACK=OFF (its install-export breaks static builds,
     # per Termux's own notes) and we keep NNAPI off too — the default CPU
     # EP (MLAS, NEON-optimized) is the dependable mobile baseline.
+# {% if sdk == 'android' %}
     FORGE_CMAKE_ARGS: >-
       -GNinja
       -DCMAKE_BUILD_TYPE=Release
@@ -51,6 +52,30 @@ build:
       -Donnxruntime_USE_XNNPACK=OFF
       -Donnxruntime_USE_NNAPI_BUILTIN=OFF
       -Donnxruntime_BUILD_UNIT_TESTS=OFF
+# {% else %}
+    # iOS lane: same shim, apple toolchain args; the shim keys its build
+    # dir on SYSROOT+ARCHITECTURES here. No -GNinja (iOS lane defaults to
+    # Unix Makefiles — the faiss/duckdb/pywhispercpp tell). CoreML EP
+    # explicitly off for v1: MLAS CPU parity with the android wheel.
+    FORGE_CMAKE_ARGS: >-
+      -DCMAKE_BUILD_TYPE=Release
+      -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+      -DCMAKE_SYSTEM_NAME=iOS
+      -DCMAKE_OSX_SYSROOT={{ sdk }}
+      -DCMAKE_OSX_DEPLOYMENT_TARGET={{ sdk_version }}
+      -DCMAKE_OSX_ARCHITECTURES={{ arch }}
+      -DPython_EXECUTABLE={CROSS_VENV_PYTHON}
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.dylib
+      -DPython_NumPy_INCLUDE_DIR={platlib}/numpy/_core/include
+      -DPYBIND11_USE_CROSSCOMPILING=TRUE
+      -Donnxruntime_ENABLE_PYTHON=ON
+      -Donnxruntime_BUILD_SHARED_LIB=OFF
+      -Donnxruntime_USE_XNNPACK=OFF
+      -Donnxruntime_USE_NNAPI_BUILTIN=OFF
+      -Donnxruntime_USE_COREML=OFF
+      -Donnxruntime_BUILD_UNIT_TESTS=OFF
+# {% endif %}
 
 requirements:
   build:
@@ -64,8 +89,11 @@ requirements:
   host:
     # pybind numpy caster + Python_NumPy_INCLUDE_DIR above.
     - numpy ^2.0.0
-    # C++17 everywhere -> libc++_shared.so at runtime.
+# {% if sdk == 'android' %}
+    # C++17 everywhere -> libc++_shared.so at runtime (android only; iOS
+    # links the system libc++).
     - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
 
 patches:
   - mobile.patch
