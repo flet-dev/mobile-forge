@@ -1,0 +1,265 @@
+tflite-runtime has no sdist and no setup.py anywhere in the TF tree -- the
+supported wheel path is tensorflow/lite/tools/pip_package/
+build_pip_package_with_cmake.sh (host==target oriented; its cmake dispatch
+has no android case -- python-for-android patches one in). This patch makes
+the TF release tree buildable by forge's standard PEP 517 flow by ADDING
+three files (the TF 2.21 root ships neither pyproject.toml nor setup.py, so
+nothing is replaced):
+
+1. pyproject.toml: points the build at the shim backend below.
+
+2. _forge/forge_tflite_backend.py: replicates the upstream script inside
+   PEP 517 hooks -- standalone host-flatc build (cached per flatbuffers tag;
+   cross-configuring tensorflow/lite FATALs without -DTFLITE_HOST_TOOLS_DIR),
+   cross cmake of tensorflow/lite building ONLY the
+   _pywrap_tensorflow_interpreter_wrapper pybind target (per-ABI build dirs:
+   forge reuses the source tree across arch slices -- the onnxruntime
+   e_machine lesson), then upstream's exact 5-file tflite_runtime/ staging.
+   XNNPACK stays ON for every ABI: interpreter_wrapper.cc references
+   TfLiteXNNPackDelegate* unconditionally at link time, so the python wheel
+   cannot build with XNNPACK off at all. The configure pins
+   -DTENSORFLOW_SOURCE_DIR to the unpacked root: without it the lite build
+   git-clones its own TF at v2.19.0 (a stale upstream default) and compiles
+   this tree's sources against those older headers.
+
+3. setup.py: adapted from setup_with_binary.py (version parsed from the
+   staged __init__.py instead of env vars; same numpy install_requires,
+   has_ext_modules for proper cpXX tagging under the crossenv).
+
+diff -ruN a/_forge/forge_tflite_backend.py b/_forge/forge_tflite_backend.py
+--- a/_forge/forge_tflite_backend.py	1970-01-01 01:00:00
++++ b/_forge/forge_tflite_backend.py	2026-07-08 17:26:49
+@@ -0,0 +1,180 @@
++"""mobile-forge PEP 517 shim for tflite-runtime.
++
++TensorFlow ships no sdist or setup.py for tflite-runtime; upstream wheels
++come from tensorflow/lite/tools/pip_package/build_pip_package_with_cmake.sh.
++This backend replicates that script's steps under forge's standard PEP 517
++flow (python -m build at the source root):
++
++1. Host flatc: cross-configuring tensorflow/lite FATALs without a host
++   flatbuffers compiler (-DTFLITE_HOST_TOOLS_DIR). Upstream configures the
++   ENTIRE lite tree a second time for the host just to build flatc; instead,
++   build flatc standalone from the exact tag pinned in
++   tools/cmake/modules/flatbuffers.cmake, cached in the system temp dir
++   keyed by that tag (a host-arch tool, safe to share across ABI slices --
++   unlike the per-arch cache that bit ckzg).
++
++2. Cross cmake of tensorflow/lite (args from FORGE_CMAKE_ARGS plus per-ABI
++   extras) building ONLY the _pywrap_tensorflow_interpreter_wrapper pybind
++   target. Build dirs are keyed per-ABI because forge reuses the unpacked
++   source tree across arch slices within one invocation (the onnxruntime
++   e_machine lesson). The cmake step runs before EVERY hook, guarded by a
++   marker file (hooks are separate subprocesses).
++
++3. Stage ./tflite_runtime/ exactly like the upstream script (interpreter.py,
++   metrics_interface.py, metrics_portable.py, a generated __init__.py, and
++   the built .so), fresh on every hook so the current ABI always wins, then
++   delegate to setuptools.build_meta against the forge-added setup.py.
++"""
++
++import os
++import re
++import shlex
++import shutil
++import subprocess
++import tempfile
++import urllib.request
++from pathlib import Path
++
++from setuptools import build_meta as _orig
++from setuptools.build_meta import *  # noqa: F401,F403
++
++_LITE = Path("tensorflow") / "lite"
++
++
++def _tf_version() -> str:
++    text = (Path("tensorflow") / "tf_version.bzl").read_text()
++    return re.search(r'TF_VERSION = "([^"]+)"', text).group(1)
++
++
++def _flatbuffers_tag() -> str:
++    text = (_LITE / "tools/cmake/modules/flatbuffers.cmake").read_text()
++    return re.search(r"GIT_TAG\s+(\S+)", text).group(1)
++
++
++def _host_env() -> dict:
++    # Scrub the android cross toolchain out of the environment for the host
++    # flatc build (CC and friends point at NDK clang here).
++    env = dict(os.environ)
++    for k in (
++        "CC", "CXX", "AR", "LD", "RANLIB", "STRIP", "READELF", "NM",
++        "CFLAGS", "CXXFLAGS", "CPPFLAGS", "LDFLAGS",
++        "_PYTHON_SYSCONFIGDATA_NAME", "PYTHONPATH",
++    ):
++        env.pop(k, None)
++    return env
++
++
++def _jobs() -> str:
++    return f"-j{os.cpu_count() or 4}"
++
++
++def _host_flatc() -> Path:
++    tag = _flatbuffers_tag()
++    root = Path(tempfile.gettempdir()) / f"forge-tflite-host-flatc-{tag}"
++    marker = root / ".done"
++    if not marker.exists():
++        shutil.rmtree(root, ignore_errors=True)
++        (root / "src").mkdir(parents=True)
++        tarball = root / "flatbuffers.tar.gz"
++        urllib.request.urlretrieve(
++            f"https://github.com/google/flatbuffers/archive/refs/tags/{tag}.tar.gz",
++            tarball,
++        )
++        subprocess.check_call(
++            ["tar", "-xzf", str(tarball), "-C", str(root / "src"),
++             "--strip-components", "1"]
++        )
++        env = _host_env()
++        subprocess.check_call(
++            ["cmake", "-S", str(root / "src"), "-B", str(root / "build"),
++             "-DCMAKE_BUILD_TYPE=Release", "-DFLATBUFFERS_BUILD_TESTS=OFF"],
++            env=env,
++        )
++        subprocess.check_call(
++            ["cmake", "--build", str(root / "build"), _jobs(), "-t", "flatc"],
++            env=env,
++        )
++        (root / "bin").mkdir()
++        shutil.copy2(root / "build" / "flatc", root / "bin" / "flatc")
++        marker.write_text("ok\n")
++    return root
++
++
++def _cmake_build() -> None:
++    args = shlex.split(os.environ.get("FORGE_CMAKE_ARGS", ""))
++    if not args:
++        raise RuntimeError(
++            "FORGE_CMAKE_ARGS must carry the cross-compile CMake arguments"
++        )
++    abi = next(
++        (a.split("=", 1)[1] for a in args if a.startswith("-DANDROID_ABI=")),
++        "default",
++    )
++
++    ver = _tf_version()
++    major, minor, patch = ver.split(".")[:3]
++    includes = os.environ.get("FORGE_WRAPPER_INCLUDES", "").strip()
++    flags = (
++        f"{includes} -DTF_MAJOR_VERSION={major} -DTF_MINOR_VERSION={minor}"
++        f" -DTF_PATCH_VERSION={patch} -DTF_VERSION_SUFFIX=''"
++    )
++    extra = [f"-DCMAKE_C_FLAGS={flags}", f"-DCMAKE_CXX_FLAGS={flags}"]
++    linker = os.environ.get("FORGE_SHARED_LINKER_FLAGS", "").strip()
++    if linker:
++        extra.append(f"-DCMAKE_SHARED_LINKER_FLAGS={linker}")
++    # XNNPACK stays ON for every ABI (the default): interpreter_wrapper.cc
++    # calls TfLiteXNNPackDelegate* unconditionally at link time, so the
++    # python wheel cannot be built with TFLITE_ENABLE_XNNPACK=OFF at all --
++    # upstream's own 32-bit-arm OFF convention predates that code and only
++    # works for the C++ library. p4a shipped XNNPACK-on-v7a at TF 2.8.
++
++    bindir = Path(".forge_build") / abi
++    marker = bindir / ".done"
++    if not marker.exists():
++        host_tools = _host_flatc()
++        # Without TENSORFLOW_SOURCE_DIR the lite build git-clones its own
++        # TF pinned at v2.19.0 (!) and compiles OUR sources against THOSE
++        # headers -- first slice died on a header that only exists in 2.21.
++        subprocess.check_call(
++            ["cmake", "-S", str(_LITE), "-B", str(bindir), *args, *extra,
++             f"-DTENSORFLOW_SOURCE_DIR={Path.cwd()}",
++             f"-DTFLITE_HOST_TOOLS_DIR={host_tools}"]
++        )
++        subprocess.check_call(
++            ["cmake", "--build", str(bindir), _jobs(), "-t",
++             "_pywrap_tensorflow_interpreter_wrapper"]
++        )
++        marker.write_text("ok\n")
++
++    # Stage the python package fresh on every hook (current ABI wins).
++    pkg = Path("tflite_runtime")
++    shutil.rmtree(pkg, ignore_errors=True)
++    pkg.mkdir()
++    for src in (
++        _LITE / "python" / "interpreter.py",
++        _LITE / "python" / "metrics" / "metrics_interface.py",
++        _LITE / "python" / "metrics" / "metrics_portable.py",
++    ):
++        shutil.copy2(src, pkg / src.name)
++    (pkg / "__init__.py").write_text(
++        f"__version__ = '{ver}'\n__git_version__ = 'v{ver}'\n"
++    )
++    so = bindir / "_pywrap_tensorflow_interpreter_wrapper.so"
++    shutil.copy2(so, pkg / so.name)
++
++
++def get_requires_for_build_wheel(config_settings=None):
++    _cmake_build()
++    return _orig.get_requires_for_build_wheel(config_settings)
++
++
++def prepare_metadata_for_build_wheel(metadata_directory, config_settings=None):
++    _cmake_build()
++    return _orig.prepare_metadata_for_build_wheel(
++        metadata_directory, config_settings
++    )
++
++
++def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
++    _cmake_build()
++    return _orig.build_wheel(wheel_directory, config_settings, metadata_directory)
+diff -ruN a/pyproject.toml b/pyproject.toml
+--- a/pyproject.toml	1970-01-01 01:00:00
++++ b/pyproject.toml	2026-07-08 16:48:14
+@@ -0,0 +1,4 @@
++[build-system]
++requires = ["setuptools>=61.0.0", "wheel"]
++build-backend = "forge_tflite_backend"
++backend-path = ["_forge"]
+diff -ruN a/setup.py b/setup.py
+--- a/setup.py	1970-01-01 01:00:00
++++ b/setup.py	2026-07-08 17:08:19
+@@ -0,0 +1,41 @@
++"""mobile-forge setuptools config for the tflite-runtime wheel.
++
++Adapted from tensorflow/lite/tools/pip_package/setup_with_binary.py (which
++reads PROJECT_NAME/PACKAGE_VERSION from env vars set by upstream's build
++script). The PEP 517 shim (_forge/forge_tflite_backend.py) stages
++./tflite_runtime/ -- including the cross-compiled pybind module -- before
++setuptools runs.
++"""
++
++import re
++
++from setuptools import setup
++
++with open("tflite_runtime/__init__.py") as f:
++    version = re.search(r"__version__ = '([^']+)'", f.read()).group(1)
++
++DESCRIPTION = "TensorFlow Lite is for mobile and embedded devices."
++
++setup(
++    name="tflite-runtime",
++    version=version,
++    description=DESCRIPTION,
++    long_description=DESCRIPTION,
++    url="https://www.tensorflow.org/lite/",
++    author="Google, LLC",
++    author_email="packages@tensorflow.org",
++    license="Apache 2.0",
++    include_package_data=True,
++    has_ext_modules=lambda: True,
++    keywords="tflite tensorflow tensor machine learning",
++    packages=["tflite_runtime"],
++    package_data={"tflite_runtime": ["*.so"]},
++    install_requires=[
++        "numpy >= 1.23.2",
++    ],
++    # The TF source root carries a Bazel `BUILD` file, which collides with
++    # setuptools' default `build/` dir on case-insensitive filesystems
++    # (macOS local builds): "could not create 'build/lib...': Not a
++    # directory". Build somewhere else.
++    options={"build": {"build_base": ".forge_pybuild"}},
++)

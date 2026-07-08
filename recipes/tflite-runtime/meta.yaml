@@ -1,0 +1,63 @@
+package:
+  name: tflite-runtime
+  version: "2.21.0"
+  # Android-first like onnxruntime/sherpa-onnx; a TFLite iOS wheel is a
+  # separate spike (Metal delegate, different packaging).
+  platforms: [android]
+
+source:
+  # tflite-runtime has never had an sdist (upstream wheels come from
+  # tensorflow/lite/tools/pip_package/build_pip_package_with_cmake.sh);
+  # build from the TF release tree. The lite/ CMake superbuild fetches its
+  # pinned deps (abseil/eigen/xnnpack/ruy/flatbuffers/...) at configure.
+  url: https://github.com/tensorflow/tensorflow/archive/refs/tags/v2.21.0.tar.gz
+
+build:
+  number: 1
+  script_env:
+    _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
+    # Consumed by the patch-added PEP 517 shim (_forge/forge_tflite_backend.py):
+    # standalone host-flatc build + cross cmake of tensorflow/lite building
+    # ONLY the _pywrap_tensorflow_interpreter_wrapper pybind module, then
+    # upstream's exact 5-file python package staging. The wrapper target has
+    # no FindPython -- Python/numpy/pybind11 headers are plain -I injections
+    # (upstream's own mechanism); numpy+pybind11 resolve from the cross venv
+    # via {platlib}, no imports needed (target numpy is not host-runnable).
+    FORGE_WRAPPER_INCLUDES: >-
+      -I{HOST_PYTHON_HOME}/include/python{py_version_short}
+      -I{platlib}/numpy/_core/include
+      -I{platlib}/pybind11/include
+    # Multi-token -D values can't ride inside FORGE_CMAKE_ARGS (the shim
+    # shlex-splits it), so linker flags get their own var. libpython is
+    # linked explicitly like every other forge pybind wheel: upstream
+    # relies on manylinux-style lazy resolution, Android wants DT_NEEDED.
+    FORGE_SHARED_LINKER_FLAGS: >-
+      -Wl,-z,max-page-size=16384
+      -L{HOST_PYTHON_HOME}/lib -lpython{py_version_short}
+    # XNNPACK stays at its default (ON) except armeabi-v7a, where the shim
+    # follows upstream's own pip script convention (OFF for all 32-bit arm).
+    FORGE_CMAKE_ARGS: >-
+      -DCMAKE_BUILD_TYPE=Release
+      -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+      -DCMAKE_TOOLCHAIN_FILE={NDK_ROOT}/build/cmake/android.toolchain.cmake
+      -DANDROID_ABI={ANDROID_ABI}
+      -DANDROID_NATIVE_API_LEVEL={ANDROID_API_LEVEL}
+      -DANDROID_STL=c++_shared
+
+requirements:
+  build:
+    - setuptools
+    - wheel
+    - cmake
+  host:
+    # Build-time headers only (via FORGE_WRAPPER_INCLUDES {platlib} paths).
+    # numpy>=2 headers yield binaries compatible with numpy 1.x AND 2.x;
+    # numpy is also the wheel's one runtime dep (install_requires in the
+    # shim's setup.py, matching upstream setup_with_binary.py).
+    - numpy ^2.0.0
+    - pybind11
+    # C++20 -> libc++_shared.so at runtime.
+    - flet-libcpp-shared >=27.2.12479018
+
+patches:
+  - mobile.patch
