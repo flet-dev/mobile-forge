@@ -1,0 +1,156 @@
+onnxruntime publishes no sdist and its supported wheel path
+(ci_build/build.py) assumes host==target for the python step. This patch
+makes the GitHub source tree buildable by forge's standard PEP 517 flow,
+following the sequence Termux proved for Android (their python-onnxruntime
+1.27.0 package):
+
+1. pyproject.toml + NEW _forge/forge_ort_backend.py: a thin PEP 517 shim
+   wrapping setuptools.build_meta that first runs the CMake build (source =
+   ./cmake, binary dir = the source ROOT, args from FORGE_CMAKE_ARGS) so the
+   staged python package lands in ./onnxruntime/capi/ where the root
+   setup.py expects it, then delegates wheel assembly to setuptools.
+
+2. cmake/CMakeLists.txt (Termux 0004): find Python COMPONENTS Development
+   before Development.Module -- under a crossenv, the Module-only lookup
+   misses the artifacts FindPython needs.
+
+3. mlas sqnbitgemm avx2 header (Termux 0006): include onnxruntime_config.h
+   for the x86_64 lane.
+
+Deliberately NOT taken from Termux: their 0001/0002 (system abseil and
+protobuf -- we want the FetchContent vendored builds) and 0003 (Android
+providers_shared enablement -- we build BUILD_SHARED_LIB=OFF, statically
+absorbing everything into the single pybind module, so the shared-provider
+machinery never runs). The host protoc question answers itself: with no
+ONNX_CUSTOM_PROTOC_EXECUTABLE set, ORT's own CMake fetches the pinned
+protoc_mac_universal v21.12 on macOS hosts.
+
+diff -ruN oa/_forge/forge_ort_backend.py ob/_forge/forge_ort_backend.py
+diff -ruN oa/_forge/forge_ort_backend.py ob/_forge/forge_ort_backend.py
+diff -ruN oa/_forge/forge_ort_backend.py ob/_forge/forge_ort_backend.py
+
+4. setup.py: the crossenv reports platform.system() == "Android", which
+   matches no upstream branch, leaving the native-lib list unset -- the
+   built pybind module never entered the wheel (Termux hits the same and
+   hand-installs it after the fact; we extend the Linux predicate).
+
+diff -ruN oa/_forge/forge_ort_backend.py ob/_forge/forge_ort_backend.py
+diff -ruN oa/_forge/forge_ort_backend.py ob/_forge/forge_ort_backend.py
+--- a/_forge/forge_ort_backend.py	1970-01-01 01:00:00
++++ b/_forge/forge_ort_backend.py	2026-07-08 10:07:39
+@@ -0,0 +1,65 @@
++"""mobile-forge PEP 517 shim for onnxruntime.
++
++Upstream produces wheels via ci_build/build.py: CMake builds the tree and
++stages the python package into <binary_dir>/onnxruntime/, then setup.py is
++run from there (Termux proved the flat equivalent for Android cross
++builds). Two forge realities shape this shim:
++
++- setup.py touches the staged tree even at MODULE level and setuptools
++  validates every declared package directory during egg_info, so the
++  CMake step must run before ANY hook (hooks are separate subprocesses;
++  completion is tracked with a marker file in the binary dir).
++- forge reuses the unpacked source tree across arch slices within one
++  invocation (only the first slice unpacks clean), so the binary dir is
++  keyed PER-ABI and the staged python package is overlaid into
++  ./onnxruntime fresh on every hook -- otherwise slice 2 would package
++  slice 1's architecture (the e_machine mismatch the first CI run caught).
++"""
++
++import os
++import shlex
++import shutil
++import subprocess
++
++from setuptools import build_meta as _orig
++from setuptools.build_meta import *  # noqa: F401,F403
++
++
++def _cmake_build() -> None:
++    args = shlex.split(os.environ.get("FORGE_CMAKE_ARGS", ""))
++    if not args:
++        raise RuntimeError(
++            "FORGE_CMAKE_ARGS must carry the cross-compile CMake arguments"
++        )
++    abi = "default"
++    for a in args:
++        if a.startswith("-DANDROID_ABI="):
++            abi = a.split("=", 1)[1]
++    bindir = os.path.join(".forge_build", abi)
++    marker = os.path.join(bindir, ".done")
++    if not os.path.exists(marker):
++        subprocess.check_call(["cmake", "-S", "cmake", "-B", bindir, *args])
++        nproc = os.cpu_count() or 4
++        subprocess.check_call(["cmake", "--build", bindir, f"-j{nproc}"])
++        with open(marker, "w") as f:
++            f.write("ok\n")
++    # Overlay the staged python package (capi/*.so + generated sources)
++    # into ./onnxruntime where setup.py expects it. Runs on every hook:
++    # cheap, idempotent, and guarantees the CURRENT ABI wins.
++    shutil.copytree(os.path.join(bindir, "onnxruntime"), "onnxruntime",
++                    dirs_exist_ok=True)
++
++
++def get_requires_for_build_wheel(config_settings=None):
++    _cmake_build()
++    return _orig.get_requires_for_build_wheel(config_settings)
++
++
++def prepare_metadata_for_build_wheel(metadata_directory, config_settings=None):
++    _cmake_build()
++    return _orig.prepare_metadata_for_build_wheel(metadata_directory, config_settings)
++
++
++def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
++    _cmake_build()
++    return _orig.build_wheel(wheel_directory, config_settings, metadata_directory)
+diff -ruN oa/cmake/CMakeLists.txt ob/cmake/CMakeLists.txt
+--- a/cmake/CMakeLists.txt	2026-06-12 17:12:02
++++ b/cmake/CMakeLists.txt	2026-07-08 02:00:26
+@@ -521,6 +521,7 @@
+     if (onnxruntime_REQUIRE_PYTHON_EMBED_LIB)
+       find_package(Python 3.10 COMPONENTS Interpreter Development NumPy)
+     else()
++      find_package(Python 3.10 COMPONENTS Development)
+       find_package(Python 3.10 COMPONENTS Interpreter Development.Module NumPy)
+     endif()
+     message("Numpy version: ${Python_NumPy_VERSION}")
+diff -ruN oa/onnxruntime/core/mlas/lib/sqnbitgemm_kernel_avx2_int8_blklen32.h ob/onnxruntime/core/mlas/lib/sqnbitgemm_kernel_avx2_int8_blklen32.h
+--- a/onnxruntime/core/mlas/lib/sqnbitgemm_kernel_avx2_int8_blklen32.h	2026-06-12 17:12:02
++++ b/onnxruntime/core/mlas/lib/sqnbitgemm_kernel_avx2_int8_blklen32.h	2026-07-08 02:00:26
+@@ -3,6 +3,7 @@
+ #include <cassert>
+ #include <utility>
+ 
++#include "onnxruntime_config.h"
+ #include "qnbitgemm.h"
+ #include "sqnbitgemm_kernel_avx_common.h"
+ 
+diff -ruN oa/pyproject.toml ob/pyproject.toml
+--- a/pyproject.toml	2026-06-12 17:12:02
++++ b/pyproject.toml	2026-07-08 02:00:26
+@@ -1,6 +1,7 @@
+ [build-system]
+ requires = ["setuptools>=61.0.0", "wheel", "packaging"]
+-build-backend = "setuptools.build_meta"
++build-backend = "forge_ort_backend"
++backend-path = ["_forge"]
+ 
+ [tool.pydocstyle]
+ convention = "google"
+diff -ruN oa/setup.py ob/setup.py
+--- a/setup.py	2026-06-12 17:12:02
++++ b/setup.py	2026-07-08 02:37:02
+@@ -372,7 +372,11 @@
+ dl_libs = []
+ libs = []
+ 
+-if platform.system() == "Linux" or platform.system() == "AIX":
++# mobile-forge: the crossenv reports platform.system() == "Android" --
++# upstream has no branch for it, leaving `libs` unset -> the pybind .so
++# never enters the wheel (Termux hit the same on py3.13 and hand-installs
++# it post-hoc; we fix the predicate instead).
++if platform.system() in ("Linux", "AIX", "Android"):
+     libs = [
+         "onnxruntime_pybind11_state.so",
+         "libdnnl.so.2",
