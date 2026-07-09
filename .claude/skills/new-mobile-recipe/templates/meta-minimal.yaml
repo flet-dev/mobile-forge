@@ -1,0 +1,14 @@
+# Minimal C-extension recipe.
+#
+# Use when:
+#   - Upstream has C/C++ source
+#   - Plain setuptools / pyproject.toml build
+#   - No system library deps (or only deps already in dist/: bzip2, openssl, libffi, mpdecimal, xz)
+#   - No patches needed
+#
+# Replace <name> with the PyPI sdist filename (case-sensitive — MarkupSafe not markupsafe).
+# Replace <version> with the version. Quote it if it could parse as a YAML float (e.g. '2.0').
+
+package:
+  name: <name>
+  version: <version>
