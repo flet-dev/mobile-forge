@@ -1,16 +1,6 @@
 package:
   name: tflite-runtime
   version: "2.21.0"
-  # Android-first like onnxruntime/sherpa-onnx; a TFLite iOS wheel is a
-  # separate spike (Metal delegate, different packaging).
-  platforms: [android]
-
-source:
-  # tflite-runtime has never had an sdist (upstream wheels come from
-  # tensorflow/lite/tools/pip_package/build_pip_package_with_cmake.sh);
-  # build from the TF release tree. The lite/ CMake superbuild fetches its
-  # pinned deps (abseil/eigen/xnnpack/ruy/flatbuffers/...) at configure.
-  url: https://github.com/tensorflow/tensorflow/archive/refs/tags/v2.21.0.tar.gz
 
 build:
   number: 1
@@ -27,6 +17,7 @@ build:
       -I{HOST_PYTHON_HOME}/include/python{py_version_short}
       -I{platlib}/numpy/_core/include
       -I{platlib}/pybind11/include
+# {% if sdk == 'android' %}
     # Multi-token -D values can't ride inside FORGE_CMAKE_ARGS (the shim
     # shlex-splits it), so linker flags get their own var. libpython is
     # linked explicitly like every other forge pybind wheel: upstream
@@ -43,6 +34,28 @@ build:
       -DANDROID_ABI={ANDROID_ABI}
       -DANDROID_NATIVE_API_LEVEL={ANDROID_API_LEVEL}
       -DANDROID_STL=c++_shared
+# {% else %}
+    # iOS: the wrapper target links no libpython (no FindPython anywhere),
+    # and apple's two-level namespace would fail the link on the undefined
+    # python symbols -- resolve them at dlopen instead.
+    FORGE_SHARED_LINKER_FLAGS: -Wl,-undefined,dynamic_lookup
+    FORGE_CMAKE_ARGS: >-
+      -DCMAKE_BUILD_TYPE=Release
+      -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+      -DCMAKE_SYSTEM_NAME=iOS
+      -DCMAKE_OSX_SYSROOT={{ sdk }}
+      -DCMAKE_OSX_DEPLOYMENT_TARGET={{ sdk_version }}
+      -DCMAKE_OSX_ARCHITECTURES={{ arch }}
+      -DFLATBUFFERS_BUILD_FLATC=OFF
+      -DFLATBUFFERS_INSTALL=OFF
+# {% endif %}
+
+source:
+  # tflite-runtime has never had an sdist (upstream wheels come from
+  # tensorflow/lite/tools/pip_package/build_pip_package_with_cmake.sh);
+  # build from the TF release tree. The lite/ CMake superbuild fetches its
+  # pinned deps (abseil/eigen/xnnpack/ruy/flatbuffers/...) at configure.
+  url: https://github.com/tensorflow/tensorflow/archive/refs/tags/v2.21.0.tar.gz
 
 requirements:
   build:
@@ -56,8 +69,10 @@ requirements:
     # shim's setup.py, matching upstream setup_with_binary.py).
     - numpy ^2.0.0
     - pybind11
-    # C++20 -> libc++_shared.so at runtime.
+# {% if sdk == 'android' %}
+    # C++20 -> libc++_shared.so at runtime (iOS links the system libc++).
     - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
 
 patches:
   - mobile.patch

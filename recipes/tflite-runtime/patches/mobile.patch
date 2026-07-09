@@ -28,8 +28,8 @@ nothing is replaced):
 
 diff -ruN a/_forge/forge_tflite_backend.py b/_forge/forge_tflite_backend.py
 --- a/_forge/forge_tflite_backend.py	1970-01-01 01:00:00
-+++ b/_forge/forge_tflite_backend.py	2026-07-08 17:26:49
-@@ -0,0 +1,180 @@
++++ b/_forge/forge_tflite_backend.py	2026-07-09 13:28:40
+@@ -0,0 +1,196 @@
 +"""mobile-forge PEP 517 shim for tflite-runtime.
 +
 +TensorFlow ships no sdist or setup.py for tflite-runtime; upstream wheels
@@ -138,10 +138,19 @@ diff -ruN a/_forge/forge_tflite_backend.py b/_forge/forge_tflite_backend.py
 +        raise RuntimeError(
 +            "FORGE_CMAKE_ARGS must carry the cross-compile CMake arguments"
 +        )
-+    abi = next(
-+        (a.split("=", 1)[1] for a in args if a.startswith("-DANDROID_ABI=")),
-+        "default",
-+    )
++    # Per-slice build dir key: ANDROID_ABI on android, sysroot + arch on
++    # iOS (device/sim x arm64/x86_64) -- the onnxruntime-iOS lesson.
++    abi = "default"
++    sysroot = arch = ""
++    for a in args:
++        if a.startswith("-DANDROID_ABI="):
++            abi = a.split("=", 1)[1]
++        elif a.startswith("-DCMAKE_OSX_SYSROOT="):
++            sysroot = a.split("=", 1)[1]
++        elif a.startswith("-DCMAKE_OSX_ARCHITECTURES="):
++            arch = a.split("=", 1)[1]
++    if sysroot or arch:
++        abi = f"{sysroot}-{arch}"
 +
 +    ver = _tf_version()
 +    major, minor, patch = ver.split(".")[:3]
@@ -191,8 +200,15 @@ diff -ruN a/_forge/forge_tflite_backend.py b/_forge/forge_tflite_backend.py
 +    (pkg / "__init__.py").write_text(
 +        f"__version__ = '{ver}'\n__git_version__ = 'v{ver}'\n"
 +    )
++    # CMake names the SHARED wrapper .so on android/linux but .dylib on
++    # apple; the python module must ship as .so either way (a dylib is
++    # perfectly loadable under the extension name -- the lightgbm trick).
 +    so = bindir / "_pywrap_tensorflow_interpreter_wrapper.so"
-+    shutil.copy2(so, pkg / so.name)
++    if not so.exists():
++        so = bindir / "lib_pywrap_tensorflow_interpreter_wrapper.dylib"
++    if not so.exists():
++        so = bindir / "_pywrap_tensorflow_interpreter_wrapper.dylib"
++    shutil.copy2(so, pkg / "_pywrap_tensorflow_interpreter_wrapper.so")
 +
 +
 +def get_requires_for_build_wheel(config_settings=None):
@@ -212,7 +228,7 @@ diff -ruN a/_forge/forge_tflite_backend.py b/_forge/forge_tflite_backend.py
 +    return _orig.build_wheel(wheel_directory, config_settings, metadata_directory)
 diff -ruN a/pyproject.toml b/pyproject.toml
 --- a/pyproject.toml	1970-01-01 01:00:00
-+++ b/pyproject.toml	2026-07-08 16:48:14
++++ b/pyproject.toml	2026-07-09 13:28:19
 @@ -0,0 +1,4 @@
 +[build-system]
 +requires = ["setuptools>=61.0.0", "wheel"]
@@ -220,7 +236,7 @@ diff -ruN a/pyproject.toml b/pyproject.toml
 +backend-path = ["_forge"]
 diff -ruN a/setup.py b/setup.py
 --- a/setup.py	1970-01-01 01:00:00
-+++ b/setup.py	2026-07-08 17:08:19
++++ b/setup.py	2026-07-09 13:28:19
 @@ -0,0 +1,41 @@
 +"""mobile-forge setuptools config for the tflite-runtime wheel.
 +
