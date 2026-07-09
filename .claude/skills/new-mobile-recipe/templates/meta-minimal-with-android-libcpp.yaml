@@ -1,0 +1,26 @@
+# Minimal C-extension + Android C++ runtime dep.
+#
+# Use when:
+#   - Upstream has C++ source (or vendors a C++ library like double-conversion, re2, protobuf-runtime)
+#   - Plain setuptools / pyproject.toml build
+#   - No other system deps
+#
+# How to detect upfront: look at upstream's setup.py for `.cpp`/`.cc` sources,
+# `language='c++'` on Extension(), or `-lstdc++`/`-lc++` in extra_link_args.
+#
+# Without flet-libcpp-shared, the Android build succeeds but `import <name>` at
+# runtime fails with: `dlopen failed: library "libc++_shared.so" not found`.
+# iOS doesn't need this — Apple's clang resolves to system libc++.
+
+package:
+  name: <name>
+  version: <version>
+
+# {% if sdk == 'android' %}
+requirements:
+  host:
+    # libc++_shared.so gets surfaced to jniLibs/<abi>/ by serious_python_android's
+    # copyOpt_<abi> gradle task. fix_wheel() in mobile-forge writes a Requires-Dist
+    # entry into our wheel METADATA so pip auto-installs flet-libcpp-shared.
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
