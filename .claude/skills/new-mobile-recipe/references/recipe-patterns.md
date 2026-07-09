@@ -386,7 +386,7 @@ source:
   url: https://upstream.example.com/sources/libZZZ-{{ version }}.tar.gz
 
 build:
-  number: 0    # bump this when only the recipe changes, not the upstream version
+  number: 1    # bump this when only the recipe changes, not the upstream version
 
 patches:
   - {{ patch }}
@@ -687,7 +687,9 @@ So:
 
 ### `build.number`
 
-Optional integer (default 0) in `build:`. Bump when the recipe itself changes but the upstream version doesn't — invalidates cached wheels and gives the new build a distinct filename (`<pkg>-<ver>-N-<tag>.whl`). Important for forcing redeploys when patching.
+Integer in `build:`, schema default **1** (`src/forge/schema/meta-schema.yaml`) — and `1` is the repo convention (start every new recipe there). Bump when the recipe itself changes but the upstream version doesn't — pip prefers higher build numbers for the same version, and the new build gets a distinct filename (`<pkg>-<ver>-N-<tag>.whl`). Important for forcing redeploys when patching.
+
+Don't write `number: 0`: forge only passes `--build-number` when the value is truthy (`build.py`), so `0` produces a wheel with NO build tag — losing the ability to supersede it later without a version bump.
 
 ### Source layout
 

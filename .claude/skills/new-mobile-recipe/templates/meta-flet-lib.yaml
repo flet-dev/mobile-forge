@@ -32,10 +32,11 @@ source:
   #   - GNOME sources (libxml2, libxslt): use HTTPS, structure is /sources/<lib>/<X.Y>/<lib>-<X.Y.Z>.tar.xz
   url: https://example.com/libZZZ-{{ version }}.tar.gz
 
-# Optional: bump when only the recipe changes, not the upstream version.
-# Invalidates cached wheels.
+# Start at 1 (the schema default and repo convention); bump when only the
+# recipe changes, not the upstream version. Never 0 — that suppresses the
+# wheel's build tag entirely.
 build:
-  number: 0
+  number: 1
 
 patches:
   - {{ patch }}
