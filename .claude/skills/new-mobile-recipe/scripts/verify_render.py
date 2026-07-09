@@ -17,7 +17,6 @@ will match the SDK-conditional structure you intended. Common bugs caught:
 
 Exit code 0 on success, 1 on any render/parse failure.
 """
-from __future__ import annotations
 
 import sys
 from pathlib import Path
@@ -44,14 +43,19 @@ def main():
         import jinja2
         import yaml
     except ImportError as e:
-        print(f"ERROR: missing dependency ({e}). Run from inside the venv3.12 venv.", file=sys.stderr)
+        print(
+            f"ERROR: missing dependency ({e}). Run from inside the venv3.12 venv.",
+            file=sys.stderr,
+        )
         sys.exit(2)
 
     template_text = meta_path.read_text(encoding="utf-8")
     any_failed = False
 
     for ctx in SDK_CONTEXTS:
-        print(f"--- sdk={ctx['sdk']} arch={ctx['arch']} version={ctx['sdk_version']} ---")
+        print(
+            f"--- sdk={ctx['sdk']} arch={ctx['arch']} version={ctx['sdk_version']} ---"
+        )
         try:
             rendered = jinja2.Template(template_text).render(
                 sdk=ctx["sdk"],
@@ -77,11 +81,18 @@ def main():
             continue
 
         # Pretty print the parsed dict
-        print(yaml.safe_dump(parsed, sort_keys=False, default_flow_style=False, indent=2).rstrip())
+        print(
+            yaml.safe_dump(
+                parsed, sort_keys=False, default_flow_style=False, indent=2
+            ).rstrip()
+        )
         print()
 
     if any_failed:
-        print("One or more renders failed. Fix the meta.yaml before running forge.", file=sys.stderr)
+        print(
+            "One or more renders failed. Fix the meta.yaml before running forge.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     print("All renders parsed successfully.")

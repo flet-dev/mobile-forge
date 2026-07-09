@@ -1,6 +1,6 @@
 ---
 name: new-mobile-recipe
-description: Authoring playbook for brand-new mobile-forge recipes (flet-dev/mobile-forge) — cross-compiled Python wheels for iOS and Android distributed via pypi.flet.dev. Covers deciding whether a package needs a recipe at all (pure-Python sdist-only packages need `[tool.flet] source_packages` in the app, NOT a recipe), picking the right recipe shape (minimal C-extension, Rust/PyO3, C-ext with patches, meson-python, scikit-build-core, native library, native-library consumer, PEP 517 shim for no-sdist CMake giants, prebuilt-repackage + host_build chain), running the build, and diagnosing the recurring local-dev pitfalls (CI-baked sysconfigdata paths on macOS, NDK r27d install fragility, Android libc++_shared runtime linkage). USE THIS SKILL whenever the user asks to add a new recipe to mobile-forge, mentions "forge recipe", "mobile-forge", "recipe for <package>", "build a wheel for mobile/iOS/Android", "add <package> to pypi.flet.dev", or wants to cross-compile a Python package for Flet's mobile targets. Use proactively if the user pastes a flet-dev/flet discussions URL from the Packages category (https://github.com/flet-dev/flet/discussions/categories/packages) and asks to make a recipe for it. Sibling skills — `local-recipe-testing`: run the finished wheel on an emulator/simulator; `forge-ci`: push/dispatch and triage CI runs; `forge-error-catalogue`: concrete build-error → fix mappings; `native-recipe-bumps`: bump versions of existing `flet-lib*` recipes (use that, not this, for bumps).
+description: Authoring playbook for brand-new mobile-forge recipes (flet-dev/mobile-forge) — cross-compiled Python wheels for iOS and Android distributed via pypi.flet.dev. Covers deciding whether a package needs a recipe at all (pure-Python sdist-only packages need `[tool.flet] source_packages` in the app, NOT a recipe), picking the right recipe shape (minimal C-extension, Rust/PyO3, C-ext with patches, meson-python, scikit-build-core, native library, native-library consumer, PEP 517 shim for no-sdist CMake giants, prebuilt-repackage + host_build chain), running the build, and diagnosing the recurring local-dev pitfalls (NDK r27d install fragility, Android libc++_shared runtime linkage, stale pre-2026-06 support tarballs). USE THIS SKILL whenever the user asks to add a new recipe to mobile-forge, mentions "forge recipe", "mobile-forge", "recipe for <package>", "build a wheel for mobile/iOS/Android", "add <package> to pypi.flet.dev", or wants to cross-compile a Python package for Flet's mobile targets. Use proactively if the user pastes a flet-dev/flet discussions URL from the Packages category (https://github.com/flet-dev/flet/discussions/categories/packages) and asks to make a recipe for it. Sibling skills — `local-recipe-testing`: run the finished wheel on an emulator/simulator; `forge-ci`: push/dispatch and triage CI runs; `forge-error-catalogue`: concrete build-error → fix mappings; `native-recipe-bumps`: bump versions of existing `flet-lib*` recipes (use that, not this, for bumps).
 ---
 
 # Authoring new mobile-forge recipes
@@ -129,9 +129,9 @@ It verifies:
 - `forge` resolves on `$PATH`
 - `dist/` has the precompiled dep wheels (bzip2, openssl, libffi, mpdecimal, xz) for both iOS slices and Android ABIs
 
-If any check fails, the script prints what to do. **The two non-trivial fixes have their own scripts:**
+If any check fails, the script prints what to do. **The one non-trivial fix has its own script:**
 
-### Fix 1: NDK install (one-time)
+### Fix: NDK install (one-time)
 
 Mobile-forge pins NDK r27d. If `$NDK_HOME` is empty or points at a wrong version, run:
 
@@ -149,38 +149,24 @@ you can `export NDK_HOME=~/Library/Android/sdk/ndk/<version>` and use that — f
 the differences between r27 / r27d / r28 are immaterial. CI builds against r27d; your local r27 
 should produce equivalent wheels.
 
-### Fix 2: Android Python sysconfigdata CI paths — usually SELF-HEALING now (check first)
+### Note: Android sysconfigdata CI paths — self-healing, nothing to fix
 
 Historically the `python-android-mobile-forge-3.12.tar.gz` broke macOS local dev: CI-runner
 paths (`/home/runner/...`) baked into `_sysconfigdata__linux_.py` meant crossenv couldn't
 find the cross-compiler. **Fixed upstream in python-build** (PRs
 [#5](https://github.com/flet-dev/python-build/pull/5) /
 [#8](https://github.com/flet-dev/python-build/pull/8) /
-[#9](https://github.com/flet-dev/python-build/pull/9), releases since 2026-06): tarballs now
-ship SELF-RELOCATING sysconfigdata. The `/home/runner` strings are still in the file *by
-design* (build-time constants), and an injected `_mobile_forge_relocate_sysconfig()` rewrites
-them at import time to your local layout — so **counting `/home/runner` occurrences proves
-nothing**. Check for the relocator instead:
+[#9](https://github.com/flet-dev/python-build/pull/9)): releases since 2026-06 ship
+SELF-RELOCATING sysconfigdata, and `setup.sh` pins a release ≥ 20260701 — so a normal setup
+needs nothing. Two things worth knowing:
 
-```bash
-grep -l _mobile_forge_relocate_sysconfig \
-  "$MOBILE_FORGE_ANDROID_SUPPORT_PATH"/install/android/*/python-3.12.*/lib/python3.12/_sysconfigdata__linux_.py
-```
-
-- **Relocator present** (every release since 2026-06) → nothing to do. It finds your NDK via
-  `NDK_HOME`/`ANDROID_NDK_HOME` (set one), else `~/ndk/<ver>`, else
-  `~/Library/Android/sdk/ndk/*` — darwin vs linux prebuilt dirs handled.
-- **Relocator absent** (pre-June-2026 tarball) → run the legacy in-place rewrite:
-
-```bash
-bash .claude/skills/new-mobile-recipe/scripts/fix_android_sysconfig.sh
-```
-
-(The script self-checks and exits early on self-relocating tarballs. Running it there is
-harmless but pointless — it rewrites the constants the relocator would have substituted.)
-
-The symptom either way is the same: `Cannot find cross-compiler ('/home/runner/...')` — if
-you see it on a modern tarball, the relocator ran but found no NDK; set `NDK_HOME` and retry.
+- The `/home/runner` strings are still in the file *by design* (build-time constants that an
+  injected `_mobile_forge_relocate_sysconfig()` rewrites at import time), so grep-counting
+  them tells you nothing. `preflight.sh` checks for the relocator marker instead.
+- If you ever see `Cannot find cross-compiler ('/home/runner/...')`: on a modern tarball it
+  means the relocator found no NDK — set `NDK_HOME` (or `ANDROID_NDK_HOME`) and retry. If the
+  relocator marker is genuinely absent, your extracted tree predates 2026-06 — delete
+  `downloads/support/python-android-*` and re-run `setup.sh` rather than patching it.
 
 ---
 
@@ -441,7 +427,6 @@ pushed branch unless explicitly told otherwise.
 - `templates/build-flet-lib-shared.sh` — **shared**-library template for ctypes-loaded `flet-lib*` (Pattern H: pyzbar→libzbar etc.)
 - `templates/test_template.py` — smoke test scaffold (follows the repo test conventions)
 - `scripts/preflight.sh` — env verification
-- `scripts/fix_android_sysconfig.sh` — sysconfigdata rewrite
 - `scripts/install_ndk_r27d.sh` — robust NDK r27d installer
 - `scripts/verify_render.py` — Jinja meta.yaml render check
 - shipped ML-wave archetypes (fork branches; read via `git show <branch>:<path>`): `machine/onnxruntime` + `machine/tflite-runtime` (PEP 517 shim), `machine/sherpa-onnx` (prebuilt-repackage + host_build chain incl. `flet-libonnxruntime`), `machine/onnx-insightface` (scikit-build-core + host-protoc), `machine/scikit-image` + `machine/h5py` (meson lanes, build.sh lib chain)

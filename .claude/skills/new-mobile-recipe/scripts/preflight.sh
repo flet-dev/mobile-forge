@@ -11,7 +11,7 @@
 #   6. NDK_HOME points at an r27d (or compatible) NDK install
 #   7. dist/ has the iOS dep wheels (bzip2, openssl, etc.)
 #   8. dist/ has the Android dep wheels
-#   9. The Android sysconfigdata files have local paths (not CI-baked /home/runner)
+#   9. The Android sysconfigdata files are self-relocating (python-build >= 2026-06)
 #
 # Output: prints PASS/FAIL/WARN for each check. Exit code 0 if no FAILs.
 
@@ -164,39 +164,26 @@ if [ -n "${MOBILE_FORGE_ANDROID_SUPPORT_PATH:-}" ]; then
     fi
 fi
 
-# 9b. Android sysconfigdata path bake-in check.
-# Only flag build-critical paths (CC/CXX/AR + python install root). The CI tarball
-# also bakes cosmetic LZMA build paths from the cpython-android-source-deps build
-# (MODULE__LZMA_CFLAGS / LDFLAGS), but those are -I/-L flags into non-existent
-# dirs that compilers warn-and-ignore — they don't block the build, and the
-# fix_android_sysconfig.sh script doesn't (and shouldn't) rewrite them.
+# 9b. Android sysconfigdata self-relocation check.
+# python-build releases since 2026-06 (PRs #5/#8/#9) inject a
+# _mobile_forge_relocate_sysconfig() block that rewrites the CI-baked
+# /home/runner paths at import time — those strings staying in the file is
+# expected, so we check for the relocator marker, not for the paths.
+# setup.sh pins a release >= 20260701, so a normal setup always passes.
 if [ -n "${MOBILE_FORGE_ANDROID_SUPPORT_PATH:-}" ]; then
-    # Self-relocating tarballs (python-build >= 2026-06, PRs #5/#8/#9) keep the
-    # /home/runner strings as build-time constants and rewrite them at import
-    # time — their presence is expected and NOT a failure.
     total_files=$(ls "$MOBILE_FORGE_ANDROID_SUPPORT_PATH"/install/android/*/python-3.12.*/lib/python3.12/_sysconfigdata__linux_.py 2>/dev/null | wc -l | tr -d ' ')
     relocating=$(grep -l "_mobile_forge_relocate_sysconfig" \
         "$MOBILE_FORGE_ANDROID_SUPPORT_PATH"/install/android/*/python-3.12.*/lib/python3.12/_sysconfigdata__linux_.py \
         2>/dev/null | wc -l | tr -d ' ')
-    critical_bad=$(grep -lE "/home/runner/ndk|/home/runner/work/python-build" \
-        "$MOBILE_FORGE_ANDROID_SUPPORT_PATH"/install/android/*/python-3.12.*/lib/python3.12/_sysconfigdata__linux_.py \
-        2>/dev/null | wc -l | tr -d ' ')
-    cosmetic_bad=$(grep -lE "/home/runner/work/cpython-android-source-deps" \
-        "$MOBILE_FORGE_ANDROID_SUPPORT_PATH"/install/android/*/python-3.12.*/lib/python3.12/_sysconfigdata__linux_.py \
-        2>/dev/null | wc -l | tr -d ' ')
-    if [ "$total_files" != "0" ] && [ "$relocating" = "$total_files" ]; then
+    if [ "$total_files" = "0" ]; then
+        check fail "No Android sysconfigdata files found under MOBILE_FORGE_ANDROID_SUPPORT_PATH" \
+            "re-run: source ./setup.sh <python-version>"
+    elif [ "$relocating" = "$total_files" ]; then
         check pass "Android sysconfigdata is self-relocating (python-build >= 2026-06)" \
             "CI-baked strings rewrite themselves at import; ensure NDK_HOME is set"
-    elif [ "$critical_bad" = "0" ]; then
-        if [ "$cosmetic_bad" = "0" ]; then
-            check pass "Android sysconfigdata files have local paths"
-        else
-            check pass "Android sysconfigdata build-critical paths are local" \
-                "($cosmetic_bad file(s) still contain cosmetic LZMA -I/-L paths — harmless)"
-        fi
     else
-        check fail "$critical_bad Android sysconfigdata file(s) contain CI-baked NDK or python-install paths" \
-            "run: bash .claude/skills/new-mobile-recipe/scripts/fix_android_sysconfig.sh"
+        check fail "$((total_files - relocating))/$total_files Android sysconfigdata file(s) lack the self-relocation block (tarball predates 2026-06)" \
+            "delete downloads/support/python-android-* and re-run: source ./setup.sh <python-version>"
     fi
 fi
 
