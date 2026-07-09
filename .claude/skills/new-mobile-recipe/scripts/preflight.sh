@@ -171,13 +171,23 @@ fi
 # dirs that compilers warn-and-ignore — they don't block the build, and the
 # fix_android_sysconfig.sh script doesn't (and shouldn't) rewrite them.
 if [ -n "${MOBILE_FORGE_ANDROID_SUPPORT_PATH:-}" ]; then
+    # Self-relocating tarballs (python-build >= 2026-06, PRs #5/#8/#9) keep the
+    # /home/runner strings as build-time constants and rewrite them at import
+    # time — their presence is expected and NOT a failure.
+    total_files=$(ls "$MOBILE_FORGE_ANDROID_SUPPORT_PATH"/install/android/*/python-3.12.*/lib/python3.12/_sysconfigdata__linux_.py 2>/dev/null | wc -l | tr -d ' ')
+    relocating=$(grep -l "_mobile_forge_relocate_sysconfig" \
+        "$MOBILE_FORGE_ANDROID_SUPPORT_PATH"/install/android/*/python-3.12.*/lib/python3.12/_sysconfigdata__linux_.py \
+        2>/dev/null | wc -l | tr -d ' ')
     critical_bad=$(grep -lE "/home/runner/ndk|/home/runner/work/python-build" \
         "$MOBILE_FORGE_ANDROID_SUPPORT_PATH"/install/android/*/python-3.12.*/lib/python3.12/_sysconfigdata__linux_.py \
         2>/dev/null | wc -l | tr -d ' ')
     cosmetic_bad=$(grep -lE "/home/runner/work/cpython-android-source-deps" \
         "$MOBILE_FORGE_ANDROID_SUPPORT_PATH"/install/android/*/python-3.12.*/lib/python3.12/_sysconfigdata__linux_.py \
         2>/dev/null | wc -l | tr -d ' ')
-    if [ "$critical_bad" = "0" ]; then
+    if [ "$total_files" != "0" ] && [ "$relocating" = "$total_files" ]; then
+        check pass "Android sysconfigdata is self-relocating (python-build >= 2026-06)" \
+            "CI-baked strings rewrite themselves at import; ensure NDK_HOME is set"
+    elif [ "$critical_bad" = "0" ]; then
         if [ "$cosmetic_bad" = "0" ]; then
             check pass "Android sysconfigdata files have local paths"
         else

@@ -67,6 +67,20 @@ done
 echo ""
 
 # =========================================================================
+# Phase 0: self-relocating tarball check (python-build PRs #5/#8/#9)
+# =========================================================================
+# Releases since 2026-06 inject a _mobile_forge_relocate_sysconfig() block
+# that rewrites the CI-baked paths at import time — the /home/runner strings
+# in the file are build-time constants, NOT live paths. Nothing to fix.
+if grep -q "_mobile_forge_relocate_sysconfig" "${files[0]}" 2>/dev/null; then
+    echo "Sysconfigdata is SELF-RELOCATING (python-build >= 2026-06) — no fix needed."
+    echo "The relocator resolves the NDK via NDK_HOME/ANDROID_NDK_HOME, ~/ndk/<ver>,"
+    echo "or ~/Library/Android/sdk/ndk/*. If crossenv still can't find the compiler,"
+    echo "set NDK_HOME rather than rewriting this file."
+    exit 0
+fi
+
+# =========================================================================
 # Phase 1: CI runner paths (NDK + python-build install root)
 # =========================================================================
 echo "──── Phase 1: CI runner paths ────"

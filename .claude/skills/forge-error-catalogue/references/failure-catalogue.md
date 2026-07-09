@@ -8,7 +8,9 @@ Each entry: the error pattern (paste-search-friendly), why it happens, and what 
 
 **Cause:** the Python Android support tarball has CI-runner paths baked into `_sysconfigdata__linux_.py`. CPython's `configure` records absolute `CC`/`CXX`/etc. paths at build time, and the upstream `python-build` repo builds on Linux CI with NDK at `/home/runner/ndk/r27d/`. On macOS local dev, those paths point nowhere.
 
-**Fix:** run the bundled rewrite script — `bash .claude/skills/new-mobile-recipe/scripts/fix_android_sysconfig.sh`. It auto-detects the local `NDK_HOME` and `MOBILE_FORGE_ANDROID_SUPPORT_PATH` and rewrites the 4 sysconfigdata files (one per ABI) in-place. Idempotent. Run once per python-build tarball; re-run only if you replace the tarball.
+**Fix — depends on the tarball's age.** python-build releases since 2026-06 (PRs #5/#8/#9) ship SELF-RELOCATING sysconfigdata: an injected `_mobile_forge_relocate_sysconfig()` rewrites the baked paths at import time (the `/home/runner` strings staying in the file is expected — don't grep-count them). Check with `grep -l _mobile_forge_relocate_sysconfig <sysconfigdata files>`:
+- **Relocator present + error anyway** → the relocator found no NDK. Set `NDK_HOME` (or `ANDROID_NDK_HOME`), or install an NDK under `~/ndk/` / `~/Library/Android/sdk/ndk/`.
+- **Relocator absent** (pre-June-2026 tarball) → run the bundled rewrite script — `bash .claude/skills/new-mobile-recipe/scripts/fix_android_sysconfig.sh`. It auto-detects the local `NDK_HOME` and `MOBILE_FORGE_ANDROID_SUPPORT_PATH` and rewrites the 4 sysconfigdata files (one per ABI) in-place. Idempotent; it also self-checks and exits early on self-relocating tarballs.
 
 **Doesn't apply to iOS** — the iOS support tarball uses CPython's modern Apple toolchain which writes platform-config files at run-time, no path baking.
 

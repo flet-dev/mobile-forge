@@ -149,43 +149,38 @@ you can `export NDK_HOME=~/Library/Android/sdk/ndk/<version>` and use that — f
 the differences between r27 / r27d / r28 are immaterial. CI builds against r27d; your local r27 
 should produce equivalent wheels.
 
-### Fix 2: Android Python sysconfigdata path rewrite (one-time per python-build tarball)
+### Fix 2: Android Python sysconfigdata CI paths — usually SELF-HEALING now (check first)
 
-The `python-android-mobile-forge-3.12.tar.gz` ships with CI-runner paths (`/home/runner/...`) 
-absolute-baked into its `_sysconfigdata__linux_.py` files. On macOS local dev this breaks both 
-crossenv (can't find the cross-compiler) and the cross-compile flags.
-
-**Don't assume a newer python-build release fixed this — check.** (Verified still present in
-the 2026-07-08 release: 130 `/home/runner` occurrences per sysconfigdata file, including the
-load-bearing `'CC'` path.) The check is one grep against YOUR extracted tarball:
+Historically the `python-android-mobile-forge-3.12.tar.gz` broke macOS local dev: CI-runner
+paths (`/home/runner/...`) baked into `_sysconfigdata__linux_.py` meant crossenv couldn't
+find the cross-compiler. **Fixed upstream in python-build** (PRs
+[#5](https://github.com/flet-dev/python-build/pull/5) /
+[#8](https://github.com/flet-dev/python-build/pull/8) /
+[#9](https://github.com/flet-dev/python-build/pull/9), releases since 2026-06): tarballs now
+ship SELF-RELOCATING sysconfigdata. The `/home/runner` strings are still in the file *by
+design* (build-time constants), and an injected `_mobile_forge_relocate_sysconfig()` rewrites
+them at import time to your local layout — so **counting `/home/runner` occurrences proves
+nothing**. Check for the relocator instead:
 
 ```bash
-grep -c '/home/runner' \
-  "$MOBILE_FORGE_ANDROID_SUPPORT_PATH"/*/python/lib/python3.12/_sysconfigdata__linux_*.py
+grep -l _mobile_forge_relocate_sysconfig \
+  "$MOBILE_FORGE_ANDROID_SUPPORT_PATH"/install/android/*/python-3.12.*/lib/python3.12/_sysconfigdata__linux_.py
 ```
 
-- **Count ≳ 100 per file** → CI paths are baked in; run the fix below.
-- **Count ≤ ~2 per file** → either the fix already ran (leftovers are benign comment strings
-  in `MODULE__LZMA`-style entries) or upstream finally fixed it. Either way, skip the script.
+- **Relocator present** (every release since 2026-06) → nothing to do. It finds your NDK via
+  `NDK_HOME`/`ANDROID_NDK_HOME` (set one), else `~/ndk/<ver>`, else
+  `~/Library/Android/sdk/ndk/*` — darwin vs linux prebuilt dirs handled.
+- **Relocator absent** (pre-June-2026 tarball) → run the legacy in-place rewrite:
 
 ```bash
 bash .claude/skills/new-mobile-recipe/scripts/fix_android_sysconfig.sh
 ```
 
-It auto-detects:
-- The CI-baked NDK path (`/home/runner/ndk/r27d/...linux-x86_64`)
-- The CI-baked Python install path (`/home/runner/work/python-build/python-build/...`)
-- Your local `NDK_HOME` and `MOBILE_FORGE_ANDROID_SUPPORT_PATH`
+(The script self-checks and exits early on self-relocating tarballs. Running it there is
+harmless but pointless — it rewrites the constants the relocator would have substituted.)
 
-…and rewrites the 4 sysconfigdata files (one per ABI) in-place with `.bak` backups. 
-Idempotent — running it twice has no effect.
-
-Run this once after extracting the Android support tarball. Re-run only if you replace the
-tarball. Related CI-side divergence: forge's `script_env` `{CC}`/`{CXX}`/`{AR}` vars are
-resolved from this same sysconfigdata — a recipe passing `{CC}` into a sub-make inherits
-whatever path is baked here (the build.py fix in this fork resolves them from the live
-environment instead; a symptom of the stale path is `clang: not found` / Error 127 inside a
-sub-make on Android).
+The symptom either way is the same: `Cannot find cross-compiler ('/home/runner/...')` — if
+you see it on a modern tarball, the relocator ran but found no NDK; set `NDK_HOME` and retry.
 
 ---
 
@@ -316,7 +311,7 @@ tail -100 errors/<name>-5.12.1-cp312-<slice>.log
 
 For specific failure modes and their fixes, see the `forge-error-catalogue` skill. **Key recurring ones to watch for:**
 
-- `Cannot find cross-compiler ('/home/runner/...')` → Phase 2 sysconfigdata fix wasn't applied (Android only)
+- `Cannot find cross-compiler ('/home/runner/...')` → Android only: on a modern tarball the sysconfig relocator found no NDK (set `NDK_HOME`); on a pre-June-2026 tarball the Phase 2 rewrite wasn't run
 - `dlopen failed: library "libc++_shared.so" not found` (at runtime, not build) → add `flet-libcpp-shared` host dep, Android-only via Jinja
 - `fatal error: 'X.h' file not found` → missing host dep; add to `requirements.host`
 - `ld: library not found for -lY` → same, missing host dep
