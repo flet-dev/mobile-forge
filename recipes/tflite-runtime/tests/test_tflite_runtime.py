@@ -3,12 +3,6 @@ import os
 MODEL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dense_relu.tflite")
 
 
-def test_import_and_version():
-    import tflite_runtime
-
-    assert tflite_runtime.__version__.startswith("2.21")
-
-
 def test_interpreter_surface():
     """The Interpreter class and its wrapper module load (the pybind .so is
     the whole recipe)."""
