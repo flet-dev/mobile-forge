@@ -37,33 +37,77 @@ fi
 rm -rf "$TEST_DIR"
 mkdir -p "$TEST_DIR"
 
-# Look for test files at known locations.
+# Look for test files in the recipe's tests/ directory
 if [ -d "$RECIPE_DIR/tests" ]; then
     cp -r "$RECIPE_DIR/tests/." "$TEST_DIR/"
-elif [ -d "$RECIPE_DIR/test" ]; then
-    cp -r "$RECIPE_DIR/test/." "$TEST_DIR/"
-elif compgen -G "$RECIPE_DIR/test_*.py" > /dev/null; then
-    cp "$RECIPE_DIR"/test_*.py "$TEST_DIR/"
 else
-    echo "::error::No test file(s) found at $RECIPE_DIR/tests/, $RECIPE_DIR/test/ or $RECIPE_DIR/test_*.py" >&2
+    echo "::error::No tests/ directory found in $RECIPE_DIR/" >&2
     exit 1
 fi
 
-# 2. Substitute the __RECIPE_DEP__ token in the pyproject template and write
-#    a fresh pyproject.toml (which is gitignored).
+# 2. Generate pyproject.toml from the template (gitignored): pin the recipe
+#    under test (__RECIPE_DEP__) and expand test-only deps (__TEST_DEPS__)
+#    from the recipe's optional tests/requirements.txt.
 DEP="$RECIPE"
 [ -n "$VERSION" ] && DEP="$RECIPE==$VERSION"
 
-# Use a temp file + mv so the substitution is sed-portability-friendly
-# (BSD sed and GNU sed differ on -i quoting).
+# Test-only deps: packages the tests import that are NOT in the recipe's
+# Requires-Dist (e.g. numpy for a zero-runtime-dep recipe like safetensors,
+# whose numpy integration is extra-gated upstream). One PEP 508 spec per
+# line; blanks and full-line comments are skipped. Each dep must resolve for
+# the MOBILE target — pure-Python from PyPI, or a recipe published on
+# pypi.flet.dev (or seeded into dist/) — the same constraint a real app faces.
+REQS_FILE="$TEST_DIR/requirements.txt"
+TEST_DEPS=()
+if [ -f "$REQS_FILE" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+        # ltrim/rtrim, then skip blanks and full-line comments
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
+        [ -z "$line" ] && continue
+        [ "${line:0:1}" = "#" ] && continue
+        # Deps are emitted as TOML literal (single-quoted) strings so PEP 508
+        # markers — which legitimately contain double quotes — pass through
+        # verbatim; a single quote inside the spec would end the TOML string.
+        if [[ "$line" == *"'"* ]]; then
+            echo "::error::single quotes are not supported in $REQS_FILE: $line" >&2
+            exit 1
+        fi
+        TEST_DEPS+=("$line")
+    done < "$REQS_FILE"
+fi
+
+# Expand the template line-by-line with printf '%s' rather than sed: the
+# replacement text (PEP 508 specs) may contain characters that are unsafe in
+# a sed RHS, and BSD/GNU sed disagree on escaping rules.
 TPL="$SCRIPT_DIR/pyproject.toml.tpl"
 OUT="$SCRIPT_DIR/pyproject.toml"
-sed "s|__RECIPE_DEP__|$DEP|" "$TPL" > "$OUT"
+: > "$OUT"
+while IFS= read -r tpl_line || [ -n "$tpl_line" ]; do
+    # Trimmed copy, so the token matches are exact-line (a comment merely
+    # *mentioning* a token must pass through verbatim, not expand).
+    trimmed="${tpl_line#"${tpl_line%%[![:space:]]*}"}"
+    trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+    if [ "$trimmed" = '"__RECIPE_DEP__",' ]; then
+        printf '%s\n' "${tpl_line/__RECIPE_DEP__/$DEP}" >> "$OUT"
+    elif [ "$trimmed" = "__TEST_DEPS__" ]; then
+        # Replaced by zero or more dep lines. The ${arr[@]+...} guard keeps
+        # the empty-array expansion safe under `set -u` on macOS bash 3.2.
+        for dep in ${TEST_DEPS[@]+"${TEST_DEPS[@]}"}; do
+            printf "    '%s',\n" "$dep" >> "$OUT"
+        done
+    else
+        printf '%s\n' "$tpl_line" >> "$OUT"
+    fi
+done < "$TPL"
 
 echo "Staged recipe '$RECIPE' (dep: $DEP)"
 echo "  recipe_tests/:"
 ls -1 "$TEST_DIR" | sed 's/^/    /'
 echo "  pyproject.toml: generated (gitignored)"
+if [ ${#TEST_DEPS[@]} -gt 0 ]; then
+    echo "  test-only deps (tests/requirements.txt): ${TEST_DEPS[*]}"
+fi
 echo ""
 echo "Next:"
 echo "  cd $(realpath --relative-to="$PWD" "$SCRIPT_DIR" 2>/dev/null || echo "$SCRIPT_DIR")"

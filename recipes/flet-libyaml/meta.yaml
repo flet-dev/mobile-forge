@@ -1,6 +1,6 @@
 package:
   name: flet-libyaml
-  version: 0.2.5
+  version: "0.2.5"
 
 build:
   number: 10

@@ -1,0 +1,66 @@
+Make uuid-utils cross-compile for Flet's mobile targets. Both problems are in
+dependencies, not in uuid-utils itself.
+
+1. armeabi-v7a (the arm-linux-androideabi Rust target) has no native 64-bit
+   atomics, so std::sync::atomic::AtomicU64 — used for the v1/v6 MAC-node cache
+   (`static NODE`) — is absent and the crate fails to compile (E0432). Depend on
+   portable-atomic (which ships a 32-bit fallback) and source AtomicU64 from it;
+   Ordering stays from std. Same fix as the tokenizers recipe.
+
+2. mac_address 1.x has no target_os="ios" backend and fails to compile there
+   (unresolved import `internal` / cannot find module `os`); reading a hardware
+   MAC is blocked by the iOS sandbox anyway. Drop mac_address on iOS and gate its
+   two use-sites so _getnode() falls through to its existing random-multicast-node
+   path (only v1/v6 UUIDs consult it; uuid4/uuid5 — what LangGraph uses — never
+   do). arm64-v8a / x86_64 Android and desktop keep the real MAC lookup.
+
+diff --git a/Cargo.toml b/Cargo.toml
+index 0085e10..663a26f 100644
+--- a/a/Cargo.toml
++++ b/Cargo.toml
+@@ -24,6 +24,13 @@ uuid = { version  = "1.23.4", features = [
+     "v8",
+     "fast-rng",
+ ]}
++# mobile-forge: the arm-linux-androideabi (armeabi-v7a) target has no native
++# 64-bit atomics, so std::sync::atomic::AtomicU64 is absent there. portable-atomic
++# supplies a fallback so the NODE counter in src/lib.rs builds on 32-bit ARM.
++portable-atomic = "1"
+ 
+-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
++# mobile-forge: mac_address 1.x has no target_os="ios" backend (fails to compile),
++# and reading a hardware MAC is a no-go under the iOS sandbox anyway. Drop it on iOS;
++# _getnode() in src/lib.rs falls back to a random multicast node there (v1/v6 only).
++[target.'cfg(all(not(target_arch = "wasm32"), not(target_os = "ios")))'.dependencies]
+ mac_address = "1.1.8"
+diff --git a/src/lib.rs b/src/lib.rs
+index e8960b8..d90c01b 100644
+--- a/a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,4 +1,4 @@
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios")))]
+ use mac_address::MacAddressIterator;
+ use pyo3::{
+     IntoPyObjectExt,
+@@ -8,9 +8,10 @@ use pyo3::{
+     types::{PyBytes, PyDict},
+ };
+ use std::{
+-    sync::atomic::{AtomicU64, Ordering},
++    sync::atomic::Ordering,
+     time::SystemTime,
+ };
++use portable_atomic::AtomicU64;
+ use uuid::{Builder, Bytes, ContextV1, Timestamp, Uuid, Variant, Version};
+ 
+ static NODE: AtomicU64 = AtomicU64::new(0);
+@@ -438,7 +439,7 @@ fn _getnode() -> u64 {
+         (mac & (1 << 41)) == 0
+     }
+ 
+-    #[cfg(not(target_arch = "wasm32"))]
++    #[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios")))]
+     {
+         let mut first_local_mac: Option<u64> = None;
+         if let Ok(iter) = MacAddressIterator::new() {

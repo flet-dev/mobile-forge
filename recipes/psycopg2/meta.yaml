@@ -1,6 +1,6 @@
 package:
   name: psycopg2
-  version: 2.9.12
+  version: "2.9.12"
 
 build:
   number: 1

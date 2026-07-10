@@ -2,8 +2,8 @@
 sentinel to console.log (which Flet redirects via $FLET_APP_CONSOLE).
 
 How this works on a CI runner:
-  1. `stage_recipe.sh <recipe>` copies `recipes/<recipe>/test_*.py` (or the
-     `recipes/<recipe>/test/` dir with assets) into `./recipe_tests/`, and
+  1. `stage_recipe.sh <recipe>` copies `recipes/<recipe>/tests/` (test files
+     plus any asset files) into `./recipe_tests/`, and
      generates `pyproject.toml` from `pyproject.toml.tpl` with the recipe
      pinned as a dependency.
   2. `flet build apk` / `flet build ios-simulator` bundles this app + the

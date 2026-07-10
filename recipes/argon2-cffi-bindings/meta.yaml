@@ -1,6 +1,6 @@
 package:
   name: argon2-cffi-bindings
-  version: 25.1.0
+  version: "25.1.0"
 
 build:
   number: 1
