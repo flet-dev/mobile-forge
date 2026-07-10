@@ -149,16 +149,14 @@ diff -ruN a/pyproject.toml b/pyproject.toml
 diff -ruN a/setup.py b/setup.py
 --- a/setup.py	2026-06-12 17:12:02
 +++ b/setup.py	2026-07-08 18:23:28
-@@ -372,7 +372,12 @@
+@@ -372,7 +372,10 @@
  dl_libs = []
  libs = []
  
 -if platform.system() == "Linux" or platform.system() == "AIX":
-+# mobile-forge: the crossenv reports platform.system() == "Android"/"iOS" --
-+# upstream has no branch for either, leaving `libs` unset -> the pybind .so
-+# never enters the wheel (Termux hit the same on py3.13 and hand-installs
-+# it post-hoc; we fix the predicate instead). The Darwin branch below stays
-+# intact for real macOS builds.
++# mobile-forge: under the crossenv platform.system() returns the target
++# ("Android"/"iOS"), matching no branch -> `libs` stays empty and the build
++# goes green while the wheel silently ships WITHOUT the pybind .so. Add both.
 +if platform.system() in ("Linux", "AIX", "Android", "iOS"):
      libs = [
          "onnxruntime_pybind11_state.so",

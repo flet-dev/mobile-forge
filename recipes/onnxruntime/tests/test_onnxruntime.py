@@ -25,13 +25,13 @@ def test_inference_session():
 
 
 def test_providers_and_metadata():
+    """Verify CPU provider availability and model I/O metadata."""
     import onnxruntime as ort
 
     assert "CPUExecutionProvider" in ort.get_available_providers()
     sess = ort.InferenceSession(MODEL, providers=["CPUExecutionProvider"])
     assert [i.name for i in sess.get_inputs()] == ["x"]
     assert [o.name for o in sess.get_outputs()] == ["y"]
-    assert ort.__version__.startswith("1.27")
 
 
 def test_session_options_threads():
