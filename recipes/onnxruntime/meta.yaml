@@ -4,21 +4,11 @@ package:
   name: onnxruntime
   version: '{{ version }}'
   # Termux's python-onnxruntime was the Android existence proof and patch
-  # donor; the iOS lane (zero prior art anywhere) rides the same shim with
-  # apple toolchain args -- the single statically-linked pybind module is
-  # exactly the wheel shape that already works on iOS (pywhispercpp/ncnn).
-  # Termux builds 32-bit arm, but only with BUILD_UNIT_TESTS=OFF dodging
+  # donor. Termux builds 32-bit arm, but only with BUILD_UNIT_TESTS=OFF dodging
   # -Wshorten-64-to-32 errors; upstream ships no 32-bit builds and the
   # test surface there is unowned. Keep the matrix honest.
   excluded_arches:
     - armeabi-v7a
-
-source:
-  # No sdist on PyPI (59 releases, 0 sdists) — GitHub tag tarball; the
-  # ~45 FetchContent deps come from cmake/deps.txt (SHA1-pinned) at
-  # configure time, incl. a HOST protoc (protoc_mac_universal v21.12) when
-  # cross-compiling with no ONNX_CUSTOM_PROTOC_EXECUTABLE set.
-  url: https://github.com/microsoft/onnxruntime/archive/refs/tags/v{{ version }}.tar.gz
 
 build:
   number: 1
@@ -79,9 +69,15 @@ build:
       -Donnxruntime_BUILD_UNIT_TESTS=OFF
 # {% endif %}
 
+source:
+  # No sdist on PyPI — GitHub tag tarball; the ~45 FetchContent deps come from
+  # cmake/deps.txt (SHA1-pinned) at configure time, incl. a HOST protoc (protoc_mac_universal v21.12)
+  # when cross-compiling with no ONNX_CUSTOM_PROTOC_EXECUTABLE set.
+  url: https://github.com/microsoft/onnxruntime/archive/refs/tags/v{{ version }}.tar.gz
+
 requirements:
   build:
-    # PEP 517 requires (setuptools/wheel/packaging) + the cmake/ninja shims;
+    # PEP 517 requires setuptools/wheel/packaging + the cmake/ninja shims;
     # forge builds with --no-isolation.
     - setuptools
     - wheel
@@ -92,8 +88,8 @@ requirements:
     # pybind numpy caster + Python_NumPy_INCLUDE_DIR above.
     - numpy ^2.0.0
 # {% if sdk == 'android' %}
-    # C++17 everywhere -> libc++_shared.so at runtime (android only; iOS
-    # links the system libc++).
+    # C++17 everywhere -> libc++_shared.so at runtime
+    # (android only; iOS links the system libc++).
     - flet-libcpp-shared >=27.2.12479018
 # {% endif %}
 
