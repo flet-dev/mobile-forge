@@ -1,0 +1,11 @@
+package:
+  name: uuid-utils
+  version: "0.17.0"
+
+build:
+  number: 1
+  script_env:
+    _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
+
+patches:
+  - mobile.patch
