@@ -79,7 +79,7 @@ on:
         description: |
           Packages (comma-separated) or 'ALL' to select all available recipes:
         required: false
-        default: "lru-dict:"
+        default: "lru-dict:,pydantic-core:,numpy:"
       prebuild_recipes:
         description: |
           Recipes (comma-separated; typically flet-lib*) to build FIRST and seed into 
@@ -480,7 +480,7 @@ jobs:
           ./tests/recipe-tester/stage_recipe.sh "$PKG_NAME" "$PKG_VERSION"
           cd tests/recipe-tester
           PIP_FIND_LINKS="$GITHUB_WORKSPACE/dist-test" \
-            uvx --with flet-cli==0.86.0.dev2 --with flet==0.86.0.dev2 flet build apk --arch x86_64 -vv --yes --python-version "$(echo "$INPUT_PYTHON_VERSION" | cut -d. -f1-2)"
+            uvx --with flet-cli>=0.86.0.dev0 --with flet>=0.86.0.dev0 flet build apk --arch x86_64 -vv --yes --python-version "$(echo "$INPUT_PYTHON_VERSION" | cut -d. -f1-2)"
 
       - name: Test on Android emulator (API 28, x86_64)
         if: matrix.platform == 'android' && steps.detect-tests.outputs.has_tests == 'true'
@@ -520,7 +520,7 @@ jobs:
           ./tests/recipe-tester/stage_recipe.sh "$PKG_NAME" "$PKG_VERSION"
           cd tests/recipe-tester
           PIP_FIND_LINKS="$GITHUB_WORKSPACE/dist-test" \
-            uvx --with flet-cli==0.86.0.dev2 --with flet==0.86.0.dev2 flet build ios-simulator -vv --yes --python-version "$(echo "$INPUT_PYTHON_VERSION" | cut -d. -f1-2)"
+            uvx --with flet-cli>=0.86.0.dev0 --with flet>=0.86.0.dev0 flet build ios-simulator -vv --yes --python-version "$(echo "$INPUT_PYTHON_VERSION" | cut -d. -f1-2)"
 
       - name: Test on iOS Simulator
         if: matrix.platform == 'ios' && steps.detect-tests.outputs.has_tests == 'true'
