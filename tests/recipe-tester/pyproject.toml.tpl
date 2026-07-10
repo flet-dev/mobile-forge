@@ -22,5 +22,12 @@ dev = [
 [tool.flet]
 artifact = "recipe-tester"
 
+# Flet 0.86 compiles the app to .pyc and strips the source by default, but pytest
+# only collects .py test files — so the bundled recipe_tests would report "0 items"
+# (EXIT 5). Keep the app source (main.py + recipe_tests/*.py) as .py. This only
+# affects the app; `--compile-packages` still compiles the bundled dependencies.
+[tool.flet.compile]
+app = false
+
 [tool.flet.app]
 path = "."
