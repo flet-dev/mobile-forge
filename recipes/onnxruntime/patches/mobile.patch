@@ -17,6 +17,14 @@ following the sequence Termux proved for Android (their python-onnxruntime
 3. mlas sqnbitgemm avx2 header (Termux 0006): include onnxruntime_config.h
    for the x86_64 lane.
 
+4. setup.py: extend the packaged-libs predicate from ("Linux", "AIX") to
+   also match "Android"/"iOS" -- under the crossenv platform.system()
+   reports the TARGET OS, which matches no upstream branch, so `libs`
+   stays empty and the build goes green while the wheel silently ships
+   WITHOUT the pybind .so (Termux hand-installs it post-hoc instead; we
+   fix the predicate). The Darwin branch stays intact for real macOS
+   builds.
+
 Deliberately NOT taken from Termux: their 0001/0002 (system abseil and
 protobuf -- we want the FetchContent vendored builds) and 0003 (Android
 providers_shared enablement -- we build BUILD_SHARED_LIB=OFF, statically
