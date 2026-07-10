@@ -1,17 +1,24 @@
 Enable the cv2 Python bindings when cross-compiling for Android and iOS, and
-qualify a few OpenCV types with the cv:: namespace so the binding sources
-compile under the stricter mobile toolchains.
+qualify OpenCV types with the cv:: namespace so the binding sources compile
+under the stricter mobile toolchains.
 
 OpenCV disables the python modules on ANDROID / APPLE_FRAMEWORK by default (see
 modules/python/CMakeLists.txt and cmake/OpenCVDetectPython.cmake); we keep only
 the WINRT guard so python3 bindings are still generated for our mobile targets.
-The pyopencv_*/cv2*.cpp/gen2.py hunks add explicit cv:: qualification
-(Ptr/Size/Point/Rect) that the mobile compilers require.
+
+The cv:: qualification is needed on iOS/macOS only: Apple's <MacTypes.h> defines
+a global `typedef char* Ptr;` (and the bindings do `using namespace cv;`), so a
+bare `Ptr<T>` is ambiguous with cv::Ptr. Likewise bare Size/Point/Rect clash.
+We fix this in three places: the hand-written binding helper headers
+(pyopencv_*/shadow_umat.hpp) are qualified directly; pycompat.hpp's CV_PY macros
+use cv::Ptr; and gen2.py qualifies the code it GENERATES (prefix_ambiguous_ios,
+including Ptr< nested inside other templates such as std::vector<Ptr<...>>).
 
 Ported to opencv-python 5.0.0.93: OpenCV 5 removed the python2 module (so the
-modules/python/CMakeLists.txt guard no longer lists python2), and the old
-setup.py cv2.data haarcascades install-path override is gone (5.0 restructured
-cv2.data packaging), so that hunk is dropped.
+modules/python/CMakeLists.txt guard no longer lists python2), added more
+bare-Ptr binding sites (cuda/videoio/shadow_umat and generated vector<Ptr<>>
+returns) that this patch now covers, and dropped the old setup.py cv2.data
+haarcascades install-path override (5.0 restructured cv2.data packaging).
 
 diff --git a/opencv/CMakeLists.txt b/opencv/CMakeLists.txt
 index d6812aa..7555914 100644
@@ -69,6 +76,53 @@ index 4e3cfa3..1ddf28d 100644
    endif()
  
    # Export return values
+diff --git a/opencv/modules/core/misc/python/pyopencv_cuda.hpp b/opencv/modules/core/misc/python/pyopencv_cuda.hpp
+index ab451b0..306e1fd 100644
+--- a/opencv/modules/core/misc/python/pyopencv_cuda.hpp
++++ b/opencv/modules/core/misc/python/pyopencv_cuda.hpp
+@@ -38,7 +38,7 @@ CV_PY_FROM_CLASS(cuda::HostMem)
+ CV_PY_FROM_CLASS_PTR(cuda::GpuMat::Allocator)
+ 
+ template<>
+-bool fillDLPackTensor(const Ptr<cv::cuda::GpuMat>& src, DLManagedTensor* tensor, const DLDevice& device)
++bool fillDLPackTensor(const cv::Ptr<cv::cuda::GpuMat>& src, DLManagedTensor* tensor, const DLDevice& device)
+ {
+     if ((device.device_type != -1 && device.device_type != kDLCUDA) || device.device_id != 0)
+     {
+@@ -60,7 +60,7 @@ bool fillDLPackTensor(const Ptr<cv::cuda::GpuMat>& src, DLManagedTensor* tensor,
+ }
+ 
+ template<>
+-bool fillDLPackTensor(const Ptr<cv::cuda::GpuMatND>& src, DLManagedTensor* tensor, const DLDevice& device)
++bool fillDLPackTensor(const cv::Ptr<cv::cuda::GpuMatND>& src, DLManagedTensor* tensor, const DLDevice& device)
+ {
+     if ((device.device_type != -1 && device.device_type != kDLCUDA) || device.device_id != 0)
+     {
+@@ -151,20 +151,20 @@ bool parseDLPackTensor(DLManagedTensor* tensor, cv::cuda::GpuMatND& obj, bool co
+ }
+ 
+ template<>
+-int GetNumDims(const Ptr<cv::cuda::GpuMat>& src) { return 3; }
++int GetNumDims(const cv::Ptr<cv::cuda::GpuMat>& src) { return 3; }
+ 
+ template<>
+-int GetNumDims(const Ptr<cv::cuda::GpuMatND>& src) { return src->dims; }
++int GetNumDims(const cv::Ptr<cv::cuda::GpuMatND>& src) { return src->dims; }
+ 
+ static PyObject* pyDLPackGpuMat(PyObject* self, PyObject* py_args, PyObject* kw) {
+-    Ptr<cv::cuda::GpuMat> * self1 = 0;
++    cv::Ptr<cv::cuda::GpuMat> * self1 = 0;
+     if (!pyopencv_cuda_GpuMat_getp(self, self1))
+         return failmsgp("Incorrect type of self (must be 'cuda_GpuMat' or its derivative)");
+     return to_dlpack(*(self1), self, py_args, kw);
+ }
+ 
+ static PyObject* pyDLPackGpuMatND(PyObject* self, PyObject* py_args, PyObject* kw) {
+-    Ptr<cv::cuda::GpuMatND> * self1 = 0;
++    cv::Ptr<cv::cuda::GpuMatND> * self1 = 0;
+     if (!pyopencv_cuda_GpuMatND_getp(self, self1))
+         return failmsgp("Incorrect type of self (must be 'cuda_GpuMatND' or its derivative)");
+     return to_dlpack(*(self1), self, py_args, kw);
 diff --git a/opencv/modules/core/misc/python/pyopencv_umat.hpp b/opencv/modules/core/misc/python/pyopencv_umat.hpp
 index 2e91cd5..9905bd0 100644
 --- a/opencv/modules/core/misc/python/pyopencv_umat.hpp
@@ -82,6 +136,19 @@ index 2e91cd5..9905bd0 100644
  {
      //dst.reset(new UMat(src->getUMat(ACCESS_RW)));
      dst.reset(new UMat());
+diff --git a/opencv/modules/core/misc/python/shadow_umat.hpp b/opencv/modules/core/misc/python/shadow_umat.hpp
+index b194aac..6e5b48e 100644
+--- a/opencv/modules/core/misc/python/shadow_umat.hpp
++++ b/opencv/modules/core/misc/python/shadow_umat.hpp
+@@ -18,7 +18,7 @@ public:
+     CV_WRAP UMat(Size size, int type, const Scalar& s, UMatUsageFlags usageFlags = USAGE_DEFAULT);
+ 
+     //! Mat is mappable to UMat
+-    CV_WRAP_MAPPABLE(Ptr<Mat>);
++    CV_WRAP_MAPPABLE(cv::Ptr<Mat>);
+ 
+     //! returns the OpenCL queue used by OpenCV UMat
+     CV_WRAP_PHANTOM(static void* queue());
 diff --git a/opencv/modules/dnn/misc/python/pyopencv_dnn.hpp b/opencv/modules/dnn/misc/python/pyopencv_dnn.hpp
 index 0cc2fe6..9b27f1c 100644
 --- a/opencv/modules/dnn/misc/python/pyopencv_dnn.hpp
@@ -207,7 +274,7 @@ index 01d48a3..ae5a264 100644
      return Py_BuildValue("(ii)", p.x, p.y);
  }
 diff --git a/opencv/modules/python/src2/gen2.py b/opencv/modules/python/src2/gen2.py
-index c8e12c6..2ec03b0 100755
+index c8e12c6..49106c0 100755
 --- a/opencv/modules/python/src2/gen2.py
 +++ b/opencv/modules/python/src2/gen2.py
 @@ -43,7 +43,7 @@ gen_template_check_self = Template("""
@@ -237,7 +304,7 @@ index c8e12c6..2ec03b0 100755
      return tp
  
  
-@@ -745,6 +745,16 @@ class FuncVariant(object):
+@@ -745,6 +745,19 @@ class FuncVariant(object):
                  self.args[argno].py_outputarg = True
          self.py_outlist = outlist
  
@@ -250,11 +317,14 @@ index c8e12c6..2ec03b0 100755
 +        r = r.replace(f"<{cn}>", f"<cv::{cn}>")
 +        if r.startswith(f"{cn}("):
 +            r = f"cv::{r}"
++    # also qualify any bare Ptr< nested inside other templates
++    # (e.g. std::vector<Ptr<CChecker>>) which the leading check above misses
++    r = re.sub(r"(?<![:\w])Ptr<", "cv::Ptr<", r)
 +    return r
  
  class FuncInfo(object):
      def __init__(self, classname, name, cname, isconstructor, namespace, is_static):
-@@ -850,8 +860,8 @@ class FuncInfo(object):
+@@ -850,8 +863,8 @@ class FuncInfo(object):
                  if not self.is_static:
                      code += gen_template_check_self.substitute(
                          name=selfinfo.name,
@@ -265,7 +335,7 @@ index c8e12c6..2ec03b0 100755
                          cvt='' if selfinfo.issimple else '*'
                      )
                  fullname = selfinfo.wname + "." + fullname
-@@ -918,7 +928,7 @@ class FuncInfo(object):
+@@ -918,7 +931,7 @@ class FuncInfo(object):
                  else:
                      if tp in all_classes:
                          tp_classinfo = all_classes[tp]
@@ -274,7 +344,7 @@ index c8e12c6..2ec03b0 100755
                          arg_type_info = ArgTypeInfo(cname_of_value, FormatStrings.object, defval0, True)
                          assert not (a.is_smart_ptr and tp_classinfo.issimple), "Can't pass 'simple' type as Ptr<>"
                          if not a.is_smart_ptr and not tp_classinfo.issimple:
-@@ -968,9 +978,9 @@ class FuncInfo(object):
+@@ -968,9 +981,9 @@ class FuncInfo(object):
                  if a.outputarg and not a.inputarg:
                      defval = ""
                  if defval:
@@ -286,7 +356,7 @@ index c8e12c6..2ec03b0 100755
  
                  if not code_args.endswith("("):
                      code_args += ", "
-@@ -998,7 +1008,7 @@ class FuncInfo(object):
+@@ -998,7 +1011,7 @@ class FuncInfo(object):
                  code_prelude = ""
                  code_fcall = ""
                  if v.rettype:
@@ -295,7 +365,7 @@ index c8e12c6..2ec03b0 100755
                      code_fcall += "retval = "
                  if not v.isphantom and ismethod and not self.is_static:
                      code_fcall += "_self_->" + self.cname
-@@ -1431,11 +1441,11 @@ class PythonWrapperGenerator(object):
+@@ -1431,11 +1444,11 @@ class PythonWrapperGenerator(object):
                  self.code_types.write(gen_template_map_type_cvt.substitute(name=classinfo.name, cname=classinfo.cname))
              else:
                  mappable_code = "\n".join([
@@ -350,7 +420,7 @@ index c936f5e..b5a89c0 100644
  
  #define CV_PY_TO_ENUM(TYPE)                                                                           \
 diff --git a/opencv/modules/videoio/misc/python/pyopencv_videoio.hpp b/opencv/modules/videoio/misc/python/pyopencv_videoio.hpp
-index a4bc8e5..f687122 100644
+index a4bc8e5..b86efd8 100644
 --- a/opencv/modules/videoio/misc/python/pyopencv_videoio.hpp
 +++ b/opencv/modules/videoio/misc/python/pyopencv_videoio.hpp
 @@ -23,7 +23,7 @@ bool pyopencv_to(PyObject *o, std::vector<cv::VideoCaptureAPIs>& apis, const Arg
@@ -371,3 +441,21 @@ index a4bc8e5..f687122 100644
  {
      if (!obj)
          return false;
+@@ -147,7 +147,7 @@ static PyObject* pycvVideoEnter(PyObject* self, PyObject* /*args*/, PyObject* /*
+ }
+ 
+ static PyObject* pycvVideoCaptureExit(PyObject* self, PyObject* /*args*/, PyObject* /*kw*/) {
+-    Ptr<cv::VideoCapture>* obj_getp = nullptr;
++    cv::Ptr<cv::VideoCapture>* obj_getp = nullptr;
+     if (pyopencv_VideoCapture_getp(self, obj_getp) && obj_getp && *obj_getp) {
+         (*obj_getp)->release();
+     }
+@@ -155,7 +155,7 @@ static PyObject* pycvVideoCaptureExit(PyObject* self, PyObject* /*args*/, PyObje
+ }
+ 
+ static PyObject* pycvVideoWriterExit(PyObject* self, PyObject* /*args*/, PyObject* /*kw*/) {
+-    Ptr<cv::VideoWriter>* obj_getp = nullptr;
++    cv::Ptr<cv::VideoWriter>* obj_getp = nullptr;
+     if (pyopencv_VideoWriter_getp(self, obj_getp) && obj_getp && *obj_getp) {
+         (*obj_getp)->release();
+     }
