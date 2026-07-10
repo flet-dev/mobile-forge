@@ -32,7 +32,7 @@ on:
           Versions in `python_versions` that aren't in this list still build wheels but skip the
           APK/iOS-simulator test stage. Use "ALL" to run tests for every entry in `python_versions`:
         required: false
-        default: "3.12"
+        default: "3.12,3.13,3.14"
       python_build_run_id:
         description: |
           flet-dev/python-build Actions run-id whose artifacts to use as the
