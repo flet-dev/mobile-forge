@@ -1,24 +1,24 @@
-Enable the cv2 Python bindings when cross-compiling for Android and iOS, and
-qualify OpenCV types with the cv:: namespace so the binding sources compile
-under the stricter mobile toolchains.
+Make opencv-python 5.0 cross-compile AND load on Flet's mobile targets.
 
-OpenCV disables the python modules on ANDROID / APPLE_FRAMEWORK by default (see
-modules/python/CMakeLists.txt and cmake/OpenCVDetectPython.cmake); we keep only
-the WINRT guard so python3 bindings are still generated for our mobile targets.
+1. Enable the cv2 Python bindings on Android/iOS (opencv disables the python
+   modules on ANDROID / APPLE_FRAMEWORK by default; keep only the WINRT guard),
+   and qualify OpenCV types with cv:: in the binding sources. The cv:: bit is
+   iOS/macOS-only: Apple's <MacTypes.h> defines a global `typedef char* Ptr;`
+   that clashes with cv::Ptr under `using namespace cv;`. We fix the hand-written
+   binding helpers (pyopencv_*/shadow_umat.hpp), pycompat.hpp's CV_PY macros, and
+   gen2.py's generated code (prefix_ambiguous_ios, incl. Ptr< nested inside other
+   templates such as std::vector<Ptr<...>>). OpenCV 5 dropped the python2 module
+   (adjusted guard) and the old setup.py cv2.data haarcascades hunk (5.0
+   restructured cv2.data packaging), so that hunk is gone.
 
-The cv:: qualification is needed on iOS/macOS only: Apple's <MacTypes.h> defines
-a global `typedef char* Ptr;` (and the bindings do `using namespace cv;`), so a
-bare `Ptr<T>` is ambiguous with cv::Ptr. Likewise bare Size/Point/Rect clash.
-We fix this in three places: the hand-written binding helper headers
-(pyopencv_*/shadow_umat.hpp) are qualified directly; pycompat.hpp's CV_PY macros
-use cv::Ptr; and gen2.py qualifies the code it GENERATES (prefix_ambiguous_ios,
-including Ptr< nested inside other templates such as std::vector<Ptr<...>>).
-
-Ported to opencv-python 5.0.0.93: OpenCV 5 removed the python2 module (so the
-modules/python/CMakeLists.txt guard no longer lists python2), added more
-bare-Ptr binding sites (cuda/videoio/shadow_umat and generated vector<Ptr<>>
-returns) that this patch now covers, and dropped the old setup.py cv2.data
-haarcascades install-path override (5.0 restructured cv2.data packaging).
+2. Skip the vendored MLAS (Microsoft Linear Algebra Subprograms, new in OpenCV 5)
+   on the iOS APPLE_FRAMEWORK build. MLAS builds as an OBJECT library whose
+   objects are meant to link straight into opencv_dnn, but they do NOT propagate
+   into the iOS .framework binary, so `import cv2` dies at dlopen with an
+   undefined `MlasGemmBatch` symbol. Gating add_subdirectory(3rdparty/mlas) on
+   NOT APPLE_FRAMEWORK leaves HAVE_MLAS=0 there, so the MlasGemmBatch call sites
+   compile out and opencv_dnn falls back to its built-in SGEMM. Android keeps
+   MLAS (it static-links fine; verified on-device).
 
 diff --git a/opencv/CMakeLists.txt b/opencv/CMakeLists.txt
 index d6812aa..7555914 100644
@@ -149,6 +149,19 @@ index b194aac..6e5b48e 100644
  
      //! returns the OpenCL queue used by OpenCV UMat
      CV_WRAP_PHANTOM(static void* queue());
+diff --git a/opencv/modules/dnn/CMakeLists.txt b/opencv/modules/dnn/CMakeLists.txt
+index a765483..eb26ac6 100644
+--- a/opencv/modules/dnn/CMakeLists.txt
++++ b/opencv/modules/dnn/CMakeLists.txt
+@@ -500,7 +500,7 @@ foreach(_v OPENCV_DNN_MLAS_ENABLED OPENCV_DNN_MLAS_SKIP_REASON
+            MLAS_HAS_ASM MLAS_HAS_POWER10 MLAS_HAS_RISCV64_RVV)
+   unset(${_v} CACHE)
+ endforeach()
+-if(NOT EMSCRIPTEN)
++if(NOT EMSCRIPTEN AND NOT APPLE_FRAMEWORK)
+   add_subdirectory("${OpenCV_SOURCE_DIR}/3rdparty/mlas" "${CMAKE_BINARY_DIR}/3rdparty/mlas")
+ endif()
+ if(HAVE_MLAS)
 diff --git a/opencv/modules/dnn/misc/python/pyopencv_dnn.hpp b/opencv/modules/dnn/misc/python/pyopencv_dnn.hpp
 index 0cc2fe6..9b27f1c 100644
 --- a/opencv/modules/dnn/misc/python/pyopencv_dnn.hpp
