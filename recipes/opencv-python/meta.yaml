@@ -1,6 +1,6 @@
 package:
   name: opencv-python
-  version: "4.12.0.88"
+  version: "5.0.0.93"
 
 requirements:
   build:
