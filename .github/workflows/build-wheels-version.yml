@@ -502,6 +502,11 @@ jobs:
         env:
           PKG_NAME: ${{ steps.detect-tests.outputs.pkg_name }}
           PKG_VERSION: ${{ steps.detect-tests.outputs.pkg_version }}
+          # Without this the `--python-version` below expands to '' (set -u prints
+          # "unbound variable" but the build continues), so `flet build` defaults to
+          # the newest Python (3.14) whose iOS stdlib is missing `_pyrepl` — pytest's
+          # pdb import then crashes with INTERNALERROR / EXIT 3. Pin it like the APK lane.
+          INPUT_PYTHON_VERSION: ${{ inputs.python_version }}
         run: |
           set -euxo pipefail
 
