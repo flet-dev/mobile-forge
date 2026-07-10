@@ -103,7 +103,7 @@ requirements:
     # CDLLs them before importing pyarrow.lib so the ext modules' @rpath link binds
     # by install-name. (host_build would NOT ship the wheel -> dylibs never reach
     # jniLibs/.fwork, which is why the old iOS bundle approach was needed and failed.)
-    - flet-libarrow ==24
+    - flet-libarrow ==24.0.0
 # {% if sdk == 'android' %}
     # pyarrow's + libarrow's .so are C++ -> need libc++_shared.so at runtime
     # (iOS uses the system libc++, no flet-lib needed).

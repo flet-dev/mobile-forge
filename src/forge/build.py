@@ -923,7 +923,7 @@ class SimplePackageBuilder(Builder):
     def make_wheel(self):
         build_num = str(self.package.meta["build"]["number"])
         name = canonicalize_name(self.package.name)
-        version = canonicalize_version(self.package.version)
+        version = canonicalize_version(self.package.version, strip_trailing_zero=False)
         info_path = (
             self.build_path / "wheel" / f"{name.replace('-', '_')}-{version}.dist-info"
         )
