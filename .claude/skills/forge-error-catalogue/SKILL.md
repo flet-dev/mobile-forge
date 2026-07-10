@@ -65,8 +65,13 @@ instead of re-deriving it.
   `install_data rename:` / `-include` sanity-check breakage, **build.sh
   `cmake: command not found` → `requirements.build`**, **duplicated patch hunks
   from concatenated diffs**, iOS `flatc` MACOSX_BUNDLE, **`.dylib` staged under
-  the `.so` name**.
+  the `.so` name**, **Apple `MacTypes.h` `Ptr` vs `cv::Ptr` ambiguity** (iOS-only;
+  hand-written + gen2.py-generated code), **opencv-5 KleidiCV `armv8-a` on x86_64**
+  and **hardcoded `CMAKE_SYSTEM_PROCESSOR` → ARM asm on the x86_64 sim** (per-arch
+  fix), **Rust crate with no `target_os="ios"` backend** (`mac_address`, cfg-gate it).
 - **Runtime failures** (device/emulator/simulator) — `libc++_shared.so` not found,
+  **CMake OBJECT-lib not linked into the iOS `.framework` → undefined symbol at
+  dlopen** (opencv-5 MLAS; green build ≠ loadable — verify with `nm -u`/`otool -L`),
   ctypes **"Unable to find … shared library"** (Pattern H loader / lib delivery),
   `libssl.so.3`/`libcrypto`/`libsqlite` not found, import-name errors, old version
   loaded, **lazy_loader "non-existent stub" (serious_python strips `*.pyi`)**,
@@ -77,7 +82,9 @@ instead of re-deriving it.
   resolving the iphoneos wheel**), **sdist-only pure-python dep → pip backtrack**
   (omegaconf `UnsupportedValueType: PosixPath`), **sdist-only pure-python dep →
   `[tool.flet] source_packages`, not a recipe**, missing `lib/<abi>/*.so`, install
-  storage, and the **stale device cache (uninstall before reinstall)**.
+  storage, the **stale device cache (uninstall before reinstall)**, and a **numpy
+  upper-cap unsatisfiable on a newer CPython → `ResolutionImpossible`** (opencv
+  `numpy<2.3.0` vs cp314; publishing an older numpy can't fix it — bump the capper).
 - **Diagnostic snippets** — inspect a wheel, see what `flet build` packaged, dump
   the env forge used, render meta.yaml per SDK context.
 

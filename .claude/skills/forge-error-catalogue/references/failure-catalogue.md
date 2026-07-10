@@ -885,7 +885,86 @@ package (tflite-runtime). Verify with `otool -h` that it's a real MH_DYLIB eithe
 
 ---
 
+### iOS: `reference to 'Ptr' is ambiguous` (Apple `MacTypes.h` vs a `using namespace`'d C++ lib)
+
+**Cause:** Apple's `<MacTypes.h>` (pulled in transitively on iOS/macOS) defines a
+global `typedef char* Ptr;`. Any C++ TU that does `using namespace cv;` (or another
+namespace exporting a `Ptr`) and then writes a bare `Ptr<T>` is ambiguous between
+`::Ptr` and `cv::Ptr`. **iOS/macOS only** — Android has no `MacTypes.h`, so bare
+`Ptr` binds to the lib's cleanly. opencv 5's python bindings hit this in hand-written
+helper headers AND in gen2.py-**generated** code (e.g. `std::vector<Ptr<CChecker>>`).
+
+**Fix:** qualify the offending names with `cv::`. Patch hand-written sources directly;
+for generated code, patch the **generator** to emit qualified names — including `Ptr<`
+**nested** inside other templates (a leading-only check misses `std::vector<Ptr<…>>`).
+Same class covers bare `Size`/`Point`/`Rect`. opencv-python 5.0.0.93 `mobile.patch`
+(`pyopencv_*`, `pycompat.hpp`, gen2.py `prefix_ambiguous_ios`).
+
+---
+
+### iOS/x86_64: `error: unknown target CPU 'armv8-a'` (an ARM NEON HAL built on the x86_64 simulator)
+
+**Cause:** opencv 5 bundles **KleidiCV** (Arm's NEON HAL, `WITH_KLEIDICV` default ON).
+Its NEON kernels pass `-mcpu=armv8-a`, which x86_64 clang rejects — the x86_64
+iOS-sim (and android x86_64) slice tries to build ARM-only code.
+
+**Fix:** `-DWITH_KLEIDICV=OFF` (perf-only HAL; opencv's own NEON still applies, and the
+4.12 wheels never shipped it). opencv-python 5.0.0.93.
+
+---
+
+### iOS/x86_64: `invalid instruction mnemonic 'b'` (ARM asm compiled on the x86_64 simulator)
+
+**Cause:** the recipe hardcoded `-DCMAKE_SYSTEM_PROCESSOR=aarch64` for **all** iOS
+slices (fine for arm64 device/sim), so on the x86_64 simulator opencv still enabled
+its ARM asm/NEON code paths and the assembler chokes on ARM mnemonics. Tolerated in
+opencv 4.12; opencv 5's stricter arch-gated asm exposes it.
+
+**Fix:** set `CMAKE_SYSTEM_PROCESSOR` **per-arch** on the iOS lane —
+`{{ 'x86_64' if arch == 'x86_64' else 'aarch64' }}` (arm64 unchanged). Android gets the
+right arch from the NDK toolchain, so it never needs this. opencv-python 5.0.0.93.
+
+---
+
+### iOS: Rust `error[E0432]: unresolved import 'internal'` / `cannot find module 'os'` (a crate with no `target_os="ios"` backend)
+
+**Cause:** a platform-specific Rust crate (here `mac_address` 1.x, pulled in for v1/v6
+UUID MAC nodes) selects a per-OS backend module but has **no `ios` one**, so its
+`internal`/`os` module is empty → won't compile for any Apple-iOS target. Android /
+linux / macos backends exist, so only the iOS slices break.
+
+**Fix:** cfg-gate the dep OUT on iOS in `Cargo.toml`
+(`[target.'cfg(all(…, not(target_os = "ios")))'.dependencies]`) AND gate its use-sites,
+routing iOS to whatever fallback the code already has (uuid-utils' `_getnode()` already
+falls back to a random node). Only viable when the dep is optional / has a fallback.
+uuid-utils 0.17.0 `mobile.patch`.
+
+---
+
 ## Runtime failures (on device/emulator/simulator)
+
+### iOS: `import <pkg>` → `symbol not found in flat namespace '…<Sym>…'` at dlopen (a CMake OBJECT library never made it into the `.framework`)
+
+**Cause:** the build is GREEN but a CMake `OBJECT` library's objects — meant to link
+straight into the consuming target — do **not** propagate into an iOS static-framework
+link. The consuming code keeps its references (iOS links with `-undefined
+dynamic_lookup`, so undefined symbols are allowed at *link* time), and the symbol has no
+provider at *runtime* → dlopen fails on first `import`. opencv 5's vendored **MLAS**
+(`3rdparty/mlas` OBJECT lib → `opencv_dnn`) does exactly this: `import cv2` dies on
+`MlasGemmBatch`. **Key lesson: a green iOS wheel ≠ a loadable one — you cannot `import`
+an iOS wheel on the macOS build host, so only the sim/emulator (or CI mobile test)
+catches this class.**
+
+**Fix:** fix the propagation, or (pragmatic) disable the OBJECT-lib feature on the iOS
+framework build. For MLAS: gate `add_subdirectory(3rdparty/mlas)` on `NOT
+APPLE_FRAMEWORK` — its call sites are wholly `#ifdef HAVE_MLAS`, so they compile out and
+opencv_dnn falls back to its built-in SGEMM. Android static-links it fine (its on-device
+test passes), so keep it there. **Cheap host-side check without a device:**
+`nm -u <ext>.so | grep -i <sym>` must be empty, and every remaining undefined symbol
+should have a provider in `otool -L` (linked frameworks), libSystem, libc++, or the
+app's Python. opencv-python 5.0.0.93 `mobile.patch`.
+
+---
 
 ### `ImportError: dlopen failed: library "libc++_shared.so" not found` (Android, at first import)
 
@@ -1020,6 +1099,30 @@ model pack is `buffalo_sc` (det_500m + w600k_mbf, 15MB download).
 ---
 
 ## Recipe-tester app failures
+
+### `ResolutionImpossible` — a package's `numpy` upper-cap can't be satisfied on a newer CPython
+
+**Symptom:** `flet build` (or a mobile test) dies with pip
+`ResolutionImpossible` / `Cannot install X, numpy and Y … conflicting
+dependencies`, naming a `numpy<A.B.C` cap. Real case: `opencv-python 4.12.0.88`
+requires `numpy<2.3.0`, but the **lowest numpy that supports cp314 is 2.3.2**, so
+NO `<2.3.0` numpy exists for Python 3.14 — and flet 0.86 defaults `flet build` to
+**cp314**. Any app pulling such a package (opencv, or ncnn which depends on it)
+becomes unresolvable on the default. cp312 is fine (numpy 2.2.2 is published), cp313
+often too.
+
+**Cause:** a native dep's `Requires-Dist` upper-caps numpy below the *lowest* numpy
+that supports the target CPython. Publishing an older numpy to the index CANNOT fix
+it — the version you'd need doesn't build for that CPython at all.
+
+**Fix:** bump the capping package to a release that lifts the cap (opencv-python
+5.0.0.93 → `numpy>=2`, unbounded). Watch sdist availability — opencv `4.13.x` dropped
+the cap but are **wheel-only** (no sdist for forge to build); `5.0.0.93` was the first
+cap-free release WITH an sdist. Interim user workaround: `flet build --python-version
+3.12`. (Trimming the *consumer's* forced deps — e.g. ncnn's `install_requires` on
+opencv-python — is a separate lever but doesn't help an app that uses opencv directly.)
+
+---
 
 ### `uv run flet build` fails building the package *from source on the host* (e.g. `Error: pg_config executable not found`)
 
