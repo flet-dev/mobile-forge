@@ -50,7 +50,7 @@ on:
       packages:
         type: string
         required: false
-        default: "pydantic-core:,numpy:,pillow:"
+        default: "lru-dict:,pydantic-core:,numpy:"
       prebuild_recipes:
         type: string
         required: false
@@ -81,7 +81,7 @@ env:
   # Used as the fallback recipe set when `packages` input is empty
   # (workflow_dispatch/workflow_call) or when no `recipes/**` paths
   # changed in the triggering event (push/pull_request).
-  SMOKE_TEST_PACKAGES: "pydantic-core:,numpy:,pillow:"
+  SMOKE_TEST_PACKAGES: "lru-dict:,pydantic-core:,numpy:"
 
 permissions:
   contents: read
