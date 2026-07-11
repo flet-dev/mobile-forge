@@ -101,6 +101,41 @@ while IFS= read -r tpl_line || [ -n "$tpl_line" ]; do
     fi
 done < "$TPL"
 
+# 3. Restrict the Android target_arch to the ABIs we actually built a wheel
+#    for. A recipe with `excluded_arches` (e.g. onnxruntime drops
+#    armeabi-v7a) has no wheel for the excluded ABI, so `flet build apk`'s
+#    default all-ABI target fails pip resolution ("No matching distribution")
+#    for it. Derive target_arch from the wheels present in dist-test/dist and
+#    write it into the generated pyproject; a recipe with wheels for every
+#    ABI (or a pure-Python one with no per-ABI wheel) is left unrestricted.
+ARCH_TOML=$(python3 - "$RECIPE" "$REPO_ROOT" <<'PY'
+import sys, os, glob, re
+recipe, repo = sys.argv[1], sys.argv[2]
+norm = lambda s: re.sub(r'[-_.]+', '_', s).lower()
+want = norm(recipe)
+order = ["arm64-v8a", "x86_64", "armeabi-v7a"]
+tag2arch = {"arm64_v8a": "arm64-v8a", "x86_64": "x86_64", "armeabi_v7a": "armeabi-v7a"}
+found = set()
+for d in ("dist-test", "dist"):
+    for whl in glob.glob(os.path.join(repo, d, "*.whl")):
+        b = os.path.basename(whl).lower()
+        if norm(b.split("-", 1)[0]) != want:
+            continue
+        m = re.search(r'android_\d+_(\w+)\.whl$', b)
+        if m and m.group(1) in tag2arch:
+            found.add(tag2arch[m.group(1)])
+# Only restrict when we have platform wheels for a proper, non-empty subset.
+if found and found != set(order):
+    abis = [a for a in order if a in found]
+    print("[tool.flet.android]")
+    print("target_arch = [" + ", ".join('"%s"' % a for a in abis) + "]")
+PY
+)
+if [ -n "$ARCH_TOML" ]; then
+    printf '\n%s\n' "$ARCH_TOML" >> "$OUT"
+    echo "  android target_arch restricted (excluded ABIs have no wheel): $(printf '%s' "$ARCH_TOML" | tr '\n' ' ')"
+fi
+
 echo "Staged recipe '$RECIPE' (dep: $DEP)"
 echo "  recipe_tests/:"
 ls -1 "$TEST_DIR" | sed 's/^/    /'
