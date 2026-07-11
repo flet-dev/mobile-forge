@@ -20,7 +20,12 @@ nothing is replaced):
    cannot build with XNNPACK off at all. The configure pins
    -DTENSORFLOW_SOURCE_DIR to the unpacked root: without it the lite build
    git-clones its own TF at v2.19.0 (a stale upstream default) and compiles
-   this tree's sources against those older headers.
+   this tree's sources against those older headers. The wrapper module is
+   staged under the target EXT_SUFFIX (e.g. .cpython-312.so), not a plain
+   .so: serious_python's android packager only relocates ABI-tagged
+   (cpython-*/abi3) extension modules into jniLibs with an importable .soref
+   marker; a plain '<name>.so' is misfiled as a dependency lib and never
+   becomes importable on device.
 
 3. setup.py: adapted from setup_with_binary.py (version parsed from the
    staged __init__.py instead of env vars; same numpy install_requires,
@@ -29,7 +34,7 @@ nothing is replaced):
 diff -ruN a/_forge/forge_tflite_backend.py b/_forge/forge_tflite_backend.py
 --- a/_forge/forge_tflite_backend.py	1970-01-01 01:00:00
 +++ b/_forge/forge_tflite_backend.py	2026-07-09 13:28:40
-@@ -0,0 +1,196 @@
+@@ -0,0 +1,204 @@
 +"""mobile-forge PEP 517 shim for tflite-runtime.
 +
 +TensorFlow ships no sdist or setup.py for tflite-runtime; upstream wheels
@@ -63,6 +68,7 @@ diff -ruN a/_forge/forge_tflite_backend.py b/_forge/forge_tflite_backend.py
 +import shlex
 +import shutil
 +import subprocess
++import sysconfig
 +import tempfile
 +import urllib.request
 +from pathlib import Path
@@ -208,7 +214,14 @@ diff -ruN a/_forge/forge_tflite_backend.py b/_forge/forge_tflite_backend.py
 +        so = bindir / "lib_pywrap_tensorflow_interpreter_wrapper.dylib"
 +    if not so.exists():
 +        so = bindir / "_pywrap_tensorflow_interpreter_wrapper.dylib"
-+    shutil.copy2(so, pkg / "_pywrap_tensorflow_interpreter_wrapper.so")
++    # Stage under the target EXT_SUFFIX (e.g. .cpython-312.so), not a plain
++    # .so: serious_python's android packager only relocates ABI-tagged
++    # extension modules (cpython-*/abi3) into jniLibs with an importable
++    # .soref marker -- a plain '<name>.so' is misfiled as a dependency lib
++    # and never becomes importable on device. The tag is a valid CPython
++    # EXTENSION_SUFFIX so the `from tflite_runtime import ...` still resolves.
++    ext = sysconfig.get_config_var("EXT_SUFFIX") or ".so"
++    shutil.copy2(so, pkg / f"_pywrap_tensorflow_interpreter_wrapper{ext}")
 +
 +
 +def get_requires_for_build_wheel(config_settings=None):
