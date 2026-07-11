@@ -1,6 +1,8 @@
+{% set version = "2.21.0" %}
+
 package:
   name: tflite-runtime
-  version: "2.21.0"
+  version: '{{ version }}'
 
 build:
   number: 1
@@ -51,11 +53,11 @@ build:
 # {% endif %}
 
 source:
-  # tflite-runtime has never had an sdist (upstream wheels come from
+  # tflite-runtime has no sdist (upstream wheels come from
   # tensorflow/lite/tools/pip_package/build_pip_package_with_cmake.sh);
   # build from the TF release tree. The lite/ CMake superbuild fetches its
   # pinned deps (abseil/eigen/xnnpack/ruy/flatbuffers/...) at configure.
-  url: https://github.com/tensorflow/tensorflow/archive/refs/tags/v2.21.0.tar.gz
+  url: https://github.com/tensorflow/tensorflow/archive/refs/tags/v{{ version }}.tar.gz
 
 requirements:
   build:

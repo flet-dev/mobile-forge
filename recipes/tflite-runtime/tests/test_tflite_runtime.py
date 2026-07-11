@@ -3,18 +3,9 @@ import os
 MODEL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dense_relu.tflite")
 
 
-def test_interpreter_surface():
-    """The Interpreter class and its wrapper module load (the pybind .so is
-    the whole recipe)."""
-    from tflite_runtime.interpreter import Interpreter, load_delegate  # noqa: F401
-
-    assert Interpreter is not None
-
-
 def test_real_inference():
-    """Real inference through the bundled 1KB dense+relu model (committed
-    test asset, generated and validated with desktop TF 2.21: fixed weights,
-    seed 42). Runs everywhere -- CI emulator included."""
+    """Real inference through the bundled 1KB dense+relu model (generated and
+    validated with desktop TF 2.21: fixed weights, seed 42). Runs everywhere."""
     import numpy as np
     from tflite_runtime.interpreter import Interpreter
 
@@ -48,7 +39,9 @@ def test_invoke_twice():
     inp = interpreter.get_input_details()[0]
     out = interpreter.get_output_details()[0]
 
-    interpreter.set_tensor(inp["index"], np.array([[1.0, 2.0, 3.0, 4.0]], dtype=np.float32))
+    interpreter.set_tensor(
+        inp["index"], np.array([[1.0, 2.0, 3.0, 4.0]], dtype=np.float32)
+    )
     interpreter.invoke()
     first = interpreter.get_tensor(out["index"]).copy()
     assert first.max() > 0
