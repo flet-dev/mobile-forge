@@ -44,7 +44,7 @@ protoc_mac_universal v21.12 on macOS hosts.
 diff -ruN a/_forge/forge_ort_backend.py b/_forge/forge_ort_backend.py
 --- a/_forge/forge_ort_backend.py	1970-01-01 01:00:00
 +++ b/_forge/forge_ort_backend.py	2026-07-08 18:23:28
-@@ -0,0 +1,87 @@
+@@ -0,0 +1,96 @@
 +"""mobile-forge PEP 517 shim for onnxruntime.
 +
 +Upstream produces wheels via ci_build/build.py: CMake builds the tree and
@@ -63,6 +63,7 @@ diff -ruN a/_forge/forge_ort_backend.py b/_forge/forge_ort_backend.py
 +  slice 1's architecture (the e_machine mismatch the first CI run caught).
 +"""
 +
++import glob
 +import os
 +import shlex
 +import shutil
@@ -110,13 +111,21 @@ diff -ruN a/_forge/forge_ort_backend.py b/_forge/forge_ort_backend.py
 +    # .cpython-312.so) so serious_python's android packager treats it as an
 +    # importable extension module: its jniLibs/.soref meta_path finder only
 +    # relocates cpython-*/abi3 names -- a plain '<name>.so' is misfiled as a
-+    # dependency lib and never becomes importable. Idempotent: copytree
-+    # re-lays the plain .so each hook, we retag it in place.
++    # dependency lib and never becomes importable.
 +    _capi = os.path.join("onnxruntime", "capi")
++    _ext = sysconfig.get_config_var("EXT_SUFFIX") or ".so"
++    _target = "onnxruntime_pybind11_state" + _ext
 +    _plain = os.path.join(_capi, "onnxruntime_pybind11_state.so")
 +    if os.path.exists(_plain):
-+        _ext = sysconfig.get_config_var("EXT_SUFFIX") or ".so"
-+        os.replace(_plain, os.path.join(_capi, "onnxruntime_pybind11_state" + _ext))
++        os.replace(_plain, os.path.join(_capi, _target))
++    # forge reuses the source tree across slices and copytree(dirs_exist_ok)
++    # never deletes, so a prior slice's tagged .so lingers -- on iOS the
++    # per-slice suffixes differ (iphoneos vs iphonesimulator) and the wheel
++    # would ship BOTH, breaking serious_python's .so->framework conversion.
++    # Drop every onnxruntime_pybind11_state*.so that isn't this slice's.
++    for _f in glob.glob(os.path.join(_capi, "onnxruntime_pybind11_state*.so")):
++        if os.path.basename(_f) != _target:
++            os.remove(_f)
 +
 +
 +def get_requires_for_build_wheel(config_settings=None):
