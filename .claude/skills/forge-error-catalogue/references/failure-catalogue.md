@@ -1211,6 +1211,25 @@ If the wheel for the right tag isn't there, build it: `forge <slice> <pkg>`.
 
 ---
 
+### `No matching distribution found for <pkg>` at APK build — the recipe has `excluded_arches`
+
+**Cause:** the recipe declares `excluded_arches` (e.g. onnxruntime drops
+`armeabi-v7a`), so no wheel is built for that ABI. But `flet build apk` defaults to
+**all** Android ABIs (`arm64-v8a`, `x86_64`, `armeabi-v7a`), and pip fails to resolve
+the package for the excluded ABI. The other-recipe tell: a recipe with all ABIs
+(tflite) passes while the excluded-ABI recipe fails at the *same* step. Only bites
+under the recipe-tester's app build (build wheels succeed on every leg).
+
+**Fix:** restrict the app's Android target to the built ABIs —
+`[tool.flet.android] target_arch = ["arm64-v8a", "x86_64"]` (drop the excluded ones;
+keep `x86_64` for the CI emulator). `tests/recipe-tester/stage_recipe.sh` now derives
+this automatically from the wheels present in `dist-test`/`dist` and writes it into
+the generated pyproject, so a recipe with `excluded_arches` no longer needs manual
+handling in CI. For a real consumer app, the author sets `target_arch` themselves —
+this is the mandatory `target_arch` note that belongs in the recipe's Consumer notes.
+
+---
+
 ### `flet build` pip-backtracks a pure-python dep to an ancient version → runtime crash (omegaconf 2.0.0 `UnsupportedValueType: PosixPath`)
 
 **Cause:** flet's mobile resolution requires **wheels**, and a pure-python dep in
