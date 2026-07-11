@@ -1,0 +1,17 @@
+setup.py generates the wheel version as MAJOR.MINOR.<build date>
+(time.strftime("%Y%m%d")), so building the 1.0.20260526 sdist on any other
+day would produce a version that mismatches this recipe's pin (and forge's
+wheel bookkeeping). Pin the date segment to the sdist's own release date.
+
+--- a/setup.py
++++ b/setup.py
+@@ -19,7 +19,8 @@ def find_version():
+     version_minor = re.findall(r"NCNN_VERSION_MINOR (.+?)", version_file)
+
+     if version_major and version_minor:
+-        ncnn_version = time.strftime("%Y%m%d", time.localtime())
++        # mobile-forge: pinned to the sdist release date
++        ncnn_version = "20260526"
+
+         return version_major[0] + "." + version_minor[0] + "." + ncnn_version
+     raise RuntimeError("Unable to find version string.")

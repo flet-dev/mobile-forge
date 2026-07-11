@@ -44,19 +44,28 @@ def _run_pytest() -> None:
     until the next loop iteration.
     """
     global EXIT_CODE, DONE
+    import os
     import pytest
+
+    # Anchor the tests dir to THIS module's location, not the cwd. Flet 0.86's
+    # iOS packaging runs the app with cwd = <container>/Library/Application
+    # Support/data, while `recipe_tests/` is bundled next to this file — so a
+    # relative "recipe_tests" resolves against the wrong dir and pytest reports
+    # "directory not found" (EXIT 4). An absolute __file__-relative path is
+    # correct on every platform / Flet version.
+    tests_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "recipe_tests")
 
     EXIT_CODE = pytest.main(
         [
             "-v",
             "--rootdir",
-            "recipe_tests",  # don't walk the bundled stdlib zip looking for conftest.py
+            tests_dir,  # don't walk the bundled stdlib zip looking for conftest.py
             "-p",
             "no:cacheprovider",  # don't try to write .pytest_cache/ on a potentially read-only mobile FS
             "--capture=no",  # let test prints reach console.log too (default pytest capture hides stdout)
             "--no-header",
             "--tb=short",  # compact output for console.log
-            "recipe_tests/",
+            tests_dir,
         ]
     )
 
