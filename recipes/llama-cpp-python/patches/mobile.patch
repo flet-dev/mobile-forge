@@ -1,4 +1,4 @@
-It does four things:
+It does five things:
 
 1. Stops llama-cpp-python's CMakeLists from FORCE-enabling GGML_METAL on all
    Apple platforms (it would override our -DGGML_METAL=OFF for the iOS cross
@@ -10,12 +10,16 @@ It does four things:
    three copies (and three colliding frameworks on iOS).
 4. Teaches the ctypes loader to find the bundled lib under its iOS framework
    name (lib<name>.fwork) and on the "ios" platform.
+5. Android/Flet 0.86: site-packages ships as a zip and serious-python relocates
+   the bundled libs (libllama/libggml*) into the APK's jniLibs, so the loader's
+   Path.exists() probes against the in-zip base_path all miss. Add a bare-soname
+   fallback (ctypes.CDLL("lib<name>.so")) for both the dependency preload and the
+   main load, so the Android linker resolves them from jniLibs.
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 5feaaca..db16837 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -67,8 +67,11 @@ if (LLAMA_BUILD)
+@@ -67,8 +67,11 @@
      set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
      set(CMAKE_SKIP_RPATH FALSE)
  
@@ -29,7 +33,7 @@ index 5feaaca..db16837 100644
  
      # Disable building curl support
      set(LLAMA_CURL OFF CACHE BOOL "llama.cpp: enable curl" FORCE)
-@@ -100,7 +103,11 @@ if (LLAMA_BUILD)
+@@ -100,7 +103,11 @@
      endif()
  
      # Architecture detection and settings for Apple platforms
@@ -43,10 +47,9 @@ index 5feaaca..db16837 100644
          execute_process(
              COMMAND uname -m
 diff --git a/llama_cpp/_ctypes_extensions.py b/llama_cpp/_ctypes_extensions.py
-index 02cee8a..9274b5d 100644
 --- a/llama_cpp/_ctypes_extensions.py
 +++ b/llama_cpp/_ctypes_extensions.py
-@@ -25,30 +25,33 @@ _EMSCRIPTEN_SIDE_MODULE_SUFFIX = ".cpython-00-wasm32-emscripten.so"
+@@ -25,30 +25,33 @@
  # Load the library
  def load_shared_library(lib_base_name: str, base_path: pathlib.Path):
      """Platform independent shared library loader"""
@@ -104,7 +107,7 @@ index 02cee8a..9274b5d 100644
          raise RuntimeError("Unsupported platform")
  
      cdll_args = dict()  # type: ignore
-@@ -67,9 +70,14 @@ def load_shared_library(lib_base_name: str, base_path: pathlib.Path):
+@@ -67,9 +70,14 @@
              os.add_dll_directory(os.path.join(os.environ["HIP_PATH"], "bin"))
              os.add_dll_directory(os.path.join(os.environ["HIP_PATH"], "lib"))
          cdll_args["winmode"] = ctypes.RTLD_GLOBAL
@@ -120,7 +123,7 @@ index 02cee8a..9274b5d 100644
          lib_dir = str(base_path)
          ld_library_path = os.environ.get("LD_LIBRARY_PATH", "")
          if lib_dir not in ld_library_path.split(os.pathsep):
-@@ -79,24 +87,26 @@ def load_shared_library(lib_base_name: str, base_path: pathlib.Path):
+@@ -79,30 +87,54 @@
                  else f"{lib_dir}{os.pathsep}{ld_library_path}"
              )
  
@@ -142,6 +145,7 @@ index 02cee8a..9274b5d 100644
 +        "llava": ("ggml-base", "ggml-cpu", "ggml", "llama"),
 +    }
 +    for dependency in dependencies.get(lib_base_name, ()):
++        loaded = False
 +        for dependency_path in _candidate_paths(dependency):
              if dependency_path.exists():
                  try:
@@ -152,7 +156,19 @@ index 02cee8a..9274b5d 100644
 -                    )
 +                except Exception:
 +                    pass
++                loaded = True
 +                break
++        if not loaded:
++            # Android: the bundled lib is not a file on disk (Flet 0.86 ships
++            # site-packages as a zip and serious-python relocated it into the
++            # APK's jniLibs); load it by bare soname so the platform linker
++            # resolves it from there. Best-effort, like the on-disk branch.
++            for dependency_path in _candidate_paths(dependency):
++                try:
++                    ctypes.CDLL(dependency_path.name, **cdll_args)  # type: ignore
++                    break
++                except OSError:
++                    continue
  
      # Try to load the shared library, handling potential errors
 -    for lib_path in lib_paths:
@@ -160,11 +176,25 @@ index 02cee8a..9274b5d 100644
          if lib_path.exists():
              try:
                  return ctypes.CDLL(str(lib_path), **cdll_args)  # type: ignore
+             except Exception as e:
+                 raise RuntimeError(f"Failed to load shared library '{lib_path}': {e}")
+ 
++    # Android: the library was relocated into the APK's jniLibs and is not a file
++    # on disk (Flet 0.86 ships site-packages as a zip); load it by bare soname so
++    # the platform linker resolves it from jniLibs.
++    for lib_path in _candidate_paths(lib_base_name):
++        try:
++            return ctypes.CDLL(lib_path.name, **cdll_args)  # type: ignore
++        except OSError:
++            continue
++
+     raise FileNotFoundError(
+         f"Shared library with base name '{lib_base_name}' not found"
+     )
 diff --git a/vendor/llama.cpp/ggml/src/CMakeLists.txt b/vendor/llama.cpp/ggml/src/CMakeLists.txt
-index 89e5180..d4a6657 100644
 --- a/vendor/llama.cpp/ggml/src/CMakeLists.txt
 +++ b/vendor/llama.cpp/ggml/src/CMakeLists.txt
-@@ -208,10 +208,13 @@ add_library(ggml-base
+@@ -208,10 +208,13 @@
              ggml-quants.h
              gguf.cpp)
  
@@ -182,7 +212,7 @@ index 89e5180..d4a6657 100644
  
  target_include_directories(ggml-base PRIVATE .)
  if (GGML_BACKEND_DL)
-@@ -244,10 +247,10 @@ add_library(ggml
+@@ -244,10 +247,10 @@
              ggml-backend-reg.cpp)
  add_library(ggml::ggml ALIAS ggml)
  
@@ -197,7 +227,7 @@ index 89e5180..d4a6657 100644
  
  if (GGML_BACKEND_DIR)
      if (NOT GGML_BACKEND_DL)
-@@ -291,10 +294,11 @@ function(ggml_add_backend_library backend)
+@@ -291,10 +294,11 @@
      # Set versioning properties for all backend libraries
      # Building a MODULE library with a version is not supported on macOS (https://gitlab.kitware.com/cmake/cmake/-/issues/20782)
      if (NOT (APPLE AND GGML_BACKEND_DL))
@@ -214,10 +244,9 @@ index 89e5180..d4a6657 100644
  
      if(NOT GGML_AVAILABLE_BACKENDS)
 diff --git a/vendor/llama.cpp/src/CMakeLists.txt b/vendor/llama.cpp/src/CMakeLists.txt
-index d15ccfd..84769d1 100644
 --- a/vendor/llama.cpp/src/CMakeLists.txt
 +++ b/vendor/llama.cpp/src/CMakeLists.txt
-@@ -43,8 +43,9 @@ add_library(llama
+@@ -43,8 +43,9 @@
              )
  
  set_target_properties(llama PROPERTIES
