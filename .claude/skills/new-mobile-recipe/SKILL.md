@@ -215,7 +215,8 @@ Open `tests/test_<name>.py` and replace the placeholder with a real smoke test:
 
 For ML/inference recipes, raise the bar from import-only to real compute:
 
-- **Test-only deps** go in `tests/requirements.txt` (PEP 508 lines; the recipe-tester expands them into its pyproject — merged in #98). E.g. tflite-runtime's tests need numpy without numpy being a recipe dep of the test app.
+- **Test-only deps** go in meta.yaml `test.requires` (a list of PEP 508 specs; the recipe-tester expands them into its pyproject `dependencies`). E.g. tflite-runtime's tests need numpy without numpy being a recipe dep of the test app. (This replaced the former per-recipe `tests/requirements.txt` file — `stage_recipe.sh` now errors if a stale one is present.)
+- **Path-hungry packages need `extract_packages`** (Android): if the package reads a bundled DATA file via a real `__file__` path (not `importlib.resources`), add a top-level meta.yaml `extract_packages:` list of the IMPORT name(s) to ship extracted to disk. Under Flet 0.86 site-packages ship as a compressed `sitepackages.zip`, so a `__file__`-relative `open()`/`read_text()` raises `NotADirectoryError` otherwise. Examples: matplotlib, astropy, `sklearn`, thinc, `[spacy, thinc]`. (Full class + look-alikes it does NOT fix in `forge-error-catalogue` § the `sitepackages.zip` class.)
 - **A tiny committed model asset (~1KB) beats an import-only test** — CI's emulator then runs REAL inference: tflite's `dense_relu.tflite` (1KB, generated with desktop TF at a fixed seed), onnxruntime's `tiny_mlp.onnx` (170 bytes, hand-built relu graph).
 - **Big assets use the discovered-by-presence pattern**: the test looks for the model file next to itself — dropped there for the local on-device loop, absent in CI → the test skips (sherpa-onnx's silero VAD, 2.2MB). These MUST stay gitignored (the `recipes/*/tests/*.onnx` rule exists) — committing one flips the CI skip into a mandatory download-free run and embeds megabytes in the repo.
 - **No desktop wheel to test against? Validate the test LOGIC on desktop via a module-alias shim**: tflite's test ran on desktop TF with the `tflite_runtime.interpreter` module aliased to `tf.lite` — that caught a real math bug before ever touching a device.
@@ -363,8 +364,8 @@ xcrun simctl launch booted com.flet.recipe-tester
 
 `PIP_FIND_LINKS` pointing at `dist/` is what makes the app bundle YOUR freshly-built wheels
 instead of pypi.flet.dev's — don't skip it. `tests/recipe-tester/README.md` documents the
-runner itself (EXIT sentinel, `tests/requirements.txt` handling, what's committed vs
-generated).
+runner itself (EXIT sentinel, meta.yaml `test.requires` / `extract_packages` handling,
+what's committed vs generated).
 
 `>>>>>>>>>> EXIT 0 <<<<<<<<<<` in console.log on both platforms = ready to ship.
 

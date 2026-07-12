@@ -15,7 +15,11 @@ description: >-
   duplicated patch hunks, iOS flatc MACOSX_BUNDLE, .dylib-vs-.so staging,
   libc++_shared, config.sub apple-ios, ctypes "Unable to find ... shared
   library", PT_LOAD 16KB alignment, lazy_loader "non-existent stub" crashes
-  (stripped *.pyi), hidden runtime deps, or a stale on-device cache. Sibling
+  (stripped *.pyi), the Flet 0.86 Android sitepackages.zip class (NotADirectoryError
+  on a bundled data file -> extract_packages, untagged native .so
+  ModuleNotFoundError -> forge ABI-tag, ctypes-by-__file__ loaders -> find_spec /
+  bare soname, jniLibs lib<pkg>.so name collision -> static-link), hidden runtime
+  deps, or a stale on-device cache. Sibling
   of `new-mobile-recipe` (authoring), `native-recipe-bumps` (version bumps),
   `local-recipe-testing` (on-device testing), and `forge-ci` (CI triage);
   this one is the dedicated error -> fix reference.
@@ -69,7 +73,15 @@ instead of re-deriving it.
   hand-written + gen2.py-generated code), **opencv-5 KleidiCV `armv8-a` on x86_64**
   and **hardcoded `CMAKE_SYSTEM_PROCESSOR` → ARM asm on the x86_64 sim** (per-arch
   fix), **Rust crate with no `target_os="ios"` backend** (`mac_address`, cfg-gate it).
-- **Runtime failures** (device/emulator/simulator) — `libc++_shared.so` not found,
+- **Runtime failures** (device/emulator/simulator) — **the Flet 0.86 Android
+  `sitepackages.zip` class** (its umbrella entry explains "why only now"):
+  `NotADirectoryError` on a bundled data file → **`extract_packages`** meta field;
+  untagged native `.so` `ModuleNotFoundError`/"circular import" → **forge `fix_wheel`
+  ABI-tags `PyInit_*` `.so`**; pycryptodome `Cannot load native module …` →
+  **`importlib.find_spec().origin`**; llama `FileNotFoundError` / ctypes
+  `find_library`-None → **bare-soname load from jniLibs**; a top-level extension
+  colliding with a `flet-lib*` at `lib<pkg>.so` → **static-link (`host_build` +
+  `-l:lib.a`)**. Plus: `libc++_shared.so` not found,
   **CMake OBJECT-lib not linked into the iOS `.framework` → undefined symbol at
   dlopen** (opencv-5 MLAS; green build ≠ loadable — verify with `nm -u`/`otool -L`),
   ctypes **"Unable to find … shared library"** (Pattern H loader / lib delivery),

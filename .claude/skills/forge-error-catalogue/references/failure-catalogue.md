@@ -943,6 +943,136 @@ uuid-utils 0.17.0 `mobile.patch`.
 
 ## Runtime failures (on device/emulator/simulator)
 
+### Flet 0.86 changed Android packaging — `sitepackages.zip` + jniLibs relocation (the umbrella behind a whole class of "worked under 0.85, fails now" on-device failures)
+
+**Cause:** the recipe-tester migration to Flet 0.86 (flet-dev/flet#104) stopped
+extracting site-packages to disk. Now, on **Android**:
+- pure Python ships in a stored **`sitepackages.zip`** imported via `zipimport`;
+- native extensions are **relocated into the APK's `jniLibs/<abi>/lib<mangled>.so`**
+  and resolved by a `sys.meta_path` finder (`_sp_bootstrap._SorefFinder`) through a
+  per-module **`.soref`** marker left in the zip — written **only** for filenames
+  matching `\.(cpython-[^/]+|abi3)\.so$`;
+- `opt/` trees from `flet-lib*` wheels are copied to `jniLibs` by `copyOpt`, which
+  takes **only `**/*.so`** (non-`.so` data is dropped);
+- packages are compiled to `.pyc` and the `.py` source is stripped (except the app,
+  which sets `[tool.flet.compile] app = false`).
+
+Under 0.85 site-packages was a real directory (the `useLegacyPackaging` extract), so
+any loader/data-access that built a filesystem path from `__file__` worked; under
+0.86 `dirname(__file__)` is *inside* the zip and every such path misses — that's the
+"why only now." **iOS is unaffected** (its site-packages stay a real dir in the app
+bundle; iOS has its own `.fwork`/framework story). Match the specific symptom below;
+after a build, `unzip -l` the APK and check `assets/sitepackages.zip` /
+`assets/extract.zip` / `lib/<abi>/`.
+
+---
+
+### `NotADirectoryError: [Errno 20] Not a directory: '.../sitepackages.zip/<pkg>/<datafile>'` (Android, at import)
+
+**Cause:** the package reads a bundled **data file** (not a `.py`) via a real
+`__file__`-relative path — matplotlib `mpl-data/matplotlibrc`, astropy `CITATION`,
+scikit-learn `estimator.css`, thinc `backends/_custom_kernels.cu` (spacy pulls
+thinc). Under 0.86 the parent is `sitepackages.zip` (a file), so `open()`/
+`read_text()` on the child path raises NotADirectoryError.
+
+**Fix:** ship the package **extracted to disk** via serious_python's Android hatch.
+Declare it in the recipe's meta.yaml as a top-level list:
+```yaml
+extract_packages:
+  - matplotlib      # the IMPORT name (sklearn not scikit-learn; cv2 not opencv-python)
+```
+`stage_recipe.sh` reads it (via `read_meta_list.py`) into
+`[tool.flet.android].extract_packages`; serious_python unpacks those packages to
+disk (on `sys.path` before the zip) so `__file__` resolves to a real dir. Field is
+in `src/forge/schema/meta-schema.yaml`. Verified: matplotlib, astropy. Two
+look-alikes this does NOT fix: **python-magic** (`could not find any valid magic
+files!` — `magic.mgc` lives in flet-libmagic's `opt/`, dropped by `copyOpt` which
+copies only `**/*.so`) and **opencv-python** (`missing configuration file:
+['config.py']` — cv2's loader needs the `.py` *source*, stripped by 0.86's `.pyc`
+compile).
+
+---
+
+### `ModuleNotFoundError: No module named '<pkg>.<ext>'` / `cannot import name '<_ext>' … (most likely due to a circular import)` for a NATIVE submodule (Android)
+
+**Cause:** the extension `.so` ships **untagged** — `ncnn/ncnn.so`,
+`faiss/_swigfaiss.so`, `CoolProp/{CoolProp,_constants}.so` — rather than
+`*.cpython-*.so`/`*.abi3.so`. serious_python only relocates + writes a `.soref` for
+ABI-tagged names; a bare `NAME.so` is treated as a plain dependency lib, gets no
+`.soref`, and the import finder can't resolve it. CMake / SWIG / Cython / nanobind
+builds routinely emit untagged extensions (they can't derive the target SOABI when
+cross-compiling; setuptools/maturin tag theirs, which is why numpy/pandas/pyarrow are
+fine). The x86_64 leg can break while arm64 is fine if the build tags
+nondeterministically per arch (onnxruntime). The misleading "circular import"
+message is just Python's wording when a `from . import _ext` can't find the `.so`.
+
+**Fix:** none per-recipe — **forge `fix_wheel` (build.py, Android branch) ABI-tags
+any bare `.so` exporting `PyInit_<basename>`** (a genuine extension; `llvm-nm -D`
+discriminates it from a dependency lib, which is left untouched) to
+`<basename>.cpython-3X.so`, so serious_python writes its `.soref`. Just rebuild; the
+fix is generic and covers future CMake/SWIG/Cython recipes. If you hit this, confirm
+via `unzip -l` that the wheel ships a bare `.so` exporting `PyInit_*`. Verified:
+ncnn, faiss-cpu, coolprop; onnxruntime x86_64.
+
+---
+
+### `OSError: Cannot load native module '<Pkg>.<mod>': Not found <mod>.cpython-3X.so, .abi3.so, .so, .fwork` (pycryptodome/pycryptodomex, Android)
+
+**Cause:** the `.abi3.so` extensions ARE relocated + `.soref`'d (a plain `import`
+would work), but pycryptodome's `Crypto/Util/_raw_api.py:load_pycryptodome_raw_lib`
+**ctypes-loads by a `__file__`-relative path** (`os.path.isfile` next to the module,
+inside the zip), never consulting the import system. General shape: any package with
+a custom dlopen-by-`__file__` loader for extensions that *are* correctly tagged.
+
+**Fix:** after the on-disk probes miss, ask the import system for the resolved
+on-device origin and dlopen that — no hardcoded soname mangling:
+```python
+import importlib.util
+spec = importlib.util.find_spec(name)      # name = "Crypto.Util._cpuid_c"
+if spec is not None and spec.origin:
+    return load_lib(spec.origin, cdecl)    # _SorefFinder set origin to the jniLibs/apk path
+```
+Extend the recipe's `mobile.patch` loader; keep the existing iOS `.fwork` branch (it
+wins first on iOS, where the path is real). Verified: pycryptodome, pycryptodomex.
+
+---
+
+### `FileNotFoundError: Shared library with base name '<X>' not found` (ctypes-by-`__file__` loader, Android)
+
+**Cause:** the loader gates each candidate on `Path.exists()` for a
+`dirname(__file__)/lib` path — inside `sitepackages.zip` under 0.86, so every probe
+misses. The bundled libs (llama-cpp-python's libllama/libggml*) were relocated to
+`jniLibs` and are loadable by bare soname. Same 0.86 class as the `find_library()
+→ None` case (pysodium/opaque) below, different loader shape.
+
+**Fix:** after the on-disk probes miss, fall back to `ctypes.CDLL("lib<name>.so")`
+(bare soname → the Android linker resolves it from jniLibs), for both the dependency
+preload and the main lib; load `RTLD_GLOBAL` so preloaded deps satisfy the main
+lib's DT_NEEDED. Verified: llama-cpp-python (android). See also "Unable to find
+… shared library" (the `find_library`-returns-None sibling).
+
+---
+
+### `ImportError: dlopen failed: cannot locate symbol "<sym>" referenced by ".../lib/<abi>/lib<pkg>.so"` where `lib<pkg>.so` is the wheel's OWN extension (Android)
+
+**Cause:** a **jniLibs name collision**. A *top-level* Python extension module named
+`<pkg>` (e.g. `jq`) mangles to `lib<pkg>.so`; a bundled `flet-lib*` C library with
+the same base name (`libjq.so`) *also* lands at `lib/<abi>/lib<pkg>.so`. One clobbers
+the other — the extension (which references the C lib's symbols) overwrites the C
+lib, so its symbols vanish (`cannot locate symbol jq_teardown`). NOT a missing
+export — `llvm-nm -D` shows the C lib exports it fine; check `lib/<abi>/lib<pkg>.so`'s
+size to see which one won.
+
+**Fix:** make the extension **self-contained** so no colliding `lib<pkg>.so` ships.
+Static-link the flet-lib* into the extension: build the flet-lib* `--with-pic` and
+keep its `.a` (drop the `.so`); in the consumer switch `requirements.host` →
+**`host_build`** (build-time only, not a runtime dep) and patch the link
+`-l<name>` → `-l:lib<name>.a` (static). The extension's DT_NEEDED then lists no
+`lib<pkg>.so`. Verified: jq (static-links flet-libjq's libjq.a/libonig.a; flet-libjq
+build 11, jq build 2).
+
+---
+
 ### iOS: `import <pkg>` → `symbol not found in flat namespace '…<Sym>…'` at dlopen (a CMake OBJECT library never made it into the `.framework`)
 
 **Cause:** the build is GREEN but a CMake `OBJECT` library's objects — meant to link
@@ -990,7 +1120,10 @@ iOS doesn't need this — Apple's clang resolves the C++ runtime to system libc+
 
 **Cause:** a pure-Python `ctypes` wrapper called `ctypes.util.find_library()`,
 which returns `None` on mobile (no ldconfig/compiler), so it gave up before
-trying to load the lib. This is the Pattern H case (pyzbar, python-magic, …).
+trying to load the lib. This is the Pattern H case (pyzbar, python-magic,
+pysodium, opaque, …); under Flet 0.86 it is the `find_library`-returns-None
+member of the `sitepackages.zip` class (umbrella entry at the top of this
+section).
 
 **Fix:** this needs the full Pattern H treatment, not a one-liner:
 1. the `flet-lib*` must be built **shared** (`lib<name>.so`), not static;
