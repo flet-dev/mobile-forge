@@ -1,12 +1,14 @@
+{% set version = "1.1.2" %}
+
 package:
   name: flet-libcrc32c
-  version: "1.1.2"
+  version: '{{ version }}'
 
 build:
   number: 10
 
 source:
-  url: https://github.com/google/crc32c/archive/refs/tags/1.1.2.tar.gz
+  url: https://github.com/google/crc32c/archive/refs/tags/{{ version }}.tar.gz
 
 requirements:
   build:
