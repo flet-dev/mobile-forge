@@ -1205,7 +1205,18 @@ keep its `.a` (drop the `.so`); in the consumer switch `requirements.host` →
 **`host_build`** (build-time only, not a runtime dep) and patch the link
 `-l<name>` → `-l:lib<name>.a` (static). The extension's DT_NEEDED then lists no
 `lib<pkg>.so`. Verified: jq (static-links flet-libjq's libjq.a/libonig.a; flet-libjq
-build 11, jq build 2).
+build 11, jq build 3).
+
+**iOS caveat — `-l:NAME.a` is a GNU ld extension; Apple's ld64 does NOT support it**
+→ the iOS build dies `ld: library ':libjq.a' not found` on every Python. The jniLibs
+name collision that motivates `-l:` is **Android-only**, and since the `flet-lib*`
+ships *only* static `.a` (no `.so`/`.dylib`), a plain `-l<name>` resolves to the
+static archive just the same on iOS. So gate the flag by target platform in the
+consumer's `setup.py`: `-l:libX.a` on Android, `-lX` on iOS. Detect with
+`"ios" in sysconfig.get_platform()` (the crossenv reports the *target* platform, e.g.
+`ios-13.0-arm64-iphonesimulator`). Verify the iOS extension is self-contained with
+`otool -L` (no `libX` dylib dep) + `nm` (the `libX` symbols are `T`, defined). Any
+recipe that borrows this static-link pattern must apply the same per-platform gate.
 
 ---
 
