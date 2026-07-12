@@ -1037,6 +1037,27 @@ wins first on iOS, where the path is real). Verified: pycryptodome, pycryptodome
 
 ---
 
+### `cannot import name '<subdir>' from partially initialized module '<pkg>'` for an include-only namespace dir (Android)
+
+**Cause:** `<pkg>/__init__.py` does `from . import <subdir>`, but `<pkg>/<subdir>/`
+has **no importable member** — only Cython `.pxi` includes / `.h`/`.c` / data
+(compiled into a sibling `.so` at build time). Under normal CPython it's an empty
+PEP 420 namespace package; under 0.86 serious_python's `synthesizePackageInits()`
+only injects a synthetic `__init__` for dirs containing a `.py`/`.pyc`/`.soref`, so
+the include-only dir is invisible to `zipimport`. selectolax:
+`from . import lexbor, modest, parser` — `modest/` holds only `.pxi` (`include`d by
+`parser.pyx`); `lexbor`/`parser` are real `.so` and load fine.
+
+**Fix:** if the import is **vestigial** (no runtime API — the real modules are the
+sibling `.so`), drop it from `__init__` via `mobile.patch` (selectolax:
+`from . import lexbor, parser`). If the dir genuinely must be importable, ship an
+empty `<pkg>/<subdir>/__init__.py` — but verify the build's `find_packages` /
+`package_data` actually lands it in the wheel (selectolax's
+`find_packages(include=["selectolax"])` would NOT, which is why the drop was cleaner
+there). Verified: selectolax (drop).
+
+---
+
 ### `FileNotFoundError: Shared library with base name '<X>' not found` (ctypes-by-`__file__` loader, Android)
 
 **Cause:** the loader gates each candidate on `Path.exists()` for a
