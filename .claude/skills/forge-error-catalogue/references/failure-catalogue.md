@@ -1104,6 +1104,38 @@ never via `import pkg.pkg`. Verified on-device (arm64) 4/4 against the byte-iden
 
 ---
 
+### `AttributeError: module 'apsw' has no attribute 'Connection'` / a package whose `__init__` IS the native extension imports empty (Android) — a serious_python `_SorefFinder` gap
+
+**Cause:** the package's `__init__` is *itself* a C extension — apsw's setup builds
+`Extension("apsw.__init__", …)` → `apsw/__init__.cpython-*.so` (dotted import name
+`apsw`). Under 0.86 that `.so` is relocated to jniLibs and its marker is written at
+**`apsw/__init__.soref`**, but `_sp_bootstrap._SorefFinder.find_spec("apsw")` only
+probed `"<dotted>.soref"` (= `apsw.soref`) → miss → `None`. Meanwhile
+`synthesizePackageInits()` injects an **empty `apsw/__init__.py`**, which then wins,
+so `import apsw` yields an empty module and any `apsw.Connection` / `apsw.apswversion()`
+raises AttributeError. **This is a serious_python bug, not a recipe/forge bug** — the
+recipe's mobile.patch (SQLite amalgamation cross-compile) is unrelated; the `.so`
+exports `PyInit_apsw` (not `PyInit___init__`) on non-Windows, so it *can* be loaded
+under the top-level name.
+
+**Fix (in serious_python, `serious_python_android/python/_sp_bootstrap.py`):** when
+`"<dotted>.soref"` misses, fall back to **`"<dotted>/__init__.soref"`**; load via
+`ExtensionFileLoader(fullname, origin)` (its `PyInit_<name>` matches) and mark the
+result a **package** — set `spec.submodule_search_locations = [<winning sys.path
+entry>/<dotted>]` so pure-Python submodules (`apsw.ext`, `apsw._unicode`, …) resolve
+via the normal zipimport/FileFinder machinery (`_read_marker` must also return which
+entry it hit). The `_SorefFinder` sits at `meta_path[0]`, so once it resolves `apsw`
+it beats the synthesized empty `__init__`. Validated on-device (Android arm64) with a
+local serious_python override: apsw 3.53.2.0 imports + runs an in-memory SQLite
+round-trip 2/2. **Caveat:** the fix must land in a *released* serious_python before
+CI / real consumers get it — until then apsw stays red in CI (do not include it in a
+recipe CI dispatch). To test an unreleased serious_python locally, point the app at
+your checkout via `[tool.flet.flutter.pubspec.dependency_overrides]` (path deps for
+`serious_python` + `serious_python_android` + `serious_python_platform_interface`) in
+the generated pyproject.
+
+---
+
 ### `magic.MagicException: could not find any valid magic files!` (python-magic, Android) — a data file that lives in a `flet-lib*` `opt/` tree
 
 **Cause:** the runtime data file a package needs ships in a **separate `flet-lib*`
