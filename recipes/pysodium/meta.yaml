@@ -5,6 +5,9 @@ package:
 build:
   number: 10
 
+patches:
+  - mobile.patch
+
 requirements:
   host:
     - flet-libsodium 1.0.20
