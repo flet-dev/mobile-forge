@@ -809,6 +809,40 @@ class Builder(ABC):
         if self.cross_venv.sdk == "android":
             env = self.compile_env()
 
+            # ABI-tag bare CPython extension modules so serious_python's Android
+            # packaging recognizes them. That packaging only relocates a native
+            # module into jniLibs and writes the `.soref` marker its on-device
+            # importer resolves for extensions whose filename carries a CPython
+            # ABI tag (`*.cpython-*.so` / `*.abi3.so`); a bare `NAME.so` is
+            # treated as a plain dependency library, gets no `.soref`, and so
+            # fails to import on-device (ModuleNotFoundError). CMake / SWIG /
+            # Cython / nanobind builds routinely emit un-tagged extensions
+            # (ncnn, faiss, coolprop, ...) because they can't derive the target
+            # SOABI when cross-compiling. Rename ONLY genuine extension modules —
+            # those exporting `PyInit_<basename>` — so real dependency
+            # libraries bundled alongside them are left untouched.
+            ext_tag_re = re.compile(r"\.(cpython-[^/]+|abi3)\.so$")
+            ext_suffix = f".cpython-3{sys.version_info.minor}.so"
+            nm = Path(env["STRIP"]).with_name("llvm-nm")
+            for so in wheel_dir.glob("**/*.so"):
+                if ext_tag_re.search(so.name):
+                    continue  # already ABI-tagged
+                module = so.name[: -len(".so")]
+                try:
+                    symbols = subprocess.check_output(
+                        [str(nm), "-D", "--defined-only", str(so)], text=True
+                    )
+                except (subprocess.CalledProcessError, OSError):
+                    continue  # not an analyzable ELF; leave it alone
+                if f"PyInit_{module}" in symbols.split():
+                    tagged = so.with_name(module + ext_suffix)
+                    log(
+                        self.log_file,
+                        f"[{self.cross_venv}] ABI-tagging extension "
+                        f"{so.name} -> {tagged.name}",
+                    )
+                    so.rename(tagged)
+
             for so in wheel_dir.glob("**/*.so"):
                 log(self.log_file, f"[{self.cross_venv}] Stripping {so}")
                 self.cross_venv.run(
