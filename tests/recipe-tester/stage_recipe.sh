@@ -80,27 +80,27 @@ fi
 # Path-hungry packages to ship EXTRACTED to disk instead of inside Flet 0.86's
 # compressed sitepackages.zip — those that read bundled data via a real __file__
 # path (rather than importlib.resources) and otherwise crash on-device with
-# NotADirectoryError. One relative path per line in recipes/<pkg>/extract_packages.txt
-# (blanks and full-line comments skipped); emitted into
-# [tool.flet.android].extract_packages as a TOML array. Absent file => [] (no-op).
-EXTRACT_FILE="$RECIPE_DIR/extract_packages.txt"
+# NotADirectoryError. Declared as the recipe's `extract_packages:` list in
+# meta.yaml; emitted into [tool.flet.android].extract_packages as a TOML array.
+# Read via read_extract_packages.py (Jinja-then-YAML, like forge loads meta), run
+# hermetically with uv so jinja2/pyyaml are present regardless of the caller env.
 EXTRACT_ENTRIES=()
-if [ -f "$EXTRACT_FILE" ]; then
-    while IFS= read -r line || [ -n "$line" ]; do
-        line="${line#"${line%%[![:space:]]*}"}"
-        line="${line%"${line##*[![:space:]]}"}"
-        [ -z "$line" ] && continue
-        [ "${line:0:1}" = "#" ] && continue
-        # Entries become double-quoted TOML strings; a literal double quote in
-        # a path would end the string. Package names / relative paths never have one.
-        if [[ "$line" == *'"'* ]]; then
-            echo "::error::double quotes are not supported in $EXTRACT_FILE: $line" >&2
-            exit 1
-        fi
-        EXTRACT_ENTRIES+=("$line")
-    done < "$EXTRACT_FILE"
+if ! EXTRACT_RAW="$(uv run --no-project --quiet --with jinja2 --with pyyaml \
+        python3 "$SCRIPT_DIR/read_extract_packages.py" "$RECIPE_DIR/meta.yaml")"; then
+    echo "::error::failed to read extract_packages from $RECIPE_DIR/meta.yaml" >&2
+    exit 1
 fi
-# Comma-joined TOML array body, e.g. "matplotlib", "thinc" (empty when no file).
+while IFS= read -r line || [ -n "$line" ]; do
+    [ -z "$line" ] && continue
+    # Entries become double-quoted TOML strings; a literal double quote in a path
+    # would end the string. Package names / relative paths never have one.
+    if [[ "$line" == *'"'* ]]; then
+        echo "::error::double quotes are not supported in extract_packages: $line" >&2
+        exit 1
+    fi
+    EXTRACT_ENTRIES+=("$line")
+done <<< "$EXTRACT_RAW"
+# Comma-joined TOML array body, e.g. "matplotlib", "thinc" (empty when none declared).
 EXTRACT_LIST=""
 for e in ${EXTRACT_ENTRIES[@]+"${EXTRACT_ENTRIES[@]}"}; do
     [ -n "$EXTRACT_LIST" ] && EXTRACT_LIST="$EXTRACT_LIST, "
@@ -141,7 +141,7 @@ if [ ${#TEST_DEPS[@]} -gt 0 ]; then
     echo "  test-only deps (tests/requirements.txt): ${TEST_DEPS[*]}"
 fi
 if [ ${#EXTRACT_ENTRIES[@]} -gt 0 ]; then
-    echo "  extract-to-disk (extract_packages.txt): ${EXTRACT_ENTRIES[*]}"
+    echo "  extract-to-disk (meta.yaml extract_packages): ${EXTRACT_ENTRIES[*]}"
 fi
 echo ""
 echo "Next:"

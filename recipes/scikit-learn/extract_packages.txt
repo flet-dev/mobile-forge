@@ -1,2 +1,0 @@
-# scikit-learn reads sklearn/utils/_repr_html/estimator.css via __file__ at import.
-sklearn

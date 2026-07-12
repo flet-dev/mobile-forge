@@ -1,3 +1,0 @@
-# spacy imports thinc (-> _custom_kernels.cu) and reads its own lang data via __file__.
-spacy
-thinc

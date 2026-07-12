@@ -2,6 +2,12 @@ package:
   name: spacy
   version: "3.8.13"
 
+# spacy imports thinc (-> thinc/backends/_custom_kernels.cu) and reads its own
+# lang data via __file__; extract both.
+extract_packages:
+  - spacy
+  - thinc
+
 build:
   number: 1
 

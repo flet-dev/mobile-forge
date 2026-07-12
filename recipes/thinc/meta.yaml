@@ -2,6 +2,10 @@ package:
   name: thinc
   version: "8.3.13"
 
+# thinc reads thinc/backends/_custom_kernels.cu via __file__ at import.
+extract_packages:
+  - thinc
+
 build:
   number: 1
 

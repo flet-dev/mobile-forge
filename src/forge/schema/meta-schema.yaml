@@ -93,6 +93,21 @@ properties:
       Patches to apply to the code. Each entry is a filename in the
       `patches` folder of the recipe.
 
+  extract_packages:
+    type: array
+    default: []
+    items:
+      type: string
+    description: >-
+      Android only. Import-relative paths (usually the package's import name)
+      to ship EXTRACTED to disk instead of inside Flet 0.86's compressed
+      `sitepackages.zip`. Needed for "path-hungry" packages that read bundled
+      DATA files through a real `__file__` path (rather than
+      `importlib.resources`) — inside the zip such reads fail with
+      `NotADirectoryError`. Consumed by the recipe-tester
+      (`tests/recipe-tester/stage_recipe.sh` -> flet build
+      `[tool.flet.android].extract_packages`); forge's build itself ignores it.
+
   build:
     type: object
     default: {}

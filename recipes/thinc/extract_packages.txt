@@ -1,2 +1,0 @@
-# thinc reads thinc/backends/_custom_kernels.cu via __file__ at import.
-thinc
