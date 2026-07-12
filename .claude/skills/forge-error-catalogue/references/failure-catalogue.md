@@ -987,10 +987,12 @@ disk (on `sys.path` before the zip) so `__file__` resolves to a real dir. Field 
 in `src/forge/schema/meta-schema.yaml`. Verified: matplotlib, astropy. **opencv-python**
 also needs `extract_packages: [cv2]` — but that alone is NOT enough for it; its
 loader has a separate config.py/native-name break (see the dedicated cv2 entry
-below). One look-alike `extract_packages` does NOT fix at all: **python-magic**
-(`could not find any valid magic files!` — `magic.mgc` lives in flet-libmagic's
-`opt/`, dropped by `copyOpt` which copies only `**/*.so`, so extracting the python
-package doesn't bring the data file back).
+below). And it does NOT help when the missing data file lives in a *flet-lib\**
+`opt/` tree rather than the python package itself: **python-magic**
+(`could not find any valid magic files!` — `magic.mgc` is dropped by `copyOpt`
+because `copyOpt` copies only `**/*.so`); the fix there is to ship the data file
+**inside the python package's own wheel** + load it from memory — see the dedicated
+python-magic entry below.
 
 ---
 
@@ -1099,6 +1101,43 @@ any package whose loader **re-imports its own native under a specific top-level
 name** — reproduce the exact name via a fresh `ExtensionFileLoader(name, origin)`,
 never via `import pkg.pkg`. Verified on-device (arm64) 4/4 against the byte-identical
 4.10 loader; ported to the 5.0.0.93 recipe.
+
+---
+
+### `magic.MagicException: could not find any valid magic files!` (python-magic, Android) — a data file that lives in a `flet-lib*` `opt/` tree
+
+**Cause:** the runtime data file a package needs ships in a **separate `flet-lib*`
+wheel's `opt/` tree**, not in the package itself, and 0.86's `copyOpt` copies **only
+`.so`** out of an `opt/` tree (and `splitSitePackages` skips `opt/` entirely), so the
+data file reaches **neither** jniLibs **nor** `sitepackages.zip`. python-magic:
+libmagic's compiled DB `magic.mgc` ships in `flet-libmagic`'s
+`opt/share/misc/magic.mgc`; the `.so` (`libmagic.so`) is relocated to jniLibs fine,
+but `magic.mgc` is dropped, so `magic_load(cookie, <missing path>)` /
+`magic_load(cookie, None)` (falls back to libmagic's compiled-in default, absent on
+device) fails. **`extract_packages` does NOT help** — extracting the *python* package
+to disk doesn't bring back a file that was never in it. iOS is unaffected (real dir).
+
+**Fix (two parts):** ship the data file **inside the consuming package's own wheel**
+(which rides 0.86's all-files `sitepackages.zip`, unlike an `opt/` tree), then load it
+in a way that survives the stored zip.
+- *Delivery:* forge's `PythonPackageBuilder` has no copy hook and `patch -p1` can't
+  carry a multi-MB binary, so copy it in from `setup.py` at build time, fed the path
+  via a meta `build.script_env` that templates the `flet-lib*` host dep's cross-env
+  path — `FLET_MAGIC_MGC: "{platlib}/opt/share/misc/magic.mgc"` (the `{platlib}/opt/…`
+  idiom; the `flet-lib*` host dep installs there). Add the file to `package_data`.
+- *Load:* real path when one exists (iOS/desktop/`extract_packages`), else read the
+  file's **bytes** via `importlib.resources.files(__package__).joinpath(...).read_bytes()`
+  (routes through `zipimport.get_data`, so it works from a stored zip) and hand them to
+  a **from-memory** API — for libmagic, bind `magic_load_buffers` (public in file
+  ≥ 5.32) and keep the ctypes buffer alive past the cookie (libmagic references it in
+  place; stash it on the object the module caches). Guard the binding
+  (`except AttributeError`) so import survives an older lib.
+Zero consumer config (no `extract_packages`). General tell: a package's runtime data
+lives in a sibling `flet-lib*` `opt/` and you see a "can't find <data>" at import →
+relocate the data into the consumer's wheel + load from memory. Verify with
+`nm -D lib<x>.so | grep <load_buffers_symbol>` (must be exported) and `unzip -l` the
+APK's `sitepackages.zip` for the data file. Verified on-device (arm64) 2/2:
+python-magic (`magic_load_buffers`, `magic.mgc` 10.3 MB in `sitepackages.zip`).
 
 ---
 

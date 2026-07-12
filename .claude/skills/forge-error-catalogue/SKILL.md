@@ -86,8 +86,12 @@ instead of re-deriving it.
   `-l:lib.a`)**; opencv-python cv2 `missing configuration file: ['config.py']` /
   `Submodule name should always start with a parent module name. Parent name:
   cv2.cv2` → **load the native under top-level name `cv2` via
-  `ExtensionFileLoader("cv2", find_spec('cv2.cv2').origin)` + `extract_packages`**.
-  Plus: `libc++_shared.so` not found,
+  `ExtensionFileLoader("cv2", find_spec('cv2.cv2').origin)` + `extract_packages`**;
+  a runtime DATA file that lives in a sibling `flet-lib*` `opt/` tree (dropped by
+  `copyOpt`, which copies only `.so`) → python-magic `could not find any valid magic
+  files!` → **ship the data file in the consumer's own wheel (`script_env`
+  `{platlib}/opt/…` copy in setup.py + `package_data`) + load from memory
+  (`importlib.resources` bytes → `magic_load_buffers`)**. Plus: `libc++_shared.so` not found,
   **CMake OBJECT-lib not linked into the iOS `.framework` → undefined symbol at
   dlopen** (opencv-5 MLAS; green build ≠ loadable — verify with `nm -u`/`otool -L`),
   ctypes **"Unable to find … shared library"** (Pattern H loader / lib delivery),
