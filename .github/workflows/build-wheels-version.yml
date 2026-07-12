@@ -478,6 +478,28 @@ jobs:
           done
 
           ./tests/recipe-tester/stage_recipe.sh "$PKG_NAME" "$PKG_VERSION"
+
+          # Seed the on-device Python runtime from the python-build run under test.
+          # When python_build_run_id is set, setup.sh kept that run's dart tarballs
+          # in downloads/. serious_python otherwise downloads the runtime from a
+          # HARDCODED flet-dev/python-build release; pre-seeding its cache (keyed by
+          # version at $FLET_CACHE_DIR/python-build/v<ver>/) with a fresh mtime makes
+          # the download's onlyIfModified check 304-skip, so `flet build` bundles THIS
+          # run's runtime -- validating an unreleased runtime fix with no release.
+          # Safe: if the CDN ignores the conditional and re-downloads, you just get
+          # the released runtime back (same result as before, never a false pass).
+          if ls "$GITHUB_WORKSPACE"/downloads/python-android-dart-*.tar.gz >/dev/null 2>&1; then
+              export FLET_CACHE_DIR="$GITHUB_WORKSPACE/.flet-cache"
+              for t in "$GITHUB_WORKSPACE"/downloads/python-android-dart-*.tar.gz; do
+                  ver=$(basename "$t" | sed -E 's/^python-android-dart-([0-9.]+)-.*/\1/')
+                  d="$FLET_CACHE_DIR/python-build/v$ver"
+                  mkdir -p "$d"
+                  cp "$t" "$d/"
+                  touch "$d/$(basename "$t")"
+                  echo "Seeded on-device runtime: $(basename "$t") -> $d"
+              done
+          fi
+
           cd tests/recipe-tester
           PIP_FIND_LINKS="$GITHUB_WORKSPACE/dist-test" \
             uvx --prerelease allow --with 'flet-cli>=0.86.0.dev0' --with 'flet>=0.86.0.dev0' flet build apk -vv --yes --python-version "$(echo "$INPUT_PYTHON_VERSION" | cut -d. -f1-2)"
