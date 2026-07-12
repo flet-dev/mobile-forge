@@ -20,6 +20,27 @@ Make opencv-python 5.0 cross-compile AND load on Flet's mobile targets.
    compile out and opencv_dnn falls back to its built-in SGEMM. Android keeps
    MLAS (it static-links fine; verified on-device).
 
+3. Teach the cv2 loader (modules/python/package/cv2/__init__.py) to boot under
+   Flet 0.86. OpenCV's stock bootstrap exec()s a config.py to discover a directory
+   of `.so` files, then pops the cv2 package and re-imports it as the top-level
+   module "cv2" so the native binary loads under that exact name (its compiled-in
+   bindings register submodules like `cv2.dnn` and assert each starts with the
+   parent name). Under Flet 0.86 Android neither half survives: `config.py` is
+   compiled to `config.pyc` (so `os.path.exists('config.py')` is False ->
+   "missing configuration file"), and the native `cv2.cv2` extension is relocated
+   to jniLibs (importable only as the submodule `cv2.cv2` via a `cv2/cv2.soref`
+   marker, never as top-level `cv2`). Loading it as `cv2.cv2` makes OpenCV abort
+   with "Submodule name should always start with a parent module name. Parent
+   name: cv2.cv2. Submodule name: cv2". The fix inserts a fast-path right after
+   the recursion guard: resolve the relocated extension via `find_spec('cv2.cv2')`
+   (the soref finder yields its real jniLibs path), then load it through a fresh
+   `ExtensionFileLoader("cv2", origin)` so its runtime `__name__` is the required
+   top-level "cv2", relink its symbols onto the package, and load the extra pure-
+   python submodules. On desktop / non-0.86 builds `find_spec('cv2.cv2')` returns
+   None and the stock loader runs unchanged. Pairs with `extract_packages: [cv2]`
+   in meta.yaml so the package ships as a real dir (the extra-submodule scan does
+   `os.listdir` on it). Verified on-device (arm64) 4/4.
+
 diff --git a/opencv/CMakeLists.txt b/opencv/CMakeLists.txt
 index d6812aa..7555914 100644
 --- a/opencv/CMakeLists.txt
@@ -472,3 +493,49 @@ index a4bc8e5..b86efd8 100644
      if (pyopencv_VideoWriter_getp(self, obj_getp) && obj_getp && *obj_getp) {
          (*obj_getp)->release();
      }
+
+diff --git a/opencv/modules/python/package/cv2/__init__.py b/opencv/modules/python/package/cv2/__init__.py
+--- a/opencv/modules/python/package/cv2/__init__.py
++++ b/opencv/modules/python/package/cv2/__init__.py
+@@ -75,6 +75,41 @@ def bootstrap():
+         print(sys.path)
+         raise ImportError('ERROR: recursion is detected during loading of "cv2" binary extensions. Check OpenCV installation.')
+     sys.OpenCV_LOADER = True
++    # --- mobile-forge fast-path -------------------------
++    # Under Flet 0.86 the native cv2 extension is relocated out of the wheel into
++    # jniLibs (resolved via a cv2/cv2.soref marker) and config.py is compiled to
++    # config.pyc, so OpenCV's stock loader -- which exec()s config.py to find a
++    # directory of .so files and re-imports it as the top-level module "cv2" --
++    # cannot run. Load the native module directly under the top-level name "cv2"
++    # (OpenCV's compiled bindings hard-require that exact name) and relink.
++    try:
++        import importlib.util as _ilu
++        import importlib.machinery as _ilm
++        _sub_spec = _ilu.find_spec(__name__ + ".cv2")
++    except Exception:
++        _sub_spec = None
++    if _sub_spec is not None and getattr(_sub_spec, "origin", None):
++        _dbg = hasattr(sys, "OpenCV_LOADER_DEBUG")
++        _loader = _ilm.ExtensionFileLoader("cv2", _sub_spec.origin)
++        _spec = _ilu.spec_from_loader("cv2", _loader)
++        _native = _ilu.module_from_spec(_spec)
++        _loader.exec_module(_native)
++        _g = globals()
++        setattr(sys.modules[__name__], "_native", _native)
++        for _k, _v in _native.__dict__.items():
++            if _k not in ("__file__", "__loader__", "__spec__", "__name__", "__package__") and _k not in _g:
++                _g[_k] = _v
++        try:
++            del sys.OpenCV_LOADER
++        except Exception:
++            pass
++        try:
++            for _s in __collect_extra_submodules(_dbg):
++                __load_extra_py_code_for_module("cv2", _s, _dbg)
++        except Exception:
++            pass
++        return
++    # --- end mobile-forge fast-path -----------------------------------------
+ 
+     DEBUG = False
+     if hasattr(sys, 'OpenCV_LOADER_DEBUG'):

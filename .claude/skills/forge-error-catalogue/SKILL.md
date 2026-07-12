@@ -18,8 +18,10 @@ description: >-
   (stripped *.pyi), the Flet 0.86 Android sitepackages.zip class (NotADirectoryError
   on a bundled data file -> extract_packages, untagged native .so
   ModuleNotFoundError -> forge ABI-tag, ctypes-by-__file__ loaders -> find_spec /
-  bare soname, jniLibs lib<pkg>.so name collision -> static-link), hidden runtime
-  deps, or a stale on-device cache. Sibling
+  bare soname, jniLibs lib<pkg>.so name collision -> static-link, a package whose
+  loader re-imports its own native under a fixed top-level name -> opencv cv2
+  "missing configuration file: ['config.py']" / "Submodule name should always start
+  with a parent module name"), hidden runtime deps, or a stale on-device cache. Sibling
   of `new-mobile-recipe` (authoring), `native-recipe-bumps` (version bumps),
   `local-recipe-testing` (on-device testing), and `forge-ci` (CI triage);
   this one is the dedicated error -> fix reference.
@@ -81,7 +83,11 @@ instead of re-deriving it.
   **`importlib.find_spec().origin`**; llama `FileNotFoundError` / ctypes
   `find_library`-None → **bare-soname load from jniLibs**; a top-level extension
   colliding with a `flet-lib*` at `lib<pkg>.so` → **static-link (`host_build` +
-  `-l:lib.a`)**. Plus: `libc++_shared.so` not found,
+  `-l:lib.a`)**; opencv-python cv2 `missing configuration file: ['config.py']` /
+  `Submodule name should always start with a parent module name. Parent name:
+  cv2.cv2` → **load the native under top-level name `cv2` via
+  `ExtensionFileLoader("cv2", find_spec('cv2.cv2').origin)` + `extract_packages`**.
+  Plus: `libc++_shared.so` not found,
   **CMake OBJECT-lib not linked into the iOS `.framework` → undefined symbol at
   dlopen** (opencv-5 MLAS; green build ≠ loadable — verify with `nm -u`/`otool -L`),
   ctypes **"Unable to find … shared library"** (Pattern H loader / lib delivery),

@@ -984,12 +984,13 @@ extract_packages:
 `stage_recipe.sh` reads it (via `read_meta_list.py`) into
 `[tool.flet.android].extract_packages`; serious_python unpacks those packages to
 disk (on `sys.path` before the zip) so `__file__` resolves to a real dir. Field is
-in `src/forge/schema/meta-schema.yaml`. Verified: matplotlib, astropy. Two
-look-alikes this does NOT fix: **python-magic** (`could not find any valid magic
-files!` — `magic.mgc` lives in flet-libmagic's `opt/`, dropped by `copyOpt` which
-copies only `**/*.so`) and **opencv-python** (`missing configuration file:
-['config.py']` — cv2's loader needs the `.py` *source*, stripped by 0.86's `.pyc`
-compile).
+in `src/forge/schema/meta-schema.yaml`. Verified: matplotlib, astropy. **opencv-python**
+also needs `extract_packages: [cv2]` — but that alone is NOT enough for it; its
+loader has a separate config.py/native-name break (see the dedicated cv2 entry
+below). One look-alike `extract_packages` does NOT fix at all: **python-magic**
+(`could not find any valid magic files!` — `magic.mgc` lives in flet-libmagic's
+`opt/`, dropped by `copyOpt` which copies only `**/*.so`, so extracting the python
+package doesn't bring the data file back).
 
 ---
 
@@ -1055,6 +1056,49 @@ empty `<pkg>/<subdir>/__init__.py` — but verify the build's `find_packages` /
 `package_data` actually lands it in the wheel (selectolax's
 `find_packages(include=["selectolax"])` would NOT, which is why the drop was cleaner
 there). Verified: selectolax (drop).
+
+---
+
+### `ImportError: OpenCV loader: missing configuration file: ['config.py']` / `Bindings generation error. Submodule name should always start with a parent module name. Parent name: cv2.cv2. Submodule name: cv2` (opencv-python, Android)
+
+**Cause:** a *two-part* 0.86 break in cv2's stock loader
+(`cv2/__init__.py::bootstrap`). Stock OpenCV: (1) `exec()`s a `config.py` /
+`config-3.py` to discover a directory of `.so` files, then (2) pops the `cv2`
+package from `sys.modules` and **re-imports it as the top-level module `cv2`** so the
+native binary's `__name__` is exactly `cv2` — its compiled-in bindings register
+submodules (`cv2.dnn`, `cv2.gapi`, …) and assert each *starts with the parent name*.
+Under 0.86 Android both halves break: `config.py` is compiled to `config.pyc`, so
+`os.path.exists('config.py')` is False → **"missing configuration file"**; and the
+native `cv2.cv2` extension is relocated to `jniLibs` (importable **only** as the
+submodule `cv2.cv2` via a `cv2/cv2.soref` marker, never as top-level `cv2`). If you
+naively `import cv2.cv2`, OpenCV's C init sees parent name `cv2.cv2`, the compiled
+submodule `cv2` no longer starts with it, and it aborts with **"Submodule name
+should always start with a parent module name."** (The native `.so`'s DT_NEEDED are
+all system libs — `libcamera2ndk`/`libmediandk`/`liblog`/… — so this is **not** a
+dlopen failure; don't chase a missing lib.)
+
+**Fix:** patch `cv2/__init__.py` to insert a fast-path right after the
+`sys.OpenCV_LOADER = True` recursion guard that bypasses the config machinery and
+loads the native under the **required top-level name `cv2`**:
+```python
+import importlib.util as _ilu, importlib.machinery as _ilm
+_sub = _ilu.find_spec(__name__ + ".cv2")          # soref finder → real jniLibs .so path
+if _sub is not None and getattr(_sub, "origin", None):
+    _loader = _ilm.ExtensionFileLoader("cv2", _sub.origin)   # name MUST be "cv2", not "cv2.cv2"
+    _native = _ilu.module_from_spec(_ilu.spec_from_loader("cv2", _loader))
+    _loader.exec_module(_native)                  # runtime __name__ == "cv2" → C init happy
+    # relink _native.__dict__ into globals(), del sys.OpenCV_LOADER,
+    # then run __collect_extra_submodules()/__load_extra_py_code_for_module()
+    return
+# else fall through to the stock loader (desktop / non-0.86)
+```
+Pair with **`extract_packages: [cv2]`** in meta.yaml (the extra-submodule scan does
+`os.listdir()` on the package dir, so cv2 must ship extracted, not zipped). On
+desktop `find_spec('cv2.cv2')` is None → stock loader runs unchanged. General tell:
+any package whose loader **re-imports its own native under a specific top-level
+name** — reproduce the exact name via a fresh `ExtensionFileLoader(name, origin)`,
+never via `import pkg.pkg`. Verified on-device (arm64) 4/4 against the byte-identical
+4.10 loader; ported to the 5.0.0.93 recipe.
 
 ---
 
