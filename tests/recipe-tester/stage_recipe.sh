@@ -47,49 +47,50 @@ fi
 
 # 2. Generate pyproject.toml from the template (gitignored): pin the recipe
 #    under test (__RECIPE_DEP__) and expand test-only deps (__TEST_DEPS__)
-#    from the recipe's optional tests/requirements.txt.
+#    from the recipe's meta.yaml `test.requires`.
 DEP="$RECIPE"
 [ -n "$VERSION" ] && DEP="$RECIPE==$VERSION"
 
+# Declarative lists live in the recipe's meta.yaml; read them the way forge loads
+# meta (Jinja -> YAML) via read_meta_list.py, run hermetically with uv so
+# jinja2/pyyaml are present regardless of the caller's environment.
+meta_list() {  # $1 = dotted key -> one item per line on stdout
+    uv run --no-project --quiet --with jinja2 --with pyyaml \
+        python3 "$SCRIPT_DIR/read_meta_list.py" "$RECIPE_DIR/meta.yaml" "$1"
+}
+
 # Test-only deps: packages the tests import that are NOT in the recipe's
-# Requires-Dist (e.g. numpy for a zero-runtime-dep recipe like safetensors,
-# whose numpy integration is extra-gated upstream). One PEP 508 spec per
-# line; blanks and full-line comments are skipped. Each dep must resolve for
+# Requires-Dist (e.g. numpy for a recipe whose numpy integration is extra-gated
+# upstream). PEP 508 specs from meta.yaml `test.requires`; each must resolve for
 # the MOBILE target — pure-Python from PyPI, or a recipe published on
 # pypi.flet.dev (or seeded into dist/) — the same constraint a real app faces.
-REQS_FILE="$TEST_DIR/requirements.txt"
-TEST_DEPS=()
-if [ -f "$REQS_FILE" ]; then
-    while IFS= read -r line || [ -n "$line" ]; do
-        # ltrim/rtrim, then skip blanks and full-line comments
-        line="${line#"${line%%[![:space:]]*}"}"
-        line="${line%"${line##*[![:space:]]}"}"
-        [ -z "$line" ] && continue
-        [ "${line:0:1}" = "#" ] && continue
-        # Deps are emitted as TOML literal (single-quoted) strings so PEP 508
-        # markers — which legitimately contain double quotes — pass through
-        # verbatim; a single quote inside the spec would end the TOML string.
-        if [[ "$line" == *"'"* ]]; then
-            echo "::error::single quotes are not supported in $REQS_FILE: $line" >&2
-            exit 1
-        fi
-        TEST_DEPS+=("$line")
-    done < "$REQS_FILE"
+if ! TEST_REQ_RAW="$(meta_list test.requires)"; then
+    echo "::error::failed to read test.requires from $RECIPE_DIR/meta.yaml" >&2
+    exit 1
 fi
+TEST_DEPS=()
+while IFS= read -r line || [ -n "$line" ]; do
+    [ -z "$line" ] && continue
+    # Deps are emitted as TOML literal (single-quoted) strings so PEP 508 markers
+    # — which legitimately contain double quotes — pass through verbatim; a single
+    # quote inside the spec would end the TOML string.
+    if [[ "$line" == *"'"* ]]; then
+        echo "::error::single quotes are not supported in test.requires: $line" >&2
+        exit 1
+    fi
+    TEST_DEPS+=("$line")
+done <<< "$TEST_REQ_RAW"
 
 # Path-hungry packages to ship EXTRACTED to disk instead of inside Flet 0.86's
 # compressed sitepackages.zip — those that read bundled data via a real __file__
 # path (rather than importlib.resources) and otherwise crash on-device with
-# NotADirectoryError. Declared as the recipe's `extract_packages:` list in
-# meta.yaml; emitted into [tool.flet.android].extract_packages as a TOML array.
-# Read via read_extract_packages.py (Jinja-then-YAML, like forge loads meta), run
-# hermetically with uv so jinja2/pyyaml are present regardless of the caller env.
-EXTRACT_ENTRIES=()
-if ! EXTRACT_RAW="$(uv run --no-project --quiet --with jinja2 --with pyyaml \
-        python3 "$SCRIPT_DIR/read_extract_packages.py" "$RECIPE_DIR/meta.yaml")"; then
+# NotADirectoryError. Declared as the recipe's top-level `extract_packages:` list
+# in meta.yaml; emitted into [tool.flet.android].extract_packages as a TOML array.
+if ! EXTRACT_RAW="$(meta_list extract_packages)"; then
     echo "::error::failed to read extract_packages from $RECIPE_DIR/meta.yaml" >&2
     exit 1
 fi
+EXTRACT_ENTRIES=()
 while IFS= read -r line || [ -n "$line" ]; do
     [ -z "$line" ] && continue
     # Entries become double-quoted TOML strings; a literal double quote in a path
@@ -138,7 +139,7 @@ echo "  recipe_tests/:"
 ls -1 "$TEST_DIR" | sed 's/^/    /'
 echo "  pyproject.toml: generated (gitignored)"
 if [ ${#TEST_DEPS[@]} -gt 0 ]; then
-    echo "  test-only deps (tests/requirements.txt): ${TEST_DEPS[*]}"
+    echo "  test-only deps (meta.yaml test.requires): ${TEST_DEPS[*]}"
 fi
 if [ ${#EXTRACT_ENTRIES[@]} -gt 0 ]; then
     echo "  extract-to-disk (meta.yaml extract_packages): ${EXTRACT_ENTRIES[*]}"

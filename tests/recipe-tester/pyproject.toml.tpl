@@ -9,7 +9,7 @@ dependencies = [
     "pytest",
     # `stage_recipe.sh` rewrites the line below to pin the recipe under test (e.g. `"numpy==2.2.2"`),
     # and replaces the token line after it with any test-only deps declared in
-    # the recipe's tests/requirements.txt (nothing emitted when the file is absent).
+    # the recipe's meta.yaml `test.requires` (nothing emitted when none declared).
     "__RECIPE_DEP__",
     __TEST_DEPS__
 ]

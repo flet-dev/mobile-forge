@@ -201,6 +201,27 @@ properties:
 
     additionalProperties: false
 
+  test:
+    type: object
+    default: {}
+    properties:
+      requires:
+        type: array
+        default: []
+        items:
+          type: string
+        description: >-
+          Test-only dependencies: packages the recipe's tests import but the
+          package itself does NOT declare in Requires-Dist (e.g. numpy for a
+          recipe whose numpy integration is extra-gated upstream). PEP 508
+          specs; each must resolve for the MOBILE target (pure-Python from PyPI,
+          or a recipe published on pypi.flet.dev / seeded into dist/) — the same
+          constraint a real app faces. Injected into the recipe-tester's
+          generated pyproject `dependencies` by
+          `tests/recipe-tester/stage_recipe.sh`. Replaces the former
+          per-recipe `tests/requirements.txt`.
+    additionalProperties: false
+
   about:
     type: object
     default: {}
