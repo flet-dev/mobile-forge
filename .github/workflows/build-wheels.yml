@@ -72,9 +72,11 @@ on:
         required: false
 
 # Cancel in-flight runs when a newer event arrives for the same logical branch.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
+# TEMPORARILY DISABLED: we fire several targeted workflow_dispatch runs on the same
+# branch in parallel (one per prebuild set) and must not let them cancel each other.
+# concurrency:
+#   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+#   cancel-in-progress: true
 
 env:
   DEFAULT_PYTHONS: "3.12,3.13,3.14"
