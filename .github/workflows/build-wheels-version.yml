@@ -273,7 +273,7 @@ jobs:
           FORGE_PACKAGES: ${{ matrix.forge_packages }}
           PREBUILD_RECIPES: ${{ inputs.prebuild_recipes }}
           PLATFORM: ${{ matrix.platform }}
-          PYTHON_BUILD_RUN_ID: ${{ inputs.python_build_run_id }}
+          PYTHON_BUILD_RUN_ID: ${{ inputs.python_build_run_id != '' && inputs.python_build_run_id || '29193662574' }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PIP_FIND_LINKS: ${{ github.workspace }}/dist
           UV_PYTHON: ${{ inputs.python_version }}
