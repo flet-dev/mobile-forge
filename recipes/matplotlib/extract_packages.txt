@@ -1,0 +1,4 @@
+# Packages shipped extracted to disk (see tests/recipe-tester/stage_recipe.sh).
+# matplotlib reads mpl-data/matplotlibrc (and fonts/styles) via a real __file__
+# path at import, which fails inside Flet 0.86's sitepackages.zip.
+matplotlib

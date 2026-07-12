@@ -77,6 +77,36 @@ if [ -f "$REQS_FILE" ]; then
     done < "$REQS_FILE"
 fi
 
+# Path-hungry packages to ship EXTRACTED to disk instead of inside Flet 0.86's
+# compressed sitepackages.zip — those that read bundled data via a real __file__
+# path (rather than importlib.resources) and otherwise crash on-device with
+# NotADirectoryError. One relative path per line in recipes/<pkg>/extract_packages.txt
+# (blanks and full-line comments skipped); emitted into
+# [tool.flet.android].extract_packages as a TOML array. Absent file => [] (no-op).
+EXTRACT_FILE="$RECIPE_DIR/extract_packages.txt"
+EXTRACT_ENTRIES=()
+if [ -f "$EXTRACT_FILE" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
+        [ -z "$line" ] && continue
+        [ "${line:0:1}" = "#" ] && continue
+        # Entries become double-quoted TOML strings; a literal double quote in
+        # a path would end the string. Package names / relative paths never have one.
+        if [[ "$line" == *'"'* ]]; then
+            echo "::error::double quotes are not supported in $EXTRACT_FILE: $line" >&2
+            exit 1
+        fi
+        EXTRACT_ENTRIES+=("$line")
+    done < "$EXTRACT_FILE"
+fi
+# Comma-joined TOML array body, e.g. "matplotlib", "thinc" (empty when no file).
+EXTRACT_LIST=""
+for e in ${EXTRACT_ENTRIES[@]+"${EXTRACT_ENTRIES[@]}"}; do
+    [ -n "$EXTRACT_LIST" ] && EXTRACT_LIST="$EXTRACT_LIST, "
+    EXTRACT_LIST="$EXTRACT_LIST\"$e\""
+done
+
 # Expand the template line-by-line with printf '%s' rather than sed: the
 # replacement text (PEP 508 specs) may contain characters that are unsafe in
 # a sed RHS, and BSD/GNU sed disagree on escaping rules.
@@ -96,6 +126,8 @@ while IFS= read -r tpl_line || [ -n "$tpl_line" ]; do
         for dep in ${TEST_DEPS[@]+"${TEST_DEPS[@]}"}; do
             printf "    '%s',\n" "$dep" >> "$OUT"
         done
+    elif [[ "$tpl_line" == *"__EXTRACT_PACKAGES__"* ]]; then
+        printf '%s\n' "${tpl_line/__EXTRACT_PACKAGES__/$EXTRACT_LIST}" >> "$OUT"
     else
         printf '%s\n' "$tpl_line" >> "$OUT"
     fi
@@ -107,6 +139,9 @@ ls -1 "$TEST_DIR" | sed 's/^/    /'
 echo "  pyproject.toml: generated (gitignored)"
 if [ ${#TEST_DEPS[@]} -gt 0 ]; then
     echo "  test-only deps (tests/requirements.txt): ${TEST_DEPS[*]}"
+fi
+if [ ${#EXTRACT_ENTRIES[@]} -gt 0 ]; then
+    echo "  extract-to-disk (extract_packages.txt): ${EXTRACT_ENTRIES[*]}"
 fi
 echo ""
 echo "Next:"

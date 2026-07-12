@@ -31,3 +31,13 @@ app = false
 
 [tool.flet.app]
 path = "."
+
+# Flet 0.86 ships site-packages inside a compressed `sitepackages.zip` (imported
+# via zipimport). Packages that read a bundled DATA file through a real `__file__`
+# path (rather than `importlib.resources`) then fail on-device with
+# `NotADirectoryError` because the parent is a zip, not a directory. List such
+# "path-hungry" packages here to ship them extracted to disk instead. Populated
+# per-recipe by `stage_recipe.sh` from `recipes/<pkg>/extract_packages.txt`
+# (empty `[]` — the default — is a no-op).
+[tool.flet.android]
+extract_packages = [__EXTRACT_PACKAGES__]

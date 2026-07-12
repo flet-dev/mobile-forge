@@ -1,0 +1,2 @@
+# astropy reads astropy/CITATION via __file__ at import (Flet 0.86 sitepackages.zip).
+astropy
