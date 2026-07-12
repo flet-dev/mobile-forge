@@ -8,7 +8,7 @@ source:
   url: https://github.com/jqlang/jq/releases/download/jq-{{ version }}/jq-{{ version }}.tar.gz
 
 build:
-  number: 10
+  number: 11
 
 requirements:
   build:
