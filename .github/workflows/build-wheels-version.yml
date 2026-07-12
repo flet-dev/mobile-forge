@@ -541,6 +541,27 @@ jobs:
           done
 
           ./tests/recipe-tester/stage_recipe.sh "$PKG_NAME" "$PKG_VERSION"
+
+          # Seed the on-device iOS runtime from the python-build run under test
+          # (see the android step for the rationale). The darwin cache is
+          # date-keyed (v<ver>-<date>) and its download is a plain `[ ! -f ]`
+          # existence check, so we pin SERIOUS_PYTHON_BUILD_DATE to a sentinel we
+          # control and drop the fixed tarball at that exact cache path; prepare_ios.sh
+          # then finds it, skips the download, and extracts THIS run's runtime.
+          # Only fires when the tarball is present (python_build_run_id set); the
+          # sentinel is never fetched from a URL because the file already exists.
+          if ls "$GITHUB_WORKSPACE"/downloads/python-ios-dart-*.tar.gz >/dev/null 2>&1; then
+              export FLET_CACHE_DIR="$GITHUB_WORKSPACE/.flet-cache"
+              export SERIOUS_PYTHON_BUILD_DATE="seeded"
+              for t in "$GITHUB_WORKSPACE"/downloads/python-ios-dart-*.tar.gz; do
+                  ver=$(basename "$t" | sed -E 's/^python-ios-dart-([0-9.]+)\.tar\.gz$/\1/')
+                  d="$FLET_CACHE_DIR/python-build/v$ver-$SERIOUS_PYTHON_BUILD_DATE"
+                  mkdir -p "$d"
+                  cp "$t" "$d/"
+                  echo "Seeded on-device iOS runtime: $(basename "$t") -> $d"
+              done
+          fi
+
           cd tests/recipe-tester
           PIP_FIND_LINKS="$GITHUB_WORKSPACE/dist-test" \
             uvx --prerelease allow --with 'flet-cli>=0.86.0.dev0' --with 'flet>=0.86.0.dev0' flet build ios-simulator -vv --yes --python-version "$(echo "$INPUT_PYTHON_VERSION" | cut -d. -f1-2)"
