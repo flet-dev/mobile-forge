@@ -219,6 +219,41 @@ The reported arch must match the tag — `*-ios_13_0_x86_64_iphonesimulator.whl`
 
 ---
 
+### iOS `flet build ios-simulator`: `Error (Xcode): Unsupported mach-o filetype (only MH_OBJECT and MH_DYLIB can be linked) in <pkg>.framework/<pkg>` (a CMake/scikit-build extension is an MH_BUNDLE)
+
+**Cause:** serious_python's darwin packaging wraps **every** site-packages native
+`.so` into a `.framework` binary that SwiftPM **links** (a `Package.swift`
+`binaryTarget` the plugin target depends on). `ld` links only `MH_OBJECT`/
+`MH_DYLIB`, so an extension that is an **`MH_BUNDLE`** aborts the app build. iOS
+CPython's sysconfig sets `LDSHARED='...-dynamiclib -F . -framework Python'`, which
+**setuptools / Cython / meson / maturin honor** (→ `MH_DYLIB`, pass); but
+**CMake / scikit-build** link a Python `MODULE` with Apple's default `-bundle`
+(→ `MH_BUNDLE`), *ignoring* `LDSHARED`. So the failing set is exactly the CMake
+ones — **opencv (`cv2`), ncnn, coolprop, faiss (`_swigfaiss`)**, plus latent
+sherpa_onnx/onnx. The flet-lib dependency is a **red herring** (cv2/ncnn link only
+system `Accelerate`/`libc++`). Discriminate with `otool -hv <so>` (`BUNDLE` vs
+`DYLIB`). (Note: **llama-cpp-python's** iOS failure is a *different* bug — ctypes
+interdependent SHARED dylibs, sp #223 — its libs are already dylibs, so this is a
+no-op there.)
+
+**Fix:** none per-recipe — **forge `fix_wheel` (build.py, iOS branch) converts each
+`MH_BUNDLE` `.so` to `MH_DYLIB`** in place: inject an `LC_ID_DYLIB` load command
+into the Mach-O header's free padding (bounded by the lowest `__TEXT` section file
+offset — the `section_64.offset` field is at +48), flip the header `filetype`
+`0x8`→`0x6` (and `ncmds`/`sizeofcmds`), then **ad-hoc re-sign** (`codesign --force
+--sign -` — the header edit invalidates the linker signature). `dlopen` (the import
+path) works on both filetypes so nothing regresses; serious_python's own
+`install_name_tool -id` overwrites the placeholder `@rpath/<basename>` id. Generic
+— rebuild and it catches every CMake extension with zero per-recipe CMake knowledge.
+Per-recipe fallback (what onnxruntime/tflite/lightgbm did): force `-dynamiclib`
++ `-undefined dynamic_lookup` in the CMake link flags. **Validate** by `otool -hv`
+= `DYLIB` + `otool -l | grep LC_ID_DYLIB` on the built wheel's `.so`, and that
+`ld ... <so>` links (exit 0) where the original bundle gave the exact error above.
+Verified: ncnn (real forge build → `MH_BUNDLE -> MH_DYLIB`, codesign ok) + cv2
+(link test + iOS-sim app build past the `cv2.cv2.framework` link).
+
+---
+
 ### iOS: a flet-lib*'s native lib is silently absent from the app bundle
 
 **Symptom:** `flet build ios-simulator` succeeds, but at runtime the consumer

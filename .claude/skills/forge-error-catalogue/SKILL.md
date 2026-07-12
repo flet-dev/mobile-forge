@@ -71,7 +71,10 @@ instead of re-deriving it.
   `install_data rename:` / `-include` sanity-check breakage, **build.sh
   `cmake: command not found` → `requirements.build`**, **duplicated patch hunks
   from concatenated diffs**, iOS `flatc` MACOSX_BUNDLE, **`.dylib` staged under
-  the `.so` name**, **Apple `MacTypes.h` `Ptr` vs `cv::Ptr` ambiguity** (iOS-only;
+  the `.so` name**, **iOS `Unsupported mach-o filetype (only MH_OBJECT and
+  MH_DYLIB can be linked)` → forge `fix_wheel` converts a CMake extension's
+  `MH_BUNDLE` `.so` to `MH_DYLIB`** (inject `LC_ID_DYLIB` + flip filetype + ad-hoc
+  re-sign; setuptools/Cython/meson already ship dylib), **Apple `MacTypes.h` `Ptr` vs `cv::Ptr` ambiguity** (iOS-only;
   hand-written + gen2.py-generated code), **opencv-5 KleidiCV `armv8-a` on x86_64**
   and **hardcoded `CMAKE_SYSTEM_PROCESSOR` → ARM asm on the x86_64 sim** (per-arch
   fix), **Rust crate with no `target_os="ios"` backend** (`mac_address`, cfg-gate it).
