@@ -1,8 +1,130 @@
+Make python-magic find its libmagic AND its magic database on Flet's mobile
+targets under Flet 0.86.
+
+1. libmagic loader (magic/loader.py). flet-libmagic ships libmagic under
+   <site-packages>/opt/lib and serious-python surfaces it (Android jniLibs / an
+   iOS framework). ctypes' find_library('magic') returns None on iOS/Android, so
+   also yield the bundled opt/lib path plus the bare sonames the platform linker
+   resolves ("libmagic.so" from jniLibs on Android, "libmagic.fwork" on iOS).
+
+2. Ship + load the magic database (setup.py + magic/__init__.py). The compiled
+   magic database (magic.mgc) is built by flet-libmagic and installed into its
+   opt/share/misc/ tree. Under Flet 0.86 Android, serious-python's copyOpt copies
+   ONLY **/*.so out of a flet-lib* opt/ tree (and splitSitePackages skips opt/
+   entirely), so magic.mgc reaches neither jniLibs nor the sitepackages.zip -- the
+   old loader pointed magic_file at <site-packages>/opt/share/misc/magic.mgc,
+   os.path.exists() was False on device, and magic_load(cookie, None) failed with
+   "could not find any valid magic files!". Fix, in two parts:
+
+   (a) setup.py copies magic.mgc INTO the `magic` package at build time (path fed
+       via the FLET_MAGIC_MGC script_env, pointing at flet-libmagic's cross-env
+       opt/) and declares it as package_data, so it ships inside python-magic's
+       own wheel -- which rides 0.86's stored sitepackages.zip (that keeps all
+       package files, unlike an opt/ tree). magic.mgc is arch-neutral, so the
+       wheel stays py3-none-any; flet-libmagic remains the per-platform
+       Requires-Dist for the .so.
+
+   (b) magic/__init__.py loads it. iOS / desktop / Android extract_packages ->
+       magic.mgc is a real file, loaded by path (magic_load). Flet 0.86 Android ->
+       the `magic` package is inside a stored zip with no real filesystem path, so
+       magic_load()'s fopen() can't reach it; bind magic_load_buffers (public in
+       file >= 5.32) and load the DB from an in-memory buffer whose bytes are read
+       via importlib.resources (which reads through zipimport). libmagic
+       references the buffer in place (MAP_TYPE_USER, no copy), so it is stashed on
+       the Magic instance to outlive the cookie. The binding is guarded so import
+       still works against an older libmagic lacking the symbol.
+
+diff --git a/magic/__init__.py b/magic/__init__.py
+index bab7c7b..f0032db 100644
+--- a/magic/__init__.py
++++ b/magic/__init__.py
+@@ -70,7 +70,22 @@ class Magic:
+         self.cookie = magic_open(self.flags)
+         self.lock = threading.Lock()
+ 
+-        magic_load(self.cookie, magic_file)
++        # mobile-forge: resolve the magic database. iOS / desktop / Android
++        # extract_packages -> magic.mgc is a real file (load by path). Flet 0.86
++        # Android -> the `magic` package ships inside a stored sitepackages.zip
++        # with no real filesystem path, so magic_load()'s fopen() can't reach
++        # magic.mgc; load the bundled DB from memory instead. libmagic references
++        # the buffer IN PLACE (no copy), so it is stashed on self and must outlive
++        # the cookie (closed in __del__ before self is released).
++        if magic_file is None:
++            magic_file = _bundled_magic_db_path()
++        try:
++            magic_load(self.cookie, magic_file)
++        except MagicException:
++            if magic_file is not None:
++                raise
++            self._magic_db_buffer = magic_load_buffers(
++                self.cookie, _bundled_magic_db_bytes())
+ 
+         # MAGIC_EXTENSION was added in 523 or 524, so bail if
+         # it doesn't appear to be available
+@@ -332,6 +347,57 @@ def magic_load(cookie, filename):
+     return _magic_load(cookie, coerce_filename(filename))
+ 
+ 
++# mobile-forge: bind magic_load_buffers (file >= 5.32) so a compiled magic DB can
++# be loaded from memory. Under Flet 0.86 Android the `magic` package ships inside a
++# stored sitepackages.zip with no real path, so magic.mgc cannot be fopen()'d by
++# magic_load(); we read its bytes via importlib.resources and hand them to libmagic
++# directly. Guarded so `import magic` still works against an older libmagic that
++# lacks the symbol.
++try:
++    _magic_load_buffers = libmagic.magic_load_buffers
++    _magic_load_buffers.restype = c_int
++    _magic_load_buffers.argtypes = [magic_t, POINTER(c_void_p), POINTER(c_size_t), c_size_t]
++    _magic_load_buffers.errcheck = errorcheck_negative_one
++except AttributeError:
++    _magic_load_buffers = None
++
++
++def magic_load_buffers(cookie, data):
++    """Load a compiled magic database from the bytes ``data``.
++
++    libmagic references the buffer IN PLACE (MAP_TYPE_USER, no copy), so the
++    returned ctypes buffer MUST be kept alive as long as ``cookie`` is used.
++    """
++    if _magic_load_buffers is None:
++        raise MagicException(b"libmagic has no magic_load_buffers")
++    buf = ctypes.create_string_buffer(data, len(data))
++    buffers = (c_void_p * 1)(ctypes.cast(buf, c_void_p))
++    sizes = (c_size_t * 1)(len(data))
++    _magic_load_buffers(cookie, buffers, sizes, 1)
++    return buf
++
++
++def _bundled_magic_db_path():
++    """A real on-disk magic.mgc path if one exists (iOS real dir, desktop, or
++    Android extract_packages), else None (Flet 0.86 Android sitepackages.zip)."""
++    import os
++    here = os.path.dirname(os.path.abspath(__file__))
++    for p in (
++        os.path.join(here, "magic.mgc"),                                           # bundled in this package
++        os.path.join(os.path.dirname(here), "opt", "share", "misc", "magic.mgc"),  # legacy flet-libmagic opt/
++    ):
++        if os.path.exists(p):
++            return p
++    return None
++
++
++def _bundled_magic_db_bytes():
++    """Bytes of the bundled magic/magic.mgc -- works whether `magic` is a real dir
++    or inside Flet 0.86's stored sitepackages.zip (read via zipimport.get_data)."""
++    from importlib.resources import files
++    return files(__package__).joinpath("magic.mgc").read_bytes()
++
++
+ magic_setflags = libmagic.magic_setflags
+ magic_setflags.restype = c_int
+ magic_setflags.argtypes = [magic_t, c_int]
 diff --git a/magic/loader.py b/magic/loader.py
-index 931f161..60479a0 100644
+index 931f161..7d4cd08 100644
 --- a/magic/loader.py
 +++ b/magic/loader.py
-@@ -8,6 +8,16 @@ def _lib_candidates():
+@@ -8,6 +8,17 @@ def _lib_candidates():
  
    yield find_library('magic')
  
@@ -16,28 +138,39 @@ index 931f161..60479a0 100644
 +  yield 'libmagic.so'                              # Android jniLibs
 +  yield 'libmagic.dylib'                           # desktop fallback
 +
++
    if sys.platform == 'darwin':
  
      paths = [
-diff --git a/magic/__init__.py b/magic/__init__.py
-index bab7c7b..e389603 100644
---- a/magic/__init__.py
-+++ b/magic/__init__.py
-@@ -70,6 +70,17 @@ class Magic:
-         self.cookie = magic_open(self.flags)
-         self.lock = threading.Lock()
+diff --git a/setup.py b/setup.py
+index 06386c3..9784d89 100644
+--- a/setup.py
++++ b/setup.py
+@@ -12,6 +12,18 @@ def read(file_name):
+                  encoding='utf-8') as f:
+         return f.read()
  
-+        # mobile-forge: on iOS/Android there is no system magic database, so
-+        # default to the magic.mgc shipped by the flet-libmagic wheel at
-+        # <site-packages>/opt/share/misc/magic.mgc when no explicit db is given.
-+        if magic_file is None:
-+            import os
-+            _bundled_db = os.path.join(
-+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-+                'opt', 'share', 'misc', 'magic.mgc')
-+            if os.path.exists(_bundled_db):
-+                magic_file = _bundled_db
++# mobile-forge: bundle the compiled magic database (magic.mgc) INSIDE this wheel.
++# flet-libmagic (a host build dep) installs magic.mgc into the cross-env opt/
++# tree; forge hands us its path via FLET_MAGIC_MGC. Copy it into the `magic`
++# package so it rides Flet 0.86 Android's stored sitepackages.zip (which keeps
++# all package files) -- serious-python's copyOpt drops non-.so files from a
++# flet-lib* opt/ tree, so magic.mgc never reaches the device otherwise.
++_mgc = os.environ.get("FLET_MAGIC_MGC")
++if _mgc and os.path.exists(_mgc):
++    import shutil
++    shutil.copyfile(
++        _mgc, os.path.join(os.path.dirname(__file__) or ".", "magic", "magic.mgc"))
 +
-         magic_load(self.cookie, magic_file)
- 
-         # MAGIC_EXTENSION was added in 523 or 524, so bail if
+ setuptools.setup(
+     name='python-magic',
+     description='File type identification using libmagic',
+@@ -23,7 +35,7 @@ setuptools.setup(
+     long_description_content_type='text/markdown',
+     packages=['magic'],
+     package_data={
+-        'magic': ['py.typed', '*.pyi', '**/*.pyi'],
++        'magic': ['py.typed', '*.pyi', '**/*.pyi', 'magic.mgc'],
+     },
+     keywords="mime magic file",
+     license="MIT",
