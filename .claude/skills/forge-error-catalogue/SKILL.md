@@ -101,7 +101,12 @@ instead of re-deriving it.
   `libssl.so.3`/`libcrypto`/`libsqlite` not found, import-name errors, old version
   loaded, **lazy_loader "non-existent stub" (serious_python strips `*.pyi`)**,
   **hidden runtime deps** (keras→scipy; device-emulating venv method),
-  **insightface `root=` PermissionError**.
+  **insightface `root=` PermissionError**, and **iOS app crashes at launch with a
+  0-byte `console.log` → `dyld: Library not loaded: @rpath/lib<X>.dylib` for a chain
+  of interdependent bundled dylibs (pyarrow, llama)** → **serious_python #223**:
+  reconcile framework install-ids + `@rpath` deps to the dotted-framework paths
+  (`reconcile_framework_install_names` in darwin scripts; needs an sp release for CI;
+  local sp fix cc28d13 verified pyarrow 4/4 on-sim).
 - **Recipe-tester app failures** — host-build (`pg_config` etc.), pypi.flet.dev
   index precedence, "no matching distribution" (incl. **ios-simulator also
   resolving the iphoneos wheel**), **sdist-only pure-python dep → pip backtrack**

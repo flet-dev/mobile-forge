@@ -232,9 +232,10 @@ CPython's sysconfig sets `LDSHARED='...-dynamiclib -F . -framework Python'`, whi
 ones — **opencv (`cv2`), ncnn, coolprop, faiss (`_swigfaiss`)**, plus latent
 sherpa_onnx/onnx. The flet-lib dependency is a **red herring** (cv2/ncnn link only
 system `Accelerate`/`libc++`). Discriminate with `otool -hv <so>` (`BUNDLE` vs
-`DYLIB`). (Note: **llama-cpp-python's** iOS failure is a *different* bug — ctypes
-interdependent SHARED dylibs, sp #223 — its libs are already dylibs, so this is a
-no-op there.)
+`DYLIB`). (Note: **llama-cpp-python / pyarrow** iOS failure is a *different* bug —
+interdependent SHARED dylibs, sp #223, which crashes at **launch** not build; see
+the dedicated entry just below. Their libs are already dylibs, so this MH_BUNDLE
+conversion is a no-op there.)
 
 **Fix:** none per-recipe — **forge `fix_wheel` (build.py, iOS branch) converts each
 `MH_BUNDLE` `.so` to `MH_DYLIB`** in place: inject an `LC_ID_DYLIB` load command
@@ -251,6 +252,51 @@ Per-recipe fallback (what onnxruntime/tflite/lightgbm did): force `-dynamiclib`
 `ld ... <so>` links (exit 0) where the original bundle gave the exact error above.
 Verified: ncnn (real forge build → `MH_BUNDLE -> MH_DYLIB`, codesign ok) + cv2
 (link test + iOS-sim app build past the `cv2.cv2.framework` link).
+
+---
+
+### iOS: app builds fine but **crashes at launch**, 0-byte `console.log` — `dyld: Library not loaded: @rpath/lib<X>.dylib, Referenced from: <app>.debug.dylib` (interdependent bundled dylibs, serious_python #223)
+
+**Symptom:** the `.app` builds and installs, but on launch `console.log` is **0
+bytes** (Flet rebinds stdout→console.log only after Python starts; pytest prints
+"test session starts" *before* importing the recipe — so 0 bytes = crash BEFORE
+Python). `simctl launch --console-pty` shows `dyld[…]: Library not loaded:
+@rpath/lib<X>.dylib … Referenced from: …/recipe-tester.debug.dylib … tried
+'…/Frameworks/lib<X>.dylib' (no such file)`. Recipes with a **chain of
+interdependent native libs**: pyarrow (`libarrow`←`libarrow_compute`←
+`libarrow_python`, plus every `pyarrow.*` C-ext), llama-cpp-python
+(`libggml-base`←`libggml-cpu`←`libggml`←`libllama`).
+
+**Cause:** serious_python framework-izes each site-package `.so`/`.dylib` into a
+framework named by its **dotted relative path** (`opt/lib/libarrow.dylib` →
+`opt.lib.libarrow.framework/opt.lib.libarrow`) and makes each a `Package.swift`
+`binaryTarget` the plugin **links at launch**. But `create_xcframework_from_dylibs`
+left every Mach-O **install-id** and interdependent **`@rpath` ref** at the
+ORIGINAL bare name (`@rpath/libarrow.dylib`) — it ran `install_name_tool -id` only
+for `ext=so`, never for `.dylib`, and never rewrote deps. So a bare
+`@rpath/libarrow.dylib` resolves to `Frameworks/libarrow.dylib` (doesn't exist; the
+file is inside `…framework/…`) → dyld can't link at launch. The recipe's ctypes
+`.fwork` shim is **moot** here — it runs IN Python, after the crash. (Distinct from
+the MH_BUNDLE build error above, and from the forge MH_BUNDLE→MH_DYLIB fix which is
+necessary-but-not-sufficient.)
+
+**Fix (serious_python, not per-recipe):** `reconcile_framework_install_names()` in
+`serious_python_darwin/darwin/xcframework_utils.sh`, called from
+`sync_site_packages.sh` after the `for _sp_ext in so dylib` conversion loop — sets
+every framework binary's own install-id to `@rpath/<fw>.framework/<fw>` and rewrites
+every dep matching a sibling's old-id to that framework path, then ad-hoc re-signs;
+excludes the python/stdlib xcframeworks. Local sp branch `fix/soref-package-init`
+commit **cc28d13** (UNPUSHED). **CI stays red for these recipes' iOS jobs until sp
+is released** (published sp lacks it — same release-gating as apsw's SP `_SorefFinder`
+fix). **Verified locally:** pyarrow 24.0.0 iOS-sim now launches, `4 passed`, `EXIT 0`
+(was this exact dyld crash). Two bash gotchas bit while implementing it — the
+`otool -D | head -1` SIGPIPE race (buffer to a var first) and zsh-vs-bash array
+indexing in the *test harness* (real sp runs under bash). To verify an unreleased sp
+change locally without a release: pubspec `dependency_overrides` path-dep the local
+sp packages, build with the **local flet-cli** (`uv run --project .../flet/sdk/python
+flet build ios-simulator --python-version 3.12`) not `uvx` (else
+`SERIOUS_PYTHON_APP … must be set`), stage the recipe's CI wheels as `-9999` via
+`PIP_FIND_LINKS`. Full recipe in the [[serious-python-223-framework-relocation]] memory.
 
 ---
 
