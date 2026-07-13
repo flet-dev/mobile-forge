@@ -1104,6 +1104,26 @@ file** read by `__file__` (the entry above), not a native lib.
 
 ---
 
+### `RuntimeError: Unsupported platform` (or a loader taking the wrong branch) on Python **3.13+** Android only — `sys.platform == "android"`
+
+**Cause:** Python **3.13+ reports `sys.platform == "android"`** on Android (PEP 738); **3.12
+reports `"linux"`**. So any recipe loader (or upstream code) that gates on
+`sys.platform.startswith("linux")` or an explicit platform list (`== "linux"`, `in ("linux",
+"darwin", …)`) silently takes the wrong branch — or hits an `else: raise` — on a **py3.13
+Android** build, while the *same recipe passes on py3.12*. llama-cpp-python hit this: its ctypes
+`_candidate_paths` matched `linux/freebsd/darwin/ios/win32/else-raise` and raised `RuntimeError:
+Unsupported platform` at import on 3.13, before its jniLibs bare-soname fallback could run.
+
+**Fix:** add `or sys.platform == "android"` wherever `"linux"` is special-cased (Android is a
+Linux kernel, so the linux path is almost always what you want), and bump the build. This is a
+**general py3.12→3.13 tell** — grep a recipe's patches/loaders for `sys.platform` before trusting
+a 3.13 build. Distinct from the 3.13/3.14 Android **x86_64 `SIGSYS`/seccomp `open()`** crash,
+which is a *native* abort from python-build's mimalloc (fixed in the `20260712` snapshot), not a
+Python-level branch — that one shows up as a hard crash with no traceback, this one as a clean
+`RuntimeError`/`ModuleNotFoundError` with a full pytest traceback.
+
+---
+
 ### `ModuleNotFoundError: No module named '<pkg>.<ext>'` / `cannot import name '<_ext>' … (most likely due to a circular import)` for a NATIVE submodule (Android)
 
 **Cause:** the extension `.so` ships **untagged** — `ncnn/ncnn.so`,
