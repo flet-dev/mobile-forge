@@ -1404,6 +1404,30 @@ scikit-image `mobile.patch`.
 
 ---
 
+### `ModuleNotFoundError: No module named '_posixshmem'` (iOS, at import of a multiprocessing user)
+
+**Cause:** a python-build gap, not a recipe bug. iOS CPython (flet's python-build)
+re-enables `_multiprocessing` (`build_ios.py` flips `py_cv_module__multiprocessing=n/a`
+→ `yes` — SemLock/sockets build fine on Darwin) but left **`_posixshmem` n/a**.
+`multiprocessing/resource_tracker.py` does an **unconditional `import _posixshmem`
+on posix**, so with `_multiprocessing` present but `_posixshmem` absent, *any*
+transitive `import multiprocessing` takes the consumer down on iOS. scikit-learn:
+`sklearn.utils.validation` → joblib → multiprocessing → `resource_tracker` →
+`ModuleNotFoundError: _posixshmem`. Affects **any** package that reaches
+multiprocessing (not sklearn-specific).
+
+**Fix (in python-build, not the recipe):** flip `py_cv_module__posixshmem=n/a` →
+`yes` in `darwin/build_ios.py`, right beside the existing `_multiprocessing` flip.
+`shm_open`/`shm_unlink` build fine on Darwin/iOS (the sandbox restricts *use*, not
+the build; nothing here uses shared memory), and upstream 3.13's official iOS
+support ships `_posixshmem`. Leave `_posixsubprocess` n/a (genuinely needs
+fork/exec). **Needs an iOS python-build rebuild + a new support run-id for CI to
+pick it up.** Tell: any iOS import traceback whose deepest frame is
+`multiprocessing/resource_tracker.py` importing a missing `_posix*` → it's this
+python-build gap, fix it there, don't patch the consuming recipe.
+
+---
+
 ### `ModuleNotFoundError` on device for a dep the package never declared (hidden dependency)
 
 **Cause:** upstream's `Requires-Dist` is incomplete for the code path mobile
