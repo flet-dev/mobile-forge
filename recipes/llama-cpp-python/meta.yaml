@@ -1,14 +1,3 @@
-# On Flet 0.86 Android, site-packages ship inside sitepackages.zip (zipimport).
-# llama's native libs live in llama_cpp/lib/ (CMAKE_INSTALL_LIBDIR below) — NOT an
-# opt/ tree, so copyOpt never relocates them to jniLibs, and they are ctypes libs
-# (not PyInit extensions) so the .soref relocation skips them too. They stay inside
-# the zip, where _ctypes_extensions.py's `ctypes.CDLL(base_path / libllama.so)`
-# fails ("dlopen ... library not found" — you can't dlopen a .so from a zip).
-# Extract llama_cpp to disk so base_path is a real filesystem dir and the ggml/llama
-# chain loads. (Android-only config; iOS framework-izes these via .fwork, unaffected.)
-extract_packages:
-  - llama_cpp
-
 package:
   name: llama-cpp-python
   version: "0.3.32"
