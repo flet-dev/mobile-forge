@@ -9,7 +9,7 @@ extract_packages:
   - cv2
 
 build:
-  number: 3
+  number: 2
   script_env:
 # {% if sdk == 'android' %}
     CMAKE_ARGS: >-
