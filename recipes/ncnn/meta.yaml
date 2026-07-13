@@ -3,7 +3,11 @@ package:
   version: "1.0.20260526"
 
 build:
-  number: 1
+  # Rebuilt at build 2 to pick up forge fix_wheel's iOS MH_BUNDLE->MH_DYLIB
+  # conversion (ncnn's CMake extension is an MH_BUNDLE Xcode refused to link
+  # into the app's frameworks). The forge fix lands with this branch, so a
+  # bump is required for the fixed wheel to rebuild + publish on merge.
+  number: 2
   script_env:
     _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
     # setup.py appends EXTRA_CMAKE_ARGS after its own args, so our overrides

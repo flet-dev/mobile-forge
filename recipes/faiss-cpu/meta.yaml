@@ -8,7 +8,11 @@ source:
   url: https://github.com/facebookresearch/faiss/archive/refs/tags/v{{ version }}.tar.gz
 
 build:
-  number: 1
+  # Rebuilt at build 2 to pick up forge fix_wheel's iOS MH_BUNDLE->MH_DYLIB
+  # conversion (faiss's _swigfaiss CMake extension is an MH_BUNDLE Xcode
+  # refused to link into the app's frameworks). The forge fix lands with this
+  # branch, so a bump is required for the fixed wheel to rebuild + publish on merge.
+  number: 2
   script_env:
     # scikit-build-core honors the CMAKE_ARGS env var (appended to its cmake call),
     # same as recipes/duckdb. faiss defines + BLAS + OpenMP are shared across

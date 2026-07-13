@@ -14,7 +14,11 @@ patches:
   - mkdir-cython-output.patch
 
 build:
-  number: 10
+  # Rebuilt at build 11 to pick up forge fix_wheel's iOS MH_BUNDLE->MH_DYLIB
+  # conversion (CoolProp's CMake extension is an MH_BUNDLE Xcode refused to
+  # link into the app's frameworks). The forge fix lands with this branch, so a
+  # bump is required for the fixed wheel to rebuild + publish on merge.
+  number: 11
   script_env:
 # {% if sdk == 'android' %}
     CMAKE_ARGS: >-
