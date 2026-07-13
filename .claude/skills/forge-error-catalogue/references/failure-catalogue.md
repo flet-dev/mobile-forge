@@ -1137,6 +1137,23 @@ name** — reproduce the exact name via a fresh `ExtensionFileLoader(name, origi
 never via `import pkg.pkg`. Verified on-device (arm64) 4/4 against the byte-identical
 4.10 loader; ported to the 5.0.0.93 recipe.
 
+**iOS has the SAME break, different relocation → the fast-path must handle both.**
+On iOS the native is framework-ized, not soref'd: serious_python leaves a
+`cv2/cv2.fwork` marker whose text is the **app-relative path to the framework
+binary** (e.g. `Frameworks/cv2.cv2.framework/cv2.cv2`). So `find_spec('cv2.cv2')`
+returns an origin ending in **`.fwork`** (not `.so`) — an Android-only fast-path
+that assumes a `.so` origin falls through and the stock loader recurses
+(`ERROR: recursion is detected during loading of "cv2" binary extensions`). Resolve
+it exactly as CPython's `AppleFrameworkLoader.create_module` does — read the
+`.fwork` text and `os.path.join(os.path.dirname(sys.executable), <that text>)` — to
+get the framework binary, then `ExtensionFileLoader("cv2", <framework binary>)`.
+(This is separate from, and downstream of, the forge `fix_wheel` MH_BUNDLE→MH_DYLIB
+conversion that makes cv2 *linkable* in the first place.) One local-repro gotcha:
+serious_python's per-arch native staging pulls the iphoneos-slice wheel from the
+index (NOT honoring `--find-links`/dist-test locally), so a hand-patched dist-test
+wheel won't take on a local `flet build ios-simulator` — verify opencv iOS in CI
+(where the freshly-built slice wheels are used), as coolprop iOS did.
+
 ---
 
 ### `AttributeError: module 'apsw' has no attribute 'Connection'` / a package whose `__init__` IS the native extension imports empty (Android) — a serious_python `_SorefFinder` gap
