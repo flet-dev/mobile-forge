@@ -7,7 +7,7 @@ extract_packages:
   - sklearn
 
 build:
-  number: 1
+  number: 2
   backend-args:
     # scikit-learn borrows BLAS via scipy.linalg.cython_blas (no external BLAS
     # link, no Fortran); OpenMP is optional (required:false → single-threaded).
@@ -33,4 +33,3 @@ requirements:
 patches:
   - relax-scipy-build-cap.patch
   - disable-openmp-non-android.patch
-  - ios-guard-multiprocessing-import.patch
