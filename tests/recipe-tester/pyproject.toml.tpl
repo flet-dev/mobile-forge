@@ -41,3 +41,17 @@ path = "."
 # (empty `[]` — the default — is a no-op).
 [tool.flet.android]
 extract_packages = [__EXTRACT_PACKAGES__]
+
+# TEMPORARY: pull serious_python from the branch carrying the unreleased iOS fixes
+# so recipe tests validate against them BEFORE they ship in a published sp release:
+#   - #223 interdependent-dylib framework relocation (reconcile_framework_install_names)
+#     — unblocks pyarrow/llama iOS launch (dyld "Library not loaded @rpath/lib*.dylib")
+#   - _SorefFinder package-__init__ native resolution (apsw et al.)
+# flet merges this into the generated Flutter pubspec's dependency_overrides
+# (recursive merge, so the nested `git = { … }` table passes straight through).
+# REMOVE this block once serious_python is released with these fixes.
+[tool.flet.flutter.pubspec.dependency_overrides]
+serious_python = { git = { url = "https://github.com/flet-dev/serious-python.git", ref = "fix/soref-package-init", path = "src/serious_python" } }
+serious_python_darwin = { git = { url = "https://github.com/flet-dev/serious-python.git", ref = "fix/soref-package-init", path = "src/serious_python_darwin" } }
+serious_python_android = { git = { url = "https://github.com/flet-dev/serious-python.git", ref = "fix/soref-package-init", path = "src/serious_python_android" } }
+serious_python_platform_interface = { git = { url = "https://github.com/flet-dev/serious-python.git", ref = "fix/soref-package-init", path = "src/serious_python_platform_interface" } }
