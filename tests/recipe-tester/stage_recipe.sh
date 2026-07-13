@@ -134,6 +134,24 @@ while IFS= read -r tpl_line || [ -n "$tpl_line" ]; do
     fi
 done < "$TPL"
 
+# When SERIOUS_PYTHON_REF is set (from the CI `serious_python_ref` input, or a
+# local env), pin serious_python + its platform implementations to that ref of
+# flet-dev/serious-python so the recipe-tester on-device test builds against an
+# UNRELEASED sp fix (#223 framework relocation, _SorefFinder, ...). Appended here
+# instead of hardcoded in the template so the ref is a single CI knob; empty ->
+# the published serious_python is used. SERIOUS_PYTHON_URL overrides the repo URL.
+if [ -n "${SERIOUS_PYTHON_REF:-}" ]; then
+    SP_URL="${SERIOUS_PYTHON_URL:-https://github.com/flet-dev/serious-python.git}"
+    {
+        echo ""
+        echo "[tool.flet.flutter.pubspec.dependency_overrides]"
+        for _sp in serious_python serious_python_darwin serious_python_android serious_python_platform_interface; do
+            echo "$_sp = { git = { url = \"$SP_URL\", ref = \"$SERIOUS_PYTHON_REF\", path = \"src/$_sp\" } }"
+        done
+    } >> "$OUT"
+    echo "  serious_python pinned: $SP_URL@$SERIOUS_PYTHON_REF (dependency_overrides)"
+fi
+
 echo "Staged recipe '$RECIPE' (dep: $DEP)"
 echo "  recipe_tests/:"
 ls -1 "$TEST_DIR" | sed 's/^/    /'

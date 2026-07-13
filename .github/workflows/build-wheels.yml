@@ -39,6 +39,14 @@ on:
           python-build support tree, instead of the pinned date-keyed release tarball:
         required: false
         default: ""
+      serious_python_ref:
+        description: |
+          Git ref (branch/tag/SHA) of flet-dev/serious-python to pin the
+          recipe-tester's serious_python (+ platform impls) to, so on-device tests
+          validate against an UNRELEASED sp fix. Empty = use the published
+          serious_python. Replaces the old hardcoded override in the pyproject template:
+        required: false
+        default: "fix/soref-package-init"
 
   # Reusable-workflow entry point for cross-repo callers.
   workflow_call:
@@ -67,6 +75,10 @@ on:
         type: string
         required: false
         default: ""
+      serious_python_ref:
+        type: string
+        required: false
+        default: "fix/soref-package-init"
     secrets:
       GEMFURY_TOKEN:
         required: false
@@ -181,5 +193,8 @@ jobs:
       prebuild_recipes: ${{ inputs.prebuild_recipes || '' }}
       mobile_test_pythons: ${{ inputs.mobile_test_pythons || '3.12' }}
       python_build_run_id: ${{ inputs.python_build_run_id || '' }}
+      # No `|| default` here: an explicitly-passed empty string must survive so a
+      # caller can disable the override and test against the published sp.
+      serious_python_ref: ${{ inputs.serious_python_ref }}
     secrets:
       GEMFURY_TOKEN: ${{ secrets.GEMFURY_TOKEN }}
