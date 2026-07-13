@@ -216,8 +216,8 @@ diff --git a/llama_cpp/_ctypes_extensions.py b/llama_cpp/_ctypes_extensions.py
 +    for lib_path in _candidate_paths(lib_base_name):
 +        try:
 +            return ctypes.CDLL(str(lib_path), **cdll_args)  # type: ignore
-+        except Exception as e:
-+            raise RuntimeError(f"Failed to load shared library '{lib_path}': {e}")
++        except Exception:
++            pass  # not on disk (Flet 0.86 Android relocates .so to jniLibs) -> fall through to the soname load below
 +
 +    # Android: the library was relocated into the APK's jniLibs (not a file on
 +    # disk); load it by bare soname.

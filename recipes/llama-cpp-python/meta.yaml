@@ -3,7 +3,10 @@ package:
   version: "0.3.32"
 
 build:
-  number: 2
+  # 3: mobile.patch loader now falls through to the bare-soname jniLibs load on
+  #    Android instead of raising on the first (disk) candidate — under Flet 0.86
+  #    the .so is relocated into jniLibs, so the disk/zip path always misses.
+  number: 3
   script_env:
 # {% if sdk == 'android' %}
     CMAKE_ARGS: >-

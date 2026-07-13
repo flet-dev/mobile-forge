@@ -1077,28 +1077,30 @@ python-magic entry below.
 
 ---
 
-### `RuntimeError: Failed to load shared library '.../sitepackages.zip/<pkg>/lib/lib<X>.so'` / `dlopen failed: library "..." not found` (Android, at import — a **ctypes** lib trapped in the zip)
+### `RuntimeError: Failed to load shared library '.../<pkg>/lib/lib<X>.so'` / `dlopen failed: library "..." not found` (Android, at import — a **ctypes** loader that raises before its own jniLibs fallback)
 
-**Cause:** the package bundles a **ctypes-loaded** native `.so` in its own subdir
-(e.g. `llama_cpp/lib/libllama.so` + the `libggml*` chain, from
-`-DCMAKE_INSTALL_LIBDIR=llama_cpp/lib`) and loads it by a `__file__`-relative path.
-It is NOT relocated to `jniLibs`: it's not in an `opt/` tree (so `copyOpt` skips it)
-and it's not a PyInit extension (so the `.soref` ABI-tag relocation skips it too —
-`llvm-nm -D` shows no `PyInit_*`). Under 0.86 it stays *inside* `sitepackages.zip`, and
-`ctypes.CDLL("<zip>/…/lib<X>.so")` fails — you cannot dlopen from a zip. Tell it apart
-from the untagged-extension case below: that's an **importable PyInit** `.so` (fix =
-ABI-tag); this is a **dependency lib** the loader opens by path (fix = put it on disk).
-The failing path literally contains `sitepackages.zip/` (proof the lib is still zipped,
-not in `jniLibs`).
+**Cause — NOT what the path suggests.** The failing path (`…/sitepackages.zip/<pkg>/lib/
+lib<X>.so` or `…/extract/<pkg>/lib/lib<X>.so`) is the path the loader *tried*, NOT where
+the `.so` is. Flet 0.86 **does relocate these ctypes libs into `jniLibs/<abi>/`** (verified:
+`unzip -l APK` shows `lib/arm64-v8a/libllama.so`, `libggml*.so`), so they ARE loadable —
+but only by **bare soname**. The bug is in the recipe's own ctypes loader: its main-load
+loop does `for lib_path in _candidate_paths(...): try: CDLL(str(lib_path)) except Exception:
+raise RuntimeError(...)` — it **raises on the FIRST (disk/zip) candidate's miss and never
+reaches the bare-soname jniLibs fallback that sits right below it**. (Regression: build-1
+guarded with `if lib_path.exists()` so it fell through; the iOS `.fwork` rework dropped the
+guard and added the raise.) llama-cpp-python (`libggml*`←`libllama`, `-DCMAKE_INSTALL_LIBDIR=
+llama_cpp/lib`) hit exactly this.
 
-**Fix:** `extract_packages: [<pkg>]` (same field as the data-file entry above) — extracting
-the package to disk makes the lib a real file, so `CDLL(base_path/lib<X>.so)` and the
-loader's RTLD_GLOBAL preload of the dependency chain resolve. **No wheel change** (build
-number unchanged — it's app-level config). iOS is unaffected (these libs are `.fwork`
-framework-ized, resolved by the recipe's ctypes shim). Verified: llama-cpp-python. NB do
-NOT "fix" it by moving the libs to `opt/lib/` in the recipe — that routes them through
-`copyOpt`→jniLibs (a bare-soname load) instead, changing the loader contract; keep them
-in the package's own `lib/` and just extract.
+**Fix — the loader, not packaging.** Change the main-load `except` to fall through (`pass`)
+instead of raising, so the loop ends and the existing `for _n in (f"lib{name}.so", …):
+CDLL(_n)` bare-soname fallback runs and the platform linker resolves it from jniLibs. Bump
+the recipe build number (it's a wheel change). iOS is unaffected (the `.fwork` candidate is
+tried first and succeeds). **`extract_packages` is a RED HERRING here** — I tried it first
+and it FAILED: it moved the package's `.pyc` to disk but the `.so` still went to jniLibs, so
+the raise-on-first-candidate still fired (path just changed from `sitepackages.zip/…` to
+`extract/…`). Verified on-device (Android arm64, `test_native_lib_callable` PASS) after the
+loader fall-through. Only reach for `extract_packages` when the missing thing is a **data
+file** read by `__file__` (the entry above), not a native lib.
 
 ---
 
