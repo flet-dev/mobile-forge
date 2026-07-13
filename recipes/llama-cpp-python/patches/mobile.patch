@@ -111,8 +111,8 @@ diff --git a/llama_cpp/_ctypes_extensions.py b/llama_cpp/_ctypes_extensions.py
 +        # iOS .fwork marker resolved to its real framework binary.
 +        if sys.platform == "emscripten":
 +            names = [f"lib{name}{_EMSCRIPTEN_SIDE_MODULE_SUFFIX}"]
-+        elif sys.platform.startswith("linux") or sys.platform.startswith("freebsd"):
-+            names = [f"lib{name}.so"]
++        elif sys.platform.startswith("linux") or sys.platform.startswith("freebsd") or sys.platform == "android":
++            names = [f"lib{name}.so"]  # Python 3.13+ reports "android" (PEP 738), 3.12 reports "linux"
 +        elif sys.platform == "darwin" or sys.platform == "ios":
 +            # iOS (sys.platform == "ios" on flet's 3.13+, else "darwin"): try the
 +            # framework marker first, then the plain desktop-macOS names.
