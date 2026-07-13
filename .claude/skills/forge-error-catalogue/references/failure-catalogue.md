@@ -687,6 +687,22 @@ by CI round 1 poisoning the x86_64 wheel with arm64 code), inherited by
 tflite-runtime. Same root-cause class as a recipe caching a per-arch artifact
 under a global guard (ckzg's vendored libblst).
 
+**Plain setuptools variant (can't re-key its build dir) — forge auto-drops it:**
+a stock sdist with **no shim** builds extensions in-place with `build_ext
+--inplace`, writing `NAME.cpython-<ver>-<triplet>.so` into the reused source
+tree; the *next* ABI slice's `bdist_wheel` then globs the **prior slice's**
+arch-tagged `.so` alongside its own (pymongo: the x86_64 wheel carried the arm64
+`bson/_cbson` + `pymongo/_cmessage` **byte-for-byte** — identical size + mtime).
+Distinct downstream symptom from the readelf-arch-mismatch above: serious_python
+strips the arch off the SOABI tag when writing `.soref`, so two arches collide on
+one `<name>.soref` → **Gradle `duplicate entry: <name>.soref`**, not a runtime
+import error. **Fix: none per-recipe — forge `fix_wheel` (build.py, Android
+branch) drops any `.so` whose ABI-tag triplet ≠ this target's
+`platform_triplet`** (a per-arch wheel must be arch-pure). Generic; covers any
+in-place-building setuptools recipe. Tell: `unzip -l` shows two `cpython-…-<archA>`
++ `cpython-…-<archB>` copies of the same module in one wheel. pymongo 4.17
+(fixed build.py 2026-07-14).
+
 ---
 
 ### Android wheel ships a dead `lib<pkg>-jni.so` (force-enabled component that can never work under flet)
@@ -1133,9 +1149,8 @@ ABI-tagged names; a bare `NAME.so` is treated as a plain dependency lib, gets no
 `.soref`, and the import finder can't resolve it. CMake / SWIG / Cython / nanobind
 builds routinely emit untagged extensions (they can't derive the target SOABI when
 cross-compiling; setuptools/maturin tag theirs, which is why numpy/pandas/pyarrow are
-fine). The x86_64 leg can break while arm64 is fine if the build tags
-nondeterministically per arch (onnxruntime). The misleading "circular import"
-message is just Python's wording when a `from . import _ext` can't find the `.so`.
+fine). The misleading "circular import" message is just Python's wording when a
+`from . import _ext` can't find the `.so`.
 
 **Fix:** none per-recipe — **forge `fix_wheel` (build.py, Android branch) ABI-tags
 any bare `.so` exporting `PyInit_<basename>`** (a genuine extension; `llvm-nm -D`
@@ -1143,7 +1158,16 @@ discriminates it from a dependency lib, which is left untouched) to
 `<basename>.cpython-3X.so`, so serious_python writes its `.soref`. Just rebuild; the
 fix is generic and covers future CMake/SWIG/Cython recipes. If you hit this, confirm
 via `unzip -l` that the wheel ships a bare `.so` exporting `PyInit_*`. Verified:
-ncnn, faiss-cpu, coolprop; onnxruntime x86_64.
+ncnn, faiss-cpu, coolprop, onnxruntime.
+
+**Subtlety — symbol-versioned `PyInit`:** a build applying a **linker version
+script** exports the init symbol *versioned* — `llvm-nm -D` prints
+`PyInit_onnxruntime_pybind11_state@@VERS_1.0`, not the bare name. forge's detector
+must match the base name *tolerating a `@version` suffix* (`tok == pyinit or
+tok.startswith(pyinit + "@")`); an exact-equality check silently misses it, the .so
+ships bare on **both** arches (not just x86_64), and you get `ModuleNotFoundError` on
+device even though `unzip -l` shows the .so present. Tell: `nm -D <so> | grep PyInit`
+shows a `@@`/`@` suffix. onnxruntime 1.27 (fixed build.py 2026-07-14).
 
 ---
 

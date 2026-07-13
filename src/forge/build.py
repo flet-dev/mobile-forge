@@ -874,6 +874,34 @@ class Builder(ABC):
         if self.cross_venv.sdk == "android":
             env = self.compile_env()
 
+            # Drop foreign-arch extension modules that leaked into this wheel.
+            # setuptools' in-place `build_ext` writes NAME.cpython-<ver>-<triplet>.so
+            # into the (reused) unpacked-sdist source tree; when forge builds each
+            # ABI from that same tree, a prior slice's arch-tagged .so lingers and
+            # bdist_wheel globs it into the next slice's wheel (pymongo: the x86_64
+            # wheel carried the arm64 `_cbson`/`_cmessage` byte-for-byte). Downstream
+            # serious_python strips the arch off the SOABI tag when writing `.soref`
+            # markers, so two arches collide on one `<name>.soref` and Gradle fails
+            # with "duplicate entry". A per-arch wheel must be arch-pure — keep only
+            # this target's platform triplet.
+            keep_triplet = self.cross_venv.platform_triplet
+            foreign_triplets = "|".join(
+                re.escape(triplet)
+                for triplet in self.cross_venv.ANDROID_PLATFORM_TRIPLET.values()
+                if triplet != keep_triplet
+            )
+            foreign_ext_re = re.compile(
+                rf"\.cpython-\d+-(?:{foreign_triplets})\.so$"
+            )
+            for so in wheel_dir.glob("**/*.so"):
+                if foreign_ext_re.search(so.name):
+                    log(
+                        self.log_file,
+                        f"[{self.cross_venv}] Dropping foreign-arch extension "
+                        f"{so.name}",
+                    )
+                    so.unlink()
+
             # ABI-tag bare CPython extension modules so serious_python's Android
             # packaging recognizes them. That packaging only relocates a native
             # module into jniLibs and writes the `.soref` marker its on-device
@@ -899,7 +927,16 @@ class Builder(ABC):
                     )
                 except (subprocess.CalledProcessError, OSError):
                     continue  # not an analyzable ELF; leave it alone
-                if f"PyInit_{module}" in symbols.split():
+                # Match `PyInit_<module>`, tolerating a symbol-version suffix.
+                # A build applying a linker version script exports the init
+                # symbol versioned (onnxruntime: `PyInit_..._state@@VERS_1.0`),
+                # which an exact-equality check would miss — leaving the module
+                # bare, unrecognized by serious_python, and unimportable on-device.
+                pyinit = f"PyInit_{module}"
+                if any(
+                    tok == pyinit or tok.startswith(pyinit + "@")
+                    for tok in symbols.split()
+                ):
                     tagged = so.with_name(module + ext_suffix)
                     log(
                         self.log_file,
