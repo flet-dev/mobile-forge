@@ -204,8 +204,31 @@ the log.
 | `packages` | `"name:"` entries, comma-separated; `:` suffix means default version. `ALL` expands to every recipe |
 | `prebuild_recipes` | comma-separated, **ordered**, built per-job before packages |
 | `python_versions` | defaults to all three; narrow for a quick re-run (e.g. `3.12.13`) |
-| `mobile_test_pythons` | default `3.12` — leave it; never `ALL` on this fork |
+| `mobile_test_pythons` | default `3.12` — leave it; never `ALL` on this fork. Pass `""` to build wheels WITHOUT the on-device test (e.g. when the test can't pass yet because the fix lives in unreleased serious_python — you'll test locally) |
 | `archs` | default `android,iOS` |
+| `python_build_run_id` | a `flet-dev/python-build` Actions run-id whose artifacts to use instead of the pinned release; empty → the hardcoded FALLBACK in `build-wheels-version.yml` (grep `PYTHON_BUILD_RUN_ID: ${{ … || '<id>' }}`). Bump that fallback to ship an unreleased python-build fix to every job |
+
+## Testing recipes against UNRELEASED serious_python / python-build (pre-PR validation)
+
+When a recipe's green depends on an sp/python-build fix that isn't in a published
+release yet (e.g. sp #223 iOS framework relocation, python-build iOS `_posixshmem`),
+wire CI + local to the fix so recipes validate BEFORE the PR:
+- **python-build fix** → bump the `PYTHON_BUILD_RUN_ID` fallback constant in
+  `build-wheels-version.yml` to the python-build CI run that has it (verify that run
+  is `success` and has the `python-darwin-<ver>` / `python-android-<ver>` artifacts).
+- **serious_python fix** → add a `[tool.flet.flutter.pubspec.dependency_overrides]`
+  block to `tests/recipe-tester/pyproject.toml.tpl` with **git** deps for
+  serious_python + `_darwin` + `_android` + `_platform_interface`, each
+  `{ git = { url = "…/serious-python.git", ref = "<branch>", path = "src/<pkg>" } }`.
+  flet merges [tool.flet.flutter.pubspec] via a recursive merge, so the nested git
+  table passes through to the Flutter pubspec; dart pub clones the branch and runs its
+  darwin scripts. Mark it TEMPORARY — remove once sp is released. (Local old-Xcode
+  builds also need `device_info_plus`/`connectivity_plus` pins, but keep those OUT of
+  the committed template — add post-staging; CI's Xcode doesn't need them.)
+- The on-device iOS/APK test in CI still uses PUBLISHED sp, so it can't pass until the
+  release — dispatch wheel builds with `mobile_test_pythons=""` and verify the recipe
+  LOCALLY (git or path sp override + local flet-cli + `--python-version 3.12`; see the
+  local-recipe-testing skill). CI goes green only after the sp/python-build release.
 
 ## Watching a run without babysitting
 
