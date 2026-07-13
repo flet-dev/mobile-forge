@@ -15,7 +15,10 @@ package:
 # x86_64 -> x86 and arm64/arm64-v8a -> aarch64 covers every shipped slice.
 # {% set arrow_cpu = 'x86' if 'x86' in arch else 'aarch64' %}
 build:
-  number: 1
+  # Rebuilt at build 2 to pick up forge fix_wheel's iOS MH_BUNDLE->MH_DYLIB
+  # conversion (pyarrow's _json/_pyarrow_cpp_tests/lib extensions are CMake
+  # MODULE bundles that Xcode refused to link into the app's frameworks).
+  number: 2
   script_env:
     # Belt-and-suspenders: hard-lock every OPTIONAL component OFF regardless of
     # what the flet-libarrow Arrow C++ build enables. pyarrow's define_option macro

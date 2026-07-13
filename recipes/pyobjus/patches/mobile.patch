@@ -1,4 +1,24 @@
+Make pyobjus 1.2.4 build and package on Flet's iOS target.
+
+1. libffi header path: the vendored sources include <ffi/ffi.h>, but the
+   flet-libffi host dep installs the header as <ffi.h>; rewrite the include in
+   _runtime.h and common.pxi.
+
+2. Python-3 fixes in the Cython sources: drop the removed py2 `unicode` builtin
+   (isinstance(arg, (str, unicode)) -> isinstance(arg, str)).
+
+3. iOS build config: pyobjus's setup.py hard-requires a pre-built
+   `ios-deps-install/` tree (from its own .ci script) for libffi; mobile-forge
+   supplies libffi via the recipe's `libffi` host dep instead, so drop that block.
+
+4. Drop the bundled `examples` data tree. pyobjus ships Python-2 example scripts
+   under share/pyobjus-examples/ (`print` statements); Flet 0.86 compiles every
+   bundled .py to .pyc and those py2 files raise `SyntaxError: Missing parentheses
+   in call to 'print'`, failing the iOS app build. The examples are demos with no
+   runtime role, so they are removed from setup.py's data_files.
+
 diff --git a/pyobjus/_runtime.h b/pyobjus/_runtime.h
+index c31b7ba..6d0cf85 100644
 --- a/pyobjus/_runtime.h
 +++ b/pyobjus/_runtime.h
 @@ -1,6 +1,6 @@
@@ -10,21 +30,23 @@ diff --git a/pyobjus/_runtime.h b/pyobjus/_runtime.h
  #include <dlfcn.h>
  #include <string.h>
 diff --git a/pyobjus/common.pxi b/pyobjus/common.pxi
+index 61a835d..42eaf81 100644
 --- a/pyobjus/common.pxi
 +++ b/pyobjus/common.pxi
-@@ -110,7 +110,7 @@
+@@ -110,7 +110,7 @@ cdef extern from "objc/runtime.h":
      objc_method_description* protocol_copyMethodDescriptionList(Protocol *p, BOOL isRequiredMethod, BOOL isInstanceMethod, unsigned int *outCount)
-
-
+ 
+ 
 -cdef extern from "ffi/ffi.h":
 +cdef extern from "ffi.h":
      ctypedef unsigned long  ffi_arg
      ctypedef signed long    ffi_sarg
      ctypedef enum: FFI_TYPE_STRUCT
 diff --git a/pyobjus/pyobjus_conversions.pxi b/pyobjus/pyobjus_conversions.pxi
+index 303038a..b3f33a3 100644
 --- a/pyobjus/pyobjus_conversions.pxi
 +++ b/pyobjus/pyobjus_conversions.pxi
-@@ -428,7 +428,7 @@
+@@ -428,7 +428,7 @@ cpdef object convert_py_to_nsobject(arg):
          return arg
      elif arg in (True, False):
          return autoclass('NSNumber').alloc().initWithBool_(int(arg))
@@ -34,11 +56,12 @@ diff --git a/pyobjus/pyobjus_conversions.pxi b/pyobjus/pyobjus_conversions.pxi
      elif isinstance(arg, int):
          return autoclass('NSNumber').alloc().initWithLong_(arg)
 diff --git a/setup.py b/setup.py
+index f0b22da..a34d428 100644
 --- a/setup.py
 +++ b/setup.py
-@@ -43,23 +43,10 @@
+@@ -43,23 +43,10 @@ extra_link_args = []
  include_dirs = []
-
+ 
  if sys.platform == "ios":
 -    ios_ver = platform.ios_ver()
 -    ios_deps_path = join(dirname(__file__), "ios-deps-install")
@@ -62,5 +85,18 @@ diff --git a/setup.py b/setup.py
 +    # the build-time ios-deps-install/ check pyobjus 1.2.4 added; let
 +    # forge's env do the libffi wiring.
      libraries.append('objc')
-
+ 
  depends = [join('pyobjus', x) for x in (
+@@ -101,8 +88,11 @@ setup(
+     ext_package='pyobjus',
+     data_files=[
+         item
++        # mobile-forge: DROP the `examples` tree. pyobjus ships Python-2 example
++        # scripts (share/pyobjus-examples/*.py with `print` statements); Flet 0.86
++        # compiles every bundled .py -> .pyc and those py2 files raise SyntaxError,
++        # failing the iOS app build. The examples are demos, not runtime code.
+         for data in [
+-            list(tree('examples').items()),
+             list(tree('objc_classes', tree_name='objc_classes/').items())
+         ]
+         for item in data
