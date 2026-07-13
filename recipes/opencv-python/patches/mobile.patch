@@ -31,15 +31,24 @@ Make opencv-python 5.0 cross-compile AND load on Flet's mobile targets.
    to jniLibs (importable only as the submodule `cv2.cv2` via a `cv2/cv2.soref`
    marker, never as top-level `cv2`). Loading it as `cv2.cv2` makes OpenCV abort
    with "Submodule name should always start with a parent module name. Parent
-   name: cv2.cv2. Submodule name: cv2". The fix inserts a fast-path right after
+   name: cv2.cv2. Submodule name: cv2". iOS breaks the same way but relocates the
+   native into a `.framework` instead: serious_python leaves a `cv2/cv2.fwork`
+   marker whose text is the app-relative path to the framework binary, so the
+   stock loader recurses ("recursion is detected during loading of cv2 binary
+   extensions") on the pop-and-reimport. The fix inserts a fast-path right after
    the recursion guard: resolve the relocated extension via `find_spec('cv2.cv2')`
-   (the soref finder yields its real jniLibs path), then load it through a fresh
+   (Android: the soref finder yields the real jniLibs `.so`; iOS: the FileFinder
+   yields the `.fwork` marker path -> read it and join with
+   `dirname(sys.executable)` to get the framework binary, exactly as CPython's
+   AppleFrameworkLoader does), then load it through a fresh
    `ExtensionFileLoader("cv2", origin)` so its runtime `__name__` is the required
    top-level "cv2", relink its symbols onto the package, and load the extra pure-
    python submodules. On desktop / non-0.86 builds `find_spec('cv2.cv2')` returns
    None and the stock loader runs unchanged. Pairs with `extract_packages: [cv2]`
    in meta.yaml so the package ships as a real dir (the extra-submodule scan does
-   `os.listdir` on it). Verified on-device (arm64) 4/4.
+   `os.listdir` on it). Verified on-device: Android arm64 4/4. iOS bundle->dylib
+   link + framework packaging validated locally; loader `.fwork` resolution
+   mirrors AppleFrameworkLoader (CI-confirmed alongside the coolprop iOS pass).
 
 diff --git a/opencv/CMakeLists.txt b/opencv/CMakeLists.txt
 index d6812aa..7555914 100644
@@ -497,26 +506,37 @@ index a4bc8e5..b86efd8 100644
 diff --git a/opencv/modules/python/package/cv2/__init__.py b/opencv/modules/python/package/cv2/__init__.py
 --- a/opencv/modules/python/package/cv2/__init__.py
 +++ b/opencv/modules/python/package/cv2/__init__.py
-@@ -75,6 +75,41 @@ def bootstrap():
+@@ -75,6 +75,52 @@ def bootstrap():
          print(sys.path)
          raise ImportError('ERROR: recursion is detected during loading of "cv2" binary extensions. Check OpenCV installation.')
      sys.OpenCV_LOADER = True
-+    # --- mobile-forge fast-path -------------------------
-+    # Under Flet 0.86 the native cv2 extension is relocated out of the wheel into
-+    # jniLibs (resolved via a cv2/cv2.soref marker) and config.py is compiled to
-+    # config.pyc, so OpenCV's stock loader -- which exec()s config.py to find a
-+    # directory of .so files and re-imports it as the top-level module "cv2" --
-+    # cannot run. Load the native module directly under the top-level name "cv2"
-+    # (OpenCV's compiled bindings hard-require that exact name) and relink.
++    # --- mobile-forge (Flet 0.86) fast-path -------------------------------
++    # Under Flet 0.86 the native cv2 extension is relocated out of the wheel:
++    # Android -> jniLibs (a cv2/cv2.soref marker, origin is a real .so); iOS ->
++    # a framework (a cv2/cv2.fwork marker whose text is the app-relative path to
++    # the framework binary). config.py is also compiled to config.pyc, so the
++    # stock loader (which exec()s config.py and re-imports as top-level "cv2")
++    # recurses/fails. Resolve the relocated native and load it under the required
++    # top-level name "cv2" (OpenCV's compiled bindings hard-require that name).
 +    try:
 +        import importlib.util as _ilu
 +        import importlib.machinery as _ilm
 +        _sub_spec = _ilu.find_spec(__name__ + ".cv2")
 +    except Exception:
 +        _sub_spec = None
-+    if _sub_spec is not None and getattr(_sub_spec, "origin", None):
++    _origin = getattr(_sub_spec, "origin", None) if _sub_spec is not None else None
++    if _origin and _origin.endswith(".fwork"):
++        # iOS: the .fwork holds the app-relative framework-binary path; resolve it
++        # exactly as CPython's AppleFrameworkLoader does.
++        try:
++            with open(_origin, "rb") as _fwf:
++                _rel = _fwf.read().decode("utf-8").strip()
++            _origin = os.path.join(os.path.dirname(sys.executable), _rel)
++        except Exception:
++            _origin = None
++    if _origin:
 +        _dbg = hasattr(sys, "OpenCV_LOADER_DEBUG")
-+        _loader = _ilm.ExtensionFileLoader("cv2", _sub_spec.origin)
++        _loader = _ilm.ExtensionFileLoader("cv2", _origin)
 +        _spec = _ilu.spec_from_loader("cv2", _loader)
 +        _native = _ilu.module_from_spec(_spec)
 +        _loader.exec_module(_native)
@@ -535,7 +555,7 @@ diff --git a/opencv/modules/python/package/cv2/__init__.py b/opencv/modules/pyth
 +        except Exception:
 +            pass
 +        return
-+    # --- end mobile-forge fast-path -----------------------------------------
++    # --- end mobile-forge fast-path ---------------------------------------
  
      DEBUG = False
      if hasattr(sys, 'OpenCV_LOADER_DEBUG'):
