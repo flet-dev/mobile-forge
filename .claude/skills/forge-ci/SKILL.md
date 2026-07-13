@@ -112,6 +112,19 @@ Both of these situations are chains — the second is easy to miss:
    (onnx's Requires-Dist includes ml_dtypes; ml-dtypes runs as both a package
    and a prebuild — that's fine and cheap).
 
+   **Silent variant — the dep resolves to an UNPATCHED published copy.** If B is
+   a *pure-Python* recipe that ALSO exists on pypi.flet.dev/PyPI, A's job won't
+   error at resolution — it silently pulls the published B (which lacks B's
+   not-yet-published 0.86 fix) and then fails at **runtime on device** with B's
+   own loader error, not `No matching distribution`. Seen with opaque →
+   `pysodium`: opaque's app pulled upstream pysodium, whose `__init__` raised
+   `ValueError: Unable to find libsodium` (no bare-soname fallback), even though
+   `flet-libsodium` was prebuilt. Fix: prebuild the **patched dep recipe** too so
+   its `-9999` wheel wins — `packages="opaque:"
+   prebuild_recipes="flet-libopaque,flet-libsodium,pysodium"`. Tell: a device
+   traceback whose failing frame is in a *dependency* package, not the one under
+   test → that dep is resolving to its unpatched published build.
+
 If a chain dep lives on a *different* branch, merge that branch in first
 (`git merge machine/<dep-branch>`) so the recipe dir exists for the prebuild.
 
