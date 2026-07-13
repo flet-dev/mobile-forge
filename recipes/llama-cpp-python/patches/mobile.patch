@@ -8,8 +8,17 @@ It does five things:
    llama) so the wheel carries single unversioned files instead of a
    lib*.dylib -> .0 -> .0.15.3 symlink triplet that forge dereferences into
    three copies (and three colliding frameworks on iOS).
-4. Teaches the ctypes loader to find the bundled lib under its iOS framework
-   name (lib<name>.fwork) and on the "ios" platform.
+4. Teaches the ctypes loader to load the bundled libs on iOS, where serious-python
+   relocates each dylib into a code-signed <name>.framework and leaves a
+   lib<name>.fwork TEXT marker (its content is the app-relative framework-binary
+   path). The loader now RESOLVES that marker to the real framework binary (as
+   CPython's AppleFrameworkLoader does — join the marker text above the wheel dir)
+   before ctypes.CDLL, instead of trying to dlopen the text marker itself; and it
+   preloads the ggml chain in dependency order (ggml-base -> ggml-cpu -> ggml ->
+   llama) with RTLD_GLOBAL. serious-python leaves the dylibs' install-ids
+   unchanged (@rpath/lib<name>.dylib), so a preloaded framework satisfies the next
+   lib's sibling @rpath reference by install-id. Also handles sys.platform == "ios"
+   (flet's 3.13+).
 5. Android/Flet 0.86: site-packages ships as a zip and serious-python relocates
    the bundled libs (libllama/libggml*) into the APK's jniLibs, so the loader's
    Path.exists() probes against the in-zip base_path all miss. Add a bare-soname
@@ -49,7 +58,7 @@ diff --git a/CMakeLists.txt b/CMakeLists.txt
 diff --git a/llama_cpp/_ctypes_extensions.py b/llama_cpp/_ctypes_extensions.py
 --- a/llama_cpp/_ctypes_extensions.py
 +++ b/llama_cpp/_ctypes_extensions.py
-@@ -25,30 +25,33 @@
+@@ -25,35 +25,54 @@ _EMSCRIPTEN_SIDE_MODULE_SUFFIX = ".cpython-00-wasm32-emscripten.so"
  # Load the library
  def load_shared_library(lib_base_name: str, base_path: pathlib.Path):
      """Platform independent shared library loader"""
@@ -77,45 +86,68 @@ diff --git a/llama_cpp/_ctypes_extensions.py b/llama_cpp/_ctypes_extensions.py
 -            base_path / f"lib{lib_base_name}.dll",
 -        ]
 -    else:
+-        raise RuntimeError("Unsupported platform")
++
++    def _resolve_fwork(marker: pathlib.Path):
++        # serious-python (iOS) relocates each bundled dylib into a code-signed
++        # <name>.framework and leaves a lib<name>.fwork TEXT marker whose content
++        # is the app-relative path to the framework binary. ctypes.CDLL needs the
++        # binary, not the marker; resolve it exactly as CPython's
++        # AppleFrameworkLoader does (join the marker text above the wheel dir).
++        try:
++            rel = marker.read_text().strip()
++        except OSError:
++            return None
++        d = marker.parent
++        for _ in range(16):
++            d = d.parent
++            fb = d / rel
++            if fb.exists():
++                return fb
++        return None
 +
 +    def _candidate_paths(name: str) -> List[pathlib.Path]:
-+        # Ordered filename candidates for lib `name` inside base_path.
++        # Ordered EXISTING library paths for lib `name` under base_path, with any
++        # iOS .fwork marker resolved to its real framework binary.
 +        if sys.platform == "emscripten":
-+            # A CPython-style tag that Pyodide skips during package auto-load.
-+            return [base_path / f"lib{name}{_EMSCRIPTEN_SIDE_MODULE_SUFFIX}"]
-+        if sys.platform.startswith("linux") or sys.platform.startswith("freebsd"):
-+            return [base_path / f"lib{name}.so"]
-+        if sys.platform == "darwin":
-+            # mobile-forge: on iOS, flet/serious-python repackages each bundled
-+            # .dylib into a code-signed framework and renames the in-wheel file
-+            # to lib<name>.fwork (ctypes.CDLL can dlopen it directly). Try that
-+            # first, then the plain desktop-macOS names.
-+            return [
-+                base_path / f"lib{name}.fwork",
-+                base_path / f"lib{name}.so",
-+                base_path / f"lib{name}.dylib",
-+            ]
-+        if sys.platform == "ios":
-+            # flet's iOS Python (3.13+) reports sys.platform == "ios".
-+            return [
-+                base_path / f"lib{name}.fwork",
-+                base_path / f"lib{name}.dylib",
-+                base_path / f"lib{name}.so",
-+            ]
-+        if sys.platform == "win32":
-+            return [base_path / f"{name}.dll", base_path / f"lib{name}.dll"]
-         raise RuntimeError("Unsupported platform")
++            names = [f"lib{name}{_EMSCRIPTEN_SIDE_MODULE_SUFFIX}"]
++        elif sys.platform.startswith("linux") or sys.platform.startswith("freebsd"):
++            names = [f"lib{name}.so"]
++        elif sys.platform == "darwin" or sys.platform == "ios":
++            # iOS (sys.platform == "ios" on flet's 3.13+, else "darwin"): try the
++            # framework marker first, then the plain desktop-macOS names.
++            names = [f"lib{name}.fwork", f"lib{name}.dylib", f"lib{name}.so"]
++        elif sys.platform == "win32":
++            names = [f"{name}.dll", f"lib{name}.dll"]
++        else:
++            raise RuntimeError("Unsupported platform")
++        out: List[pathlib.Path] = []
++        for n in names:
++            p = base_path / n
++            if n.endswith(".fwork"):
++                if p.exists():
++                    fb = _resolve_fwork(p)
++                    if fb is not None:
++                        out.append(fb)
++            else:
++                out.append(p)
++        return out
  
      cdll_args = dict()  # type: ignore
-@@ -67,9 +70,14 @@
+ 
+-    # Add the library directory to the DLL search path on Windows (if needed)
+     if sys.platform == "win32":
+         os.add_dll_directory(str(base_path))
+         os.environ["PATH"] = str(base_path) + os.pathsep + os.environ["PATH"]
+@@ -67,9 +86,14 @@ def load_shared_library(lib_base_name: str, base_path: pathlib.Path):
              os.add_dll_directory(os.path.join(os.environ["HIP_PATH"], "bin"))
              os.add_dll_directory(os.path.join(os.environ["HIP_PATH"], "lib"))
          cdll_args["winmode"] = ctypes.RTLD_GLOBAL
 +    else:
 +        # mobile-forge: load globally so each library's dependencies (preloaded
-+        # just below) satisfy its DT_NEEDED / @rpath entries by soname. The
-+        # bundled libs carry no RUNPATH, so on iOS/Android the platform linker
-+        # will not find sibling libs on its own.
++        # just below) satisfy its @rpath / DT_NEEDED entries. The bundled libs
++        # carry no usable RUNPATH on iOS/Android; dyld / the Android linker match
++        # an already-loaded image by its install-id / soname instead.
 +        cdll_args["mode"] = ctypes.RTLD_GLOBAL
  
      if sys.platform == "emscripten":
@@ -123,7 +155,7 @@ diff --git a/llama_cpp/_ctypes_extensions.py b/llama_cpp/_ctypes_extensions.py
          lib_dir = str(base_path)
          ld_library_path = os.environ.get("LD_LIBRARY_PATH", "")
          if lib_dir not in ld_library_path.split(os.pathsep):
-@@ -79,30 +87,54 @@
+@@ -79,43 +103,56 @@ def load_shared_library(lib_base_name: str, base_path: pathlib.Path):
                  else f"{lib_dir}{os.pathsep}{ld_library_path}"
              )
  
@@ -135,10 +167,23 @@ diff --git a/llama_cpp/_ctypes_extensions.py b/llama_cpp/_ctypes_extensions.py
 -            dependency_path = (
 -                base_path / f"lib{dependency}{_EMSCRIPTEN_SIDE_MODULE_SUFFIX}"
 -            )
-+    # Preload dependencies (in dependency order) so the main library resolves
-+    # them from the already-loaded set: ggml-base before ggml-cpu / ggml, and
-+    # all of them before llama / mtmd. Best-effort — the main load reports the
-+    # real error if something is genuinely missing.
+-            if dependency_path.exists():
+-                try:
+-                    ctypes.CDLL(str(dependency_path), **cdll_args)  # type: ignore
+-                except Exception as e:
+-                    raise RuntimeError(
+-                        f"Failed to load shared library '{dependency_path}': {e}"
+-                    )
+-
+-    # Try to load the shared library, handling potential errors
+-    for lib_path in lib_paths:
+-        if lib_path.exists():
++    # Preload dependencies in dependency order so the main library resolves them
++    # from the already-loaded set: ggml-base before ggml-cpu/ggml, all before
++    # llama/mtmd. On iOS the libs are framework-relocated with sibling @rpath refs
++    # that dyld cannot resolve on its own, but each preloaded framework's
++    # install-id (@rpath/lib<name>.dylib, which serious-python leaves unchanged for
++    # dylibs) matches the ref, so RTLD_GLOBAL preloading satisfies them.
 +    dependencies = {
 +        "llama": ("ggml-base", "ggml-cpu", "ggml"),
 +        "mtmd": ("ggml-base", "ggml-cpu", "ggml", "llama"),
@@ -147,50 +192,58 @@ diff --git a/llama_cpp/_ctypes_extensions.py b/llama_cpp/_ctypes_extensions.py
 +    for dependency in dependencies.get(lib_base_name, ()):
 +        loaded = False
 +        for dependency_path in _candidate_paths(dependency):
-             if dependency_path.exists():
-                 try:
-                     ctypes.CDLL(str(dependency_path), **cdll_args)  # type: ignore
--                except Exception as e:
--                    raise RuntimeError(
--                        f"Failed to load shared library '{dependency_path}': {e}"
--                    )
-+                except Exception:
-+                    pass
+             try:
+-                return ctypes.CDLL(str(lib_path), **cdll_args)  # type: ignore
+-            except Exception as e:
+-                raise RuntimeError(f"Failed to load shared library '{lib_path}': {e}")
++                ctypes.CDLL(str(dependency_path), **cdll_args)  # type: ignore
 +                loaded = True
 +                break
++            except Exception:
++                continue
 +        if not loaded:
 +            # Android: the bundled lib is not a file on disk (Flet 0.86 ships
-+            # site-packages as a zip and serious-python relocated it into the
-+            # APK's jniLibs); load it by bare soname so the platform linker
-+            # resolves it from there. Best-effort, like the on-disk branch.
-+            for dependency_path in _candidate_paths(dependency):
++            # site-packages as a zip and serious-python relocated it into the APK's
++            # jniLibs); load it by bare soname so the linker resolves it there.
++            for _n in (f"lib{dependency}.so", f"lib{dependency}.dylib"):
 +                try:
-+                    ctypes.CDLL(dependency_path.name, **cdll_args)  # type: ignore
++                    ctypes.CDLL(_n, **cdll_args)  # type: ignore
 +                    break
 +                except OSError:
 +                    continue
- 
-     # Try to load the shared library, handling potential errors
--    for lib_path in lib_paths:
-+    for lib_path in _candidate_paths(lib_base_name):
-         if lib_path.exists():
-             try:
-                 return ctypes.CDLL(str(lib_path), **cdll_args)  # type: ignore
-             except Exception as e:
-                 raise RuntimeError(f"Failed to load shared library '{lib_path}': {e}")
- 
-+    # Android: the library was relocated into the APK's jniLibs and is not a file
-+    # on disk (Flet 0.86 ships site-packages as a zip); load it by bare soname so
-+    # the platform linker resolves it from jniLibs.
++
++    # Load the main library.
 +    for lib_path in _candidate_paths(lib_base_name):
 +        try:
-+            return ctypes.CDLL(lib_path.name, **cdll_args)  # type: ignore
++            return ctypes.CDLL(str(lib_path), **cdll_args)  # type: ignore
++        except Exception as e:
++            raise RuntimeError(f"Failed to load shared library '{lib_path}': {e}")
++
++    # Android: the library was relocated into the APK's jniLibs (not a file on
++    # disk); load it by bare soname.
++    for _n in (f"lib{lib_base_name}.so", f"lib{lib_base_name}.dylib"):
++        try:
++            return ctypes.CDLL(_n, **cdll_args)  # type: ignore
 +        except OSError:
 +            continue
-+
+ 
      raise FileNotFoundError(
          f"Shared library with base name '{lib_base_name}' not found"
      )
+ 
+-
+-# ctypes sane type hint helpers
+-#
+-# - Generic Pointer and Array types
+-# - PointerOrRef type with a type hinted byref function
+-#
+-# NOTE: Only use these for static type checking not for runtime checks
+-# no good will come of that
+-
+ if TYPE_CHECKING:
+     CtypesCData = TypeVar("CtypesCData", bound=ctypes._CData)  # type: ignore
+ 
+
 diff --git a/vendor/llama.cpp/ggml/src/CMakeLists.txt b/vendor/llama.cpp/ggml/src/CMakeLists.txt
 --- a/vendor/llama.cpp/ggml/src/CMakeLists.txt
 +++ b/vendor/llama.cpp/ggml/src/CMakeLists.txt

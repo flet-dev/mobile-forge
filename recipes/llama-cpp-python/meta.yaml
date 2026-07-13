@@ -3,7 +3,7 @@ package:
   version: "0.3.32"
 
 build:
-  number: 2
+  number: 3
   script_env:
 # {% if sdk == 'android' %}
     CMAKE_ARGS: >-
