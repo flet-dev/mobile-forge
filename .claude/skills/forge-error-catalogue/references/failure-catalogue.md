@@ -300,6 +300,55 @@ flet build ios-simulator --python-version 3.12`) not `uvx` (else
 
 ---
 
+### iOS: app builds + launches but **SIGSEGV at launch** in `dyld … runInitializers`, 0-byte `console.log` — an extension runs the Python C-API in a C++ **static initializer**
+
+**Symptom:** same 0-byte `console.log` / crash-before-Python signature as the #223
+entry above (app builds + installs + launches, then dies; the on-device job just
+times out waiting for the EXIT sentinel). But the difference is in the crash report:
+pull `~/Library/Logs/DiagnosticReports/recipe-tester-*.ips` (a fresh one is written
+on every sim launch) — `termination … SIGSEGV`, `EXC_BAD_ACCESS … KERN_INVALID_ADDRESS
+at 0x68`, faulting thread bottomed in `dyld_sim … findAndRunAllInitializers →
+runInitializersBottomUp` → `<pkg>.<ext>  _GLOBAL__sub_I_<file>.cpp` →
+`pybind11::gil_scoped_acquire` → `get_internals` → `Python PyGILState_Ensure`.
+Seen: matplotlib 3.10 (ft2font, via its vendored `p11x` enum helper).
+
+**Cause:** serious_python **links** each frameworkized ext into the app, so dyld runs
+that ext's C++ **static initializers at app LAUNCH — before `Py_Initialize()`**. Any
+global / namespace-scope object whose constructor touches the Python C-API (acquires
+the GIL, calls `pybind11::cast`, imports a module) dereferences the not-yet-created
+interpreter (`_PyRuntime` still zero → deref at small offset 0x68) → segfault before
+any Python runs (hence the 0-byte console.log). It's fine on desktop/Android because
+there the ext is `dlopen`'d **at import** (interpreter already up). matplotlib's
+`src/_enums.h` `P11X_DECLARE_ENUM` macro is the concrete case: it expands to a
+namespace-scope global lambda that runs `py::gil_scoped_acquire gil; p11x::enums[…] =
+pybind11::cast(…)` at static-init (ft2font declares Kerning/LoadFlags/FaceFlags/
+StyleFlags this way). **Distinct** from #223 (a *missing-dylib* link error — dyld
+`Library not loaded`) and from the MH_BUNDLE→MH_DYLIB conversion (which is correct
+here: verify with `codesign -v` OK, `otool -l` shows `LC_BUILD_VERSION platform 7`
+IOSSIMULATOR, and `nm -m` shows all undefined syms **two-level bound**, not flat
+`dynamically looked up`). The wheel is statically flawless yet crashes — the fault is
+purely *when* its initializer runs.
+
+**Tell:** a well-formed iOS ext (valid sig, right platform, two-level symbols) that
+crashes at launch with 0-byte console.log. `nm <ext> | grep _GLOBAL__sub_I` confirms a
+static initializer exists; inspect the source for Python-API calls at namespace scope.
+
+**Fix (recipe patch):** move the Python work OUT of the static initializer into the
+`PYBIND11_MODULE` body / `PyInit` (runs at import, interpreter up). For matplotlib:
+patch `_enums.h` so `P11X_DECLARE_ENUM`'s static-init lambda stores the enum spec as
+**plain C++ data** (no GIL, no `pybind11::cast`) and `bind_enums()` — already called
+inside `PYBIND11_MODULE` — does the cast + `enum.*` class construction there. General
+rule: under serious_python's link-at-launch iOS model an extension **must not call the
+Python C-API from a C++ static initializer**. **VERIFIED:** matplotlib 3.10.9 build 2
+(`recipes/matplotlib/patches/mobile.patch` on `_enums.h`) — the patched wheel on the
+iOS simulator now launches, `test_png PASSED`, `EXIT 0` (was a launch SIGSEGV);
+disassembly confirms the rebuilt `_GLOBAL__sub_I_ft2font_wrapper.cpp` calls only plain
+C++ (vector/unordered_map emplace), no `gil_scoped_acquire`/`get_internals`.
+opencv/scipy/onnxruntime pybind modules don't hit this — their Python access is all
+inside `PyInit`.
+
+---
+
 ### iOS: a flet-lib*'s native lib is silently absent from the app bundle
 
 **Symptom:** `flet build ios-simulator` succeeds, but at runtime the consumer

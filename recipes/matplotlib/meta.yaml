@@ -15,7 +15,7 @@ requirements:
 # {% endif %}
 
 build:
-  number: 1
+  number: 2
 # {% if sdk == 'android' and arch in ['armeabi-v7a', 'x86'] %}
   script_env:
     CPPFLAGS: -Wno-c++11-narrowing
@@ -29,5 +29,5 @@ build:
 extract_packages:
   - matplotlib
 
-# potential issues:
-# https://github.com/godotengine/godot/pull/101036/files
+patches:
+  - mobile.patch
