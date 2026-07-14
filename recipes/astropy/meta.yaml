@@ -2,10 +2,6 @@ package:
   name: astropy
   version: "8.0.0"
 
-# astropy reads astropy/CITATION via a real __file__ path at import.
-extract_packages:
-  - astropy
-
 build:
   number: 1
 
@@ -17,3 +13,7 @@ requirements:
 patches:
   - android-cython-cpow.patch
 # {% endif %}
+
+# astropy reads astropy/CITATION via a real __file__ path at import.
+extract_packages:
+  - astropy

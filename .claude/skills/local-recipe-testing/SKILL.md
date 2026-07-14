@@ -173,6 +173,32 @@ The recipe-tester proves the wheel loads and its own tests pass. For recipes who
 
 Note for consumers that are pure-python + sdist-only (insightface): they need no recipe and no wheel — the verify-app's pyproject declares `[tool.flet] source_packages = ["<name>"]` instead (see `new-mobile-recipe` § "When NOT to use").
 
+## Testing an OFFICIAL PyPI mobile wheel (not a forge wheel)
+
+Upstream packages now publish cibuildwheel-built iOS/Android wheels to PyPI (cp313+
+only). They are live pip candidates in every 0.86 build, **but while a forge recipe
+exists on pypi.flet.dev it deterministically shadows them** — pip's sort at equal
+versions is tag-priority (forge `android_24` > official `android_21`) then build tag
+(forge `-1-` > none). To force the official wheel on-device without touching the index:
+retag a downloaded copy into a find-links dir with a HIGH build tag — and on Android
+also lift the platform tag past forge's —
+
+```bash
+uvx --from wheel wheel tags --build 99 --platform-tag android_24_arm64_v8a <official>.whl   # android
+uvx --from wheel wheel tags --build 99 <official-ios-slice>.whl                             # iOS: tags already equal
+```
+
+then build the verify-app with `PIP_FIND_LINKS=<dir>` and `--python-version 3.13`
+(official wheels are cp313+; pin `flet>=0.86.0.dev0` in the app deps or pip resolves the
+stable 0.85 runtime against the 0.86 template — SERIOUS_PYTHON_APP contract mismatch).
+Retagging rewrites only dist-info; **hash-verify the payload end-to-end**: the staged
+`build/site-packages/<arch>/.../*.so` must equal the wheel's, and the APK's relocated
+`lib/<abi>/lib<mangled>.so` equals it after `llvm-strip --strip-debug --strip-unneeded`
+(gradle strips jniLibs; byte-identical is the pass criterion). Precedent: lru-dict 1.4.1
+(EXIT 0 android + iOS-sim) and pyzmq 27.1.0 (EXIT 0 android, auditwheel-vendored
+`pyzmq.libs/` resolved via the jniLibs basename flatten) — full analysis in
+`playground/cibuildwheel-flet-compat.md`.
+
 ## Triage when the in-app test fails
 
 Read `console.log` first; if the app died without writing a result, pull logcat:

@@ -55,7 +55,7 @@ on:
           Empty = published serious_python:
         required: false
         type: string
-        default: "fix/soref-package-init"
+        default: ""
     secrets:
       GEMFURY_TOKEN:
         required: false
@@ -281,7 +281,7 @@ jobs:
           FORGE_PACKAGES: ${{ matrix.forge_packages }}
           PREBUILD_RECIPES: ${{ inputs.prebuild_recipes }}
           PLATFORM: ${{ matrix.platform }}
-          PYTHON_BUILD_RUN_ID: ${{ inputs.python_build_run_id != '' && inputs.python_build_run_id || '29242819654' }}
+          PYTHON_BUILD_RUN_ID: ${{ inputs.python_build_run_id }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PIP_FIND_LINKS: ${{ github.workspace }}/dist
           UV_PYTHON: ${{ inputs.python_version }}
@@ -510,11 +510,6 @@ jobs:
           fi
 
           cd tests/recipe-tester
-          # The Android on-device test runs on an x86_64 emulator, so build the
-          # APK for x86_64 ONLY: it's the sole ABI the test needs, it cuts build
-          # time, and it sidesteps recipes with excluded_arches (e.g. pyarrow
-          # drops armeabi-v7a) whose all-ABI app build would otherwise fail pip
-          # resolution ("No matching distribution") for a missing-wheel ABI.
           PIP_FIND_LINKS="$GITHUB_WORKSPACE/dist-test" \
             uvx --prerelease allow --with 'flet-cli>=0.86.0.dev0' --with 'flet>=0.86.0.dev0' flet build apk --arch x86_64 -vv --yes --python-version "$(echo "$INPUT_PYTHON_VERSION" | cut -d. -f1-2)"
 

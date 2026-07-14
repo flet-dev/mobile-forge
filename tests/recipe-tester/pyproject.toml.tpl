@@ -41,8 +41,3 @@ path = "."
 # (empty `[]` — the default — is a no-op).
 [tool.flet.android]
 extract_packages = [__EXTRACT_PACKAGES__]
-
-# NOTE: the serious_python dependency_overrides (git pin for validating unreleased
-# sp fixes) are NO LONGER hardcoded here. stage_recipe.sh appends them when the
-# `SERIOUS_PYTHON_REF` env var is set (driven by the CI `serious_python_ref` input,
-# or set manually for local builds); empty -> the published serious_python is used.

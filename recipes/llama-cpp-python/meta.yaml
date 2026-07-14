@@ -3,13 +3,7 @@ package:
   version: "0.3.32"
 
 build:
-  # 3: mobile.patch loader now falls through to the bare-soname jniLibs load on
-  #    Android instead of raising on the first (disk) candidate — under Flet 0.86
-  #    the .so is relocated into jniLibs, so the disk/zip path always misses.
-  # 4: _candidate_paths also accepts sys.platform == "android" — Python 3.13+
-  #    reports "android" (PEP 738) where 3.12 reported "linux", so on py3.13 the
-  #    loader raised "Unsupported platform" before the jniLibs fallback could run.
-  number: 4
+  number: 2
   script_env:
 # {% if sdk == 'android' %}
     CMAKE_ARGS: >-

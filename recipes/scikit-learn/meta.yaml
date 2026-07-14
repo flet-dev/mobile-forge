@@ -2,10 +2,6 @@ package:
   name: scikit-learn
   version: "1.9.0"
 
-# scikit-learn reads sklearn/utils/_repr_html/estimator.css via __file__ at import.
-extract_packages:
-  - sklearn
-
 build:
   number: 2
   backend-args:
@@ -33,3 +29,7 @@ requirements:
 patches:
   - relax-scipy-build-cap.patch
   - disable-openmp-non-android.patch
+
+# scikit-learn reads sklearn/utils/_repr_html/estimator.css via __file__ at import.
+extract_packages:
+  - sklearn

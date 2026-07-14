@@ -794,13 +794,13 @@ class Builder(ABC):
         log(self.log_file, f"[{self.cross_venv}] {so_path.name}: 16KB alignment OK")
 
     def _bundle_to_dylib(self, so_path: Path) -> bool:
-        """Convert a thin ``MH_BUNDLE`` Mach-O extension to ``MH_DYLIB`` in place.
+        """Convert a thin `MH_BUNDLE` Mach-O extension to `MH_DYLIB` in place.
 
-        Injects an ``LC_ID_DYLIB`` load command into the header's free padding and
+        Injects an `LC_ID_DYLIB` load command into the header's free padding and
         flips the filetype byte. Returns True if a conversion was made, False if
-        the file is not a thin little-endian ``MH_BUNDLE`` (already a dylib, a fat
+        the file is not a thin little-endian `MH_BUNDLE` (already a dylib, a fat
         binary, or not Mach-O — all left untouched). The caller must re-sign
-        (``codesign --force --sign -``) afterwards, since the edit invalidates the
+        (`codesign --force --sign -`) afterwards, since the edit invalidates the
         linker's ad-hoc signature.
         """
         MH_MAGIC_64 = 0xFEEDFACF
@@ -825,7 +825,10 @@ class Builder(ABC):
         off = 32
         for _ in range(ncmds):
             cmd, cmdsize = struct.unpack_from("<II", data, off)
-            if cmd == LC_SEGMENT_64 and data[off + 8 : off + 24].split(b"\0")[0] == b"__TEXT":
+            if (
+                cmd == LC_SEGMENT_64
+                and data[off + 8 : off + 24].split(b"\0")[0] == b"__TEXT"
+            ):
                 nsects = struct.unpack_from("<I", data, off + 8 + 16 + 8 * 4)[0]
                 soff = off + 72  # section_64 records follow the 72-byte segment cmd
                 for _s in range(nsects):
@@ -890,9 +893,7 @@ class Builder(ABC):
                 for triplet in self.cross_venv.ANDROID_PLATFORM_TRIPLET.values()
                 if triplet != keep_triplet
             )
-            foreign_ext_re = re.compile(
-                rf"\.cpython-\d+-(?:{foreign_triplets})\.so$"
-            )
+            foreign_ext_re = re.compile(rf"\.cpython-\d+-(?:{foreign_triplets})\.so$")
             for so in wheel_dir.glob("**/*.so"):
                 if foreign_ext_re.search(so.name):
                     log(

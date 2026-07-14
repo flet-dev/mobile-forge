@@ -2,10 +2,6 @@ package:
   name: thinc
   version: "8.3.13"
 
-# thinc reads thinc/backends/_custom_kernels.cu via __file__ at import.
-extract_packages:
-  - thinc
-
 build:
   number: 1
 
@@ -24,3 +20,7 @@ requirements:
     # load time, which the device runtime doesn't provide unless we bundle it.
     - flet-libcpp-shared >=27.2.12479018
 # {% endif %}
+
+# thinc reads thinc/backends/_custom_kernels.cu via __file__ at import.
+extract_packages:
+  - thinc

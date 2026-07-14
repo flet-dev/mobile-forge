@@ -2,12 +2,6 @@ package:
   name: opencv-python
   version: "5.0.0.93"
 
-# Ship cv2 as a real extracted directory (not inside sitepackages.zip) so the
-# loader's extra-submodule scan can os.listdir() the package; see mobile.patch
-# note 3 for the Flet 0.86 native-relocation loader fix this pairs with.
-extract_packages:
-  - cv2
-
 build:
   number: 2
   script_env:
@@ -68,3 +62,8 @@ requirements:
 
 patches:
   - mobile.patch
+
+# So the loader's extra-submodule scan can os.listdir() the package; see mobile.patch
+# note 3 for the Flet 0.86 native-relocation loader fix this pairs with.
+extract_packages:
+  - cv2

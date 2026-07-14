@@ -46,7 +46,7 @@ on:
           validate against an UNRELEASED sp fix. Empty = use the published
           serious_python. Replaces the old hardcoded override in the pyproject template:
         required: false
-        default: "fix/soref-package-init"
+        default: ""
 
   # Reusable-workflow entry point for cross-repo callers.
   workflow_call:
@@ -78,7 +78,7 @@ on:
       serious_python_ref:
         type: string
         required: false
-        default: "fix/soref-package-init"
+        default: ""
     secrets:
       GEMFURY_TOKEN:
         required: false

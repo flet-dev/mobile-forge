@@ -2,11 +2,6 @@ package:
   name: matplotlib
   version: "3.10.9"
 
-# matplotlib reads mpl-data/matplotlibrc (+ fonts/styles) via a real __file__
-# path at import; extract it so those reads resolve outside Flet 0.86's zip.
-extract_packages:
-  - matplotlib
-
 requirements:
   build:
     - ninja
@@ -28,6 +23,11 @@ build:
   backend-args:
     - -Csetup-args=--cross-file
     - -Csetup-args={MESON_CROSS_FILE}
+
+# matplotlib reads mpl-data/matplotlibrc (+ fonts/styles) via a real __file__
+# path at import; extract it so those reads resolve outside Flet 0.86's zip.
+extract_packages:
+  - matplotlib
 
 # potential issues:
 # https://github.com/godotengine/godot/pull/101036/files
