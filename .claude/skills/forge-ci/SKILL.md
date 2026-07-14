@@ -84,20 +84,6 @@ runs on one branch (double dispatch, a late push, a killed script whose last
 cancels the rest — check `gh run list --branch <branch>` and make sure the
 survivor has the inputs you meant.
 
-**PUSH BEFORE YOU DISPATCH — the #1 silent-invalid-run trap.** `gh workflow run
---ref <branch>` checks out the **fork's REMOTE branch HEAD**, never your local
-commits. Committing locally and dispatching without pushing runs *stale code*,
-and the run looks healthy — it just tests the old tree. This burns a full
-build+test cycle and gives a wrong red/green. Symptom seen once: local template
-had a serious_python git override but CI resolved `serious_python 4.3.0` from
-pub.dev (hosted), so every android leg failed on the old empty-x86_64-
-sitepackages bug. ALWAYS: `git push fork <branch>` (commits carry `[skip ci]` so
-the push won't auto-run), then **verify the dispatched run's commit**:
-`gh run view <id> --json headSha` must equal your local `git rev-parse HEAD`
-before you trust ANY result. The fork remote is usually `fork`
-(ndonkoHenri/mobile-forge); `origin` is the upstream flet-dev/mobile-forge —
-dispatch against the fork.
-
 ## Chains: when and how to use `prebuild_recipes`
 
 `prebuild_recipes` is a comma-separated list of recipes each job builds
