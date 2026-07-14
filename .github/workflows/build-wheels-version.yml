@@ -37,7 +37,8 @@ on:
         description: |
           Python versions (comma-separated) whose recipe mobile tests should actually run.
           Versions in `python_versions` that aren't in this list still build wheels but skip the
-          APK/iOS-simulator test stage. Use "ALL" to run tests for every entry in `python_versions`:
+          APK/iOS-simulator test stage. Use "ALL" to run tests for every entry in `python_versions`.
+          Empty (or any value matching no python, e.g. "none") disables all mobile tests:
         required: false
         type: string
         default: "3.12"
@@ -104,7 +105,8 @@ on:
         description: |
           Python versions (comma-separated) whose recipe mobile tests should actually run.
           Versions in `python_versions` that aren't in this list still build wheels but skip the
-          APK/iOS-simulator test stage. Use "ALL" to run tests for every entry in `python_versions`:
+          APK/iOS-simulator test stage. Use "ALL" to run tests for every entry in `python_versions`.
+          Empty (or any value matching no python, e.g. "none") disables all mobile tests:
         required: false
         default: "3.12"
       python_build_run_id:
@@ -429,7 +431,9 @@ jobs:
           fi
 
           # Gate on the caller-provided mobile_test_pythons list: only Python
-          # versions in that list actually run the APK/iOS-sim test step.
+          # versions in that list actually run the APK/iOS-sim test step. An empty
+          # list (or a non-matching sentinel like "none") matches no python, so
+          # every leg skips — i.e. mobile_test_pythons="" disables all mobile tests.
           if [[ "$MOBILE_TEST_PYTHONS" != "ALL" ]]; then
             allowed=""
             for v in $(echo "$MOBILE_TEST_PYTHONS" | tr ',' ' '); do
@@ -523,7 +527,7 @@ jobs:
 
           cd tests/recipe-tester
           PIP_FIND_LINKS="$GITHUB_WORKSPACE/dist-test" \
-            uvx --prerelease allow --with 'flet-cli>=0.86.0.dev0' --with 'flet>=0.86.0.dev0' flet build apk --arch x86_64 -vv --yes --python-version "$(echo "$INPUT_PYTHON_VERSION" | cut -d. -f1-2)"
+            uvx --prerelease allow --with 'flet-cli' --with 'flet' flet build apk --arch x86_64 -vv --yes --python-version "$(echo "$INPUT_PYTHON_VERSION" | cut -d. -f1-2)"
 
       - name: Test on Android emulator (API 28, x86_64)
         if: matrix.platform == 'android' && steps.detect-tests.outputs.has_tests == 'true'
@@ -586,7 +590,7 @@ jobs:
 
           cd tests/recipe-tester
           PIP_FIND_LINKS="$GITHUB_WORKSPACE/dist-test" \
-            uvx --prerelease allow --with 'flet-cli>=0.86.0.dev0' --with 'flet>=0.86.0.dev0' flet build ios-simulator -vv --yes --python-version "$(echo "$INPUT_PYTHON_VERSION" | cut -d. -f1-2)"
+            uvx --prerelease allow --with 'flet-cli' --with 'flet' flet build ios-simulator -vv --yes --python-version "$(echo "$INPUT_PYTHON_VERSION" | cut -d. -f1-2)"
 
       - name: Test on iOS Simulator
         if: matrix.platform == 'ios' && steps.detect-tests.outputs.has_tests == 'true'

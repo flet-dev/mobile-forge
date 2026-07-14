@@ -30,7 +30,8 @@ on:
         description: |
           Python versions (comma-separated) whose recipe mobile tests should actually run.
           Versions in `python_versions` that aren't in this list still build wheels but skip the
-          APK/iOS-simulator test stage. Use "ALL" to run tests for every entry in `python_versions`:
+          APK/iOS-simulator test stage. Use "ALL" to run tests for every entry in `python_versions`.
+          Pass an empty string to build wheels WITHOUT any on-device tests (build-only deploy):
         required: false
         default: "3.12"
       python_build_run_id:
@@ -199,7 +200,15 @@ jobs:
       archs: ${{ inputs.archs || 'android,iOS' }}
       packages: ${{ needs.detect.outputs.packages }}
       prebuild_recipes: ${{ inputs.prebuild_recipes || '' }}
-      mobile_test_pythons: ${{ inputs.mobile_test_pythons || '3.12' }}
+      # A non-empty value is honored verbatim (list of test legs, or "ALL"). push/PR
+      # carry no inputs, so those default to the 3.12 on-device test. On
+      # workflow_dispatch/workflow_call an EXPLICIT empty string disables all mobile
+      # tests — mapped to the `none` sentinel so it survives the reusable-workflow
+      # boundary and never matches a python in the child's gate (`none` works too).
+      mobile_test_pythons: >-
+        ${{ inputs.mobile_test_pythons != '' && inputs.mobile_test_pythons
+        || ((github.event_name == 'push' || github.event_name == 'pull_request') && '3.12')
+        || 'none' }}
       python_build_run_id: ${{ inputs.python_build_run_id || '' }}
       # No `|| default` here: an explicitly-passed empty string must survive so a
       # caller can disable the override and test against the published sp.

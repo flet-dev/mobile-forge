@@ -1295,8 +1295,16 @@ if _sub is not None and getattr(_sub, "origin", None):
     return
 # else fall through to the stock loader (desktop / non-0.86)
 ```
-Pair with **`extract_packages: [cv2]`** in meta.yaml (the extra-submodule scan does
-`os.listdir()` on the package dir, so cv2 must ship extracted, not zipped). On
+The recipe also declares **`extract_packages: [cv2]`**, but that is **defensive, not
+required for core cv2**: this loader loads the native `cv2` directly (no `config.py`
+read, no dir scan), and the only path that touches the package dir — cv2's OPTIONAL
+extra-submodule scan (`__collect_extra_submodules` → `os.listdir`, for `cv2.gapi`
+etc.) — is wrapped in `try/except` and **fails silently** when zipped. So `import cv2`
++ image ops (`imdecode`, …) work fine from `sitepackages.zip` WITHOUT `extract_packages`
+(verified: a consumer app with no EP classified on-device). Add `extract_packages: [cv2]`
+only if you use one of those extra submodules. Consumer apps must set it themselves in
+`[tool.flet.android] extract_packages` — the recipe's meta value only reaches the
+recipe-tester (via `stage_recipe.sh`), not `pip install` consumers. On
 desktop `find_spec('cv2.cv2')` is None → stock loader runs unchanged. General tell:
 any package whose loader **re-imports its own native under a specific top-level
 name** — reproduce the exact name via a fresh `ExtensionFileLoader(name, origin)`,
