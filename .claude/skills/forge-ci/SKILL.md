@@ -112,6 +112,19 @@ Both of these situations are chains — the second is easy to miss:
    (onnx's Requires-Dist includes ml_dtypes; ml-dtypes runs as both a package
    and a prebuild — that's fine and cheap).
 
+   **Silent variant — the dep resolves to an UNPATCHED published copy.** If B is
+   a *pure-Python* recipe that ALSO exists on pypi.flet.dev/PyPI, A's job won't
+   error at resolution — it silently pulls the published B (which lacks B's
+   not-yet-published 0.86 fix) and then fails at **runtime on device** with B's
+   own loader error, not `No matching distribution`. Seen with opaque →
+   `pysodium`: opaque's app pulled upstream pysodium, whose `__init__` raised
+   `ValueError: Unable to find libsodium` (no bare-soname fallback), even though
+   `flet-libsodium` was prebuilt. Fix: prebuild the **patched dep recipe** too so
+   its `-9999` wheel wins — `packages="opaque:"
+   prebuild_recipes="flet-libopaque,flet-libsodium,pysodium"`. Tell: a device
+   traceback whose failing frame is in a *dependency* package, not the one under
+   test → that dep is resolving to its unpatched published build.
+
 If a chain dep lives on a *different* branch, merge that branch in first
 (`git merge machine/<dep-branch>`) so the recipe dir exists for the prebuild.
 
@@ -191,8 +204,31 @@ the log.
 | `packages` | `"name:"` entries, comma-separated; `:` suffix means default version. `ALL` expands to every recipe |
 | `prebuild_recipes` | comma-separated, **ordered**, built per-job before packages |
 | `python_versions` | defaults to all three; narrow for a quick re-run (e.g. `3.12.13`) |
-| `mobile_test_pythons` | default `3.12` — leave it; never `ALL` on this fork |
+| `mobile_test_pythons` | default `3.12` — leave it; never `ALL` on this fork. Pass `""` to build wheels WITHOUT the on-device test (e.g. when the test can't pass yet because the fix lives in unreleased serious_python — you'll test locally) |
 | `archs` | default `android,iOS` |
+| `python_build_run_id` | a `flet-dev/python-build` Actions run-id whose artifacts to use instead of the pinned release; empty → the hardcoded FALLBACK in `build-wheels-version.yml` (grep `PYTHON_BUILD_RUN_ID: ${{ … || '<id>' }}`). Bump that fallback to ship an unreleased python-build fix to every job |
+
+## Testing recipes against UNRELEASED serious_python / python-build (pre-PR validation)
+
+When a recipe's green depends on an sp/python-build fix that isn't in a published
+release yet (e.g. sp #223 iOS framework relocation, python-build iOS `_posixshmem`),
+wire CI + local to the fix so recipes validate BEFORE the PR:
+- **python-build fix** → bump the `PYTHON_BUILD_RUN_ID` fallback constant in
+  `build-wheels-version.yml` to the python-build CI run that has it (verify that run
+  is `success` and has the `python-darwin-<ver>` / `python-android-<ver>` artifacts).
+- **serious_python fix** → add a `[tool.flet.flutter.pubspec.dependency_overrides]`
+  block to `tests/recipe-tester/pyproject.toml.tpl` with **git** deps for
+  serious_python + `_darwin` + `_android` + `_platform_interface`, each
+  `{ git = { url = "…/serious-python.git", ref = "<branch>", path = "src/<pkg>" } }`.
+  flet merges [tool.flet.flutter.pubspec] via a recursive merge, so the nested git
+  table passes through to the Flutter pubspec; dart pub clones the branch and runs its
+  darwin scripts. Mark it TEMPORARY — remove once sp is released. (Local old-Xcode
+  builds also need `device_info_plus`/`connectivity_plus` pins, but keep those OUT of
+  the committed template — add post-staging; CI's Xcode doesn't need them.)
+- The on-device iOS/APK test in CI still uses PUBLISHED sp, so it can't pass until the
+  release — dispatch wheel builds with `mobile_test_pythons=""` and verify the recipe
+  LOCALLY (git or path sp override + local flet-cli + `--python-version 3.12`; see the
+  local-recipe-testing skill). CI goes green only after the sp/python-build release.
 
 ## Watching a run without babysitting
 

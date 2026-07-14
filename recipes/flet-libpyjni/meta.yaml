@@ -1,6 +1,8 @@
+{% set version = "1.0.1" %}
+
 package:
   name: flet-libpyjni
-  version: "1.0.1"
+  version: '{{ version }}'
   # JNI bridge to the Android JVM — no equivalent on iOS, build can't
   # succeed there. (Mirrors flet-libcpp-shared's platforms gate.)
   platforms: [android]
@@ -9,7 +11,7 @@ build:
   number: 10
 
 source:
-  url: https://github.com/flet-dev/libpyjni/releases/download/v1.0.1/pyjni-1.0.1.tar.gz
+  url: https://github.com/flet-dev/libpyjni/releases/download/v{{ version }}/pyjni-{{ version }}.tar.gz
   
 requirements:
   build:
