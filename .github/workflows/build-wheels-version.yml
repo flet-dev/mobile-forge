@@ -56,6 +56,12 @@ on:
         required: false
         type: string
         default: ""
+      publish:
+        description: |
+          Publish the built wheels to pypi.flet.dev at the end of the run.
+        required: false
+        type: boolean
+        default: false
     secrets:
       GEMFURY_TOKEN:
         required: false
@@ -107,6 +113,12 @@ on:
           python-build support tree, instead of the pinned date-keyed release tarball:
         required: false
         default: ""
+      publish:
+        description: |
+          Publish the built wheels to pypi.flet.dev at the end of the run.
+        type: boolean
+        required: false
+        default: false
 
 env:
   FORGE_NDK_VERSION: r27d  # used by forge for wheel cross-compile
@@ -597,7 +609,9 @@ jobs:
           retention-days: 90
 
       - name: Publish wheels
-        if: ${{ success() && hashFiles('dist/*.whl') != '' && github.event_name == 'push' && github.ref == 'refs/heads/main' && inputs.python_build_run_id == '' }}
+        # Publish when a caller explicitly opts in (`publish: true`),
+        # OR on the default automatic path (push to main).
+        if: ${{ success() && hashFiles('dist/*.whl') != '' && (inputs.publish || (github.event_name == 'push' && github.ref == 'refs/heads/main' && inputs.python_build_run_id == '')) }}
         shell: bash
         env:
           GEMFURY_TOKEN: ${{ secrets.GEMFURY_TOKEN }}

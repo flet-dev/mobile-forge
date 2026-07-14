@@ -47,6 +47,12 @@ on:
           serious_python. Replaces the old hardcoded override in the pyproject template:
         required: false
         default: ""
+      publish:
+        description: |
+          Publish the built wheels to pypi.flet.dev at the end of the run.
+        type: boolean
+        required: false
+        default: false
 
   # Reusable-workflow entry point for cross-repo callers.
   workflow_call:
@@ -79,16 +85,18 @@ on:
         type: string
         required: false
         default: ""
+      publish:
+        type: boolean
+        required: false
+        default: false
     secrets:
       GEMFURY_TOKEN:
         required: false
 
 # Cancel in-flight runs when a newer event arrives for the same logical branch.
-# TEMPORARILY DISABLED: we fire several targeted workflow_dispatch runs on the same
-# branch in parallel (one per prebuild set) and must not let them cancel each other.
-# concurrency:
-#   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-#   cancel-in-progress: true
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 
 env:
   DEFAULT_PYTHONS: "3.12,3.13,3.14"
@@ -196,5 +204,6 @@ jobs:
       # No `|| default` here: an explicitly-passed empty string must survive so a
       # caller can disable the override and test against the published sp.
       serious_python_ref: ${{ inputs.serious_python_ref }}
+      publish: ${{ inputs.publish || false }}
     secrets:
       GEMFURY_TOKEN: ${{ secrets.GEMFURY_TOKEN }}
