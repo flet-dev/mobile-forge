@@ -1,9 +1,11 @@
+{% set version = "0.2.5" %}
+
 package:
   name: flet-libyaml
-  version: "0.2.5"
+  version: '{{ version }}'
 
 build:
   number: 10
 
 source:
-  url: https://github.com/yaml/libyaml/releases/download/0.2.5/yaml-0.2.5.tar.gz
+  url: https://github.com/yaml/libyaml/releases/download/{{ version }}/yaml-{{ version }}.tar.gz

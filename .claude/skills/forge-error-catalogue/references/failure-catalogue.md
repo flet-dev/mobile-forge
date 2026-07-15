@@ -219,6 +219,136 @@ The reported arch must match the tag — `*-ios_13_0_x86_64_iphonesimulator.whl`
 
 ---
 
+### iOS `flet build ios-simulator`: `Error (Xcode): Unsupported mach-o filetype (only MH_OBJECT and MH_DYLIB can be linked) in <pkg>.framework/<pkg>` (a CMake/scikit-build extension is an MH_BUNDLE)
+
+**Cause:** serious_python's darwin packaging wraps **every** site-packages native
+`.so` into a `.framework` binary that SwiftPM **links** (a `Package.swift`
+`binaryTarget` the plugin target depends on). `ld` links only `MH_OBJECT`/
+`MH_DYLIB`, so an extension that is an **`MH_BUNDLE`** aborts the app build. iOS
+CPython's sysconfig sets `LDSHARED='...-dynamiclib -F . -framework Python'`, which
+**setuptools / Cython / meson / maturin honor** (→ `MH_DYLIB`, pass); but
+**CMake / scikit-build** link a Python `MODULE` with Apple's default `-bundle`
+(→ `MH_BUNDLE`), *ignoring* `LDSHARED`. So the failing set is exactly the CMake
+ones — **opencv (`cv2`), ncnn, coolprop, faiss (`_swigfaiss`)**, plus latent
+sherpa_onnx/onnx. The flet-lib dependency is a **red herring** (cv2/ncnn link only
+system `Accelerate`/`libc++`). Discriminate with `otool -hv <so>` (`BUNDLE` vs
+`DYLIB`). (Note: **llama-cpp-python / pyarrow** iOS failure is a *different* bug —
+interdependent SHARED dylibs, sp #223, which crashes at **launch** not build; see
+the dedicated entry just below. Their libs are already dylibs, so this MH_BUNDLE
+conversion is a no-op there.)
+
+**Fix:** none per-recipe — **forge `fix_wheel` (build.py, iOS branch) converts each
+`MH_BUNDLE` `.so` to `MH_DYLIB`** in place: inject an `LC_ID_DYLIB` load command
+into the Mach-O header's free padding (bounded by the lowest `__TEXT` section file
+offset — the `section_64.offset` field is at +48), flip the header `filetype`
+`0x8`→`0x6` (and `ncmds`/`sizeofcmds`), then **ad-hoc re-sign** (`codesign --force
+--sign -` — the header edit invalidates the linker signature). `dlopen` (the import
+path) works on both filetypes so nothing regresses; serious_python's own
+`install_name_tool -id` overwrites the placeholder `@rpath/<basename>` id. Generic
+— rebuild and it catches every CMake extension with zero per-recipe CMake knowledge.
+Per-recipe fallback (what onnxruntime/tflite/lightgbm did): force `-dynamiclib`
++ `-undefined dynamic_lookup` in the CMake link flags. **Validate** by `otool -hv`
+= `DYLIB` + `otool -l | grep LC_ID_DYLIB` on the built wheel's `.so`, and that
+`ld ... <so>` links (exit 0) where the original bundle gave the exact error above.
+Verified: ncnn (real forge build → `MH_BUNDLE -> MH_DYLIB`, codesign ok) + cv2
+(link test + iOS-sim app build past the `cv2.cv2.framework` link).
+
+---
+
+### iOS: app builds fine but **crashes at launch**, 0-byte `console.log` — `dyld: Library not loaded: @rpath/lib<X>.dylib, Referenced from: <app>.debug.dylib` (interdependent bundled dylibs, serious_python #223)
+
+**Symptom:** the `.app` builds and installs, but on launch `console.log` is **0
+bytes** (Flet rebinds stdout→console.log only after Python starts; pytest prints
+"test session starts" *before* importing the recipe — so 0 bytes = crash BEFORE
+Python). `simctl launch --console-pty` shows `dyld[…]: Library not loaded:
+@rpath/lib<X>.dylib … Referenced from: …/recipe-tester.debug.dylib … tried
+'…/Frameworks/lib<X>.dylib' (no such file)`. Recipes with a **chain of
+interdependent native libs**: pyarrow (`libarrow`←`libarrow_compute`←
+`libarrow_python`, plus every `pyarrow.*` C-ext), llama-cpp-python
+(`libggml-base`←`libggml-cpu`←`libggml`←`libllama`).
+
+**Cause:** serious_python framework-izes each site-package `.so`/`.dylib` into a
+framework named by its **dotted relative path** (`opt/lib/libarrow.dylib` →
+`opt.lib.libarrow.framework/opt.lib.libarrow`) and makes each a `Package.swift`
+`binaryTarget` the plugin **links at launch**. But `create_xcframework_from_dylibs`
+left every Mach-O **install-id** and interdependent **`@rpath` ref** at the
+ORIGINAL bare name (`@rpath/libarrow.dylib`) — it ran `install_name_tool -id` only
+for `ext=so`, never for `.dylib`, and never rewrote deps. So a bare
+`@rpath/libarrow.dylib` resolves to `Frameworks/libarrow.dylib` (doesn't exist; the
+file is inside `…framework/…`) → dyld can't link at launch. The recipe's ctypes
+`.fwork` shim is **moot** here — it runs IN Python, after the crash. (Distinct from
+the MH_BUNDLE build error above, and from the forge MH_BUNDLE→MH_DYLIB fix which is
+necessary-but-not-sufficient.)
+
+**Fix (serious_python, not per-recipe):** `reconcile_framework_install_names()` in
+`serious_python_darwin/darwin/xcframework_utils.sh`, called from
+`sync_site_packages.sh` after the `for _sp_ext in so dylib` conversion loop — sets
+every framework binary's own install-id to `@rpath/<fw>.framework/<fw>` and rewrites
+every dep matching a sibling's old-id to that framework path, then ad-hoc re-signs;
+excludes the python/stdlib xcframeworks. Local sp branch `fix/soref-package-init`
+commit **cc28d13** (UNPUSHED). **CI stays red for these recipes' iOS jobs until sp
+is released** (published sp lacks it — same release-gating as apsw's SP `_SorefFinder`
+fix). **Verified locally:** pyarrow 24.0.0 iOS-sim now launches, `4 passed`, `EXIT 0`
+(was this exact dyld crash). Two bash gotchas bit while implementing it — the
+`otool -D | head -1` SIGPIPE race (buffer to a var first) and zsh-vs-bash array
+indexing in the *test harness* (real sp runs under bash). To verify an unreleased sp
+change locally without a release: pubspec `dependency_overrides` path-dep the local
+sp packages, build with the **local flet-cli** (`uv run --project .../flet/sdk/python
+flet build ios-simulator --python-version 3.12`) not `uvx` (else
+`SERIOUS_PYTHON_APP … must be set`), stage the recipe's CI wheels as `-9999` via
+`PIP_FIND_LINKS`. Full recipe in the [[serious-python-223-framework-relocation]] memory.
+
+---
+
+### iOS: app builds + launches but **SIGSEGV at launch** in `dyld … runInitializers`, 0-byte `console.log` — an extension runs the Python C-API in a C++ **static initializer**
+
+**Symptom:** same 0-byte `console.log` / crash-before-Python signature as the #223
+entry above (app builds + installs + launches, then dies; the on-device job just
+times out waiting for the EXIT sentinel). But the difference is in the crash report:
+pull `~/Library/Logs/DiagnosticReports/recipe-tester-*.ips` (a fresh one is written
+on every sim launch) — `termination … SIGSEGV`, `EXC_BAD_ACCESS … KERN_INVALID_ADDRESS
+at 0x68`, faulting thread bottomed in `dyld_sim … findAndRunAllInitializers →
+runInitializersBottomUp` → `<pkg>.<ext>  _GLOBAL__sub_I_<file>.cpp` →
+`pybind11::gil_scoped_acquire` → `get_internals` → `Python PyGILState_Ensure`.
+Seen: matplotlib 3.10 (ft2font, via its vendored `p11x` enum helper).
+
+**Cause:** serious_python **links** each frameworkized ext into the app, so dyld runs
+that ext's C++ **static initializers at app LAUNCH — before `Py_Initialize()`**. Any
+global / namespace-scope object whose constructor touches the Python C-API (acquires
+the GIL, calls `pybind11::cast`, imports a module) dereferences the not-yet-created
+interpreter (`_PyRuntime` still zero → deref at small offset 0x68) → segfault before
+any Python runs (hence the 0-byte console.log). It's fine on desktop/Android because
+there the ext is `dlopen`'d **at import** (interpreter already up). matplotlib's
+`src/_enums.h` `P11X_DECLARE_ENUM` macro is the concrete case: it expands to a
+namespace-scope global lambda that runs `py::gil_scoped_acquire gil; p11x::enums[…] =
+pybind11::cast(…)` at static-init (ft2font declares Kerning/LoadFlags/FaceFlags/
+StyleFlags this way). **Distinct** from #223 (a *missing-dylib* link error — dyld
+`Library not loaded`) and from the MH_BUNDLE→MH_DYLIB conversion (which is correct
+here: verify with `codesign -v` OK, `otool -l` shows `LC_BUILD_VERSION platform 7`
+IOSSIMULATOR, and `nm -m` shows all undefined syms **two-level bound**, not flat
+`dynamically looked up`). The wheel is statically flawless yet crashes — the fault is
+purely *when* its initializer runs.
+
+**Tell:** a well-formed iOS ext (valid sig, right platform, two-level symbols) that
+crashes at launch with 0-byte console.log. `nm <ext> | grep _GLOBAL__sub_I` confirms a
+static initializer exists; inspect the source for Python-API calls at namespace scope.
+
+**Fix (recipe patch):** move the Python work OUT of the static initializer into the
+`PYBIND11_MODULE` body / `PyInit` (runs at import, interpreter up). For matplotlib:
+patch `_enums.h` so `P11X_DECLARE_ENUM`'s static-init lambda stores the enum spec as
+**plain C++ data** (no GIL, no `pybind11::cast`) and `bind_enums()` — already called
+inside `PYBIND11_MODULE` — does the cast + `enum.*` class construction there. General
+rule: under serious_python's link-at-launch iOS model an extension **must not call the
+Python C-API from a C++ static initializer**. **VERIFIED:** matplotlib 3.10.9 build 2
+(`recipes/matplotlib/patches/mobile.patch` on `_enums.h`) — the patched wheel on the
+iOS simulator now launches, `test_png PASSED`, `EXIT 0` (was a launch SIGSEGV);
+disassembly confirms the rebuilt `_GLOBAL__sub_I_ft2font_wrapper.cpp` calls only plain
+C++ (vector/unordered_map emplace), no `gil_scoped_acquire`/`get_internals`.
+opencv/scipy/onnxruntime pybind modules don't hit this — their Python access is all
+inside `PyInit`.
+
+---
+
 ### iOS: a flet-lib*'s native lib is silently absent from the app bundle
 
 **Symptom:** `flet build ios-simulator` succeeds, but at runtime the consumer
@@ -606,6 +736,22 @@ by CI round 1 poisoning the x86_64 wheel with arm64 code), inherited by
 tflite-runtime. Same root-cause class as a recipe caching a per-arch artifact
 under a global guard (ckzg's vendored libblst).
 
+**Plain setuptools variant (can't re-key its build dir) — forge auto-drops it:**
+a stock sdist with **no shim** builds extensions in-place with `build_ext
+--inplace`, writing `NAME.cpython-<ver>-<triplet>.so` into the reused source
+tree; the *next* ABI slice's `bdist_wheel` then globs the **prior slice's**
+arch-tagged `.so` alongside its own (pymongo: the x86_64 wheel carried the arm64
+`bson/_cbson` + `pymongo/_cmessage` **byte-for-byte** — identical size + mtime).
+Distinct downstream symptom from the readelf-arch-mismatch above: serious_python
+strips the arch off the SOABI tag when writing `.soref`, so two arches collide on
+one `<name>.soref` → **Gradle `duplicate entry: <name>.soref`**, not a runtime
+import error. **Fix: none per-recipe — forge `fix_wheel` (build.py, Android
+branch) drops any `.so` whose ABI-tag triplet ≠ this target's
+`platform_triplet`** (a per-arch wheel must be arch-pure). Generic; covers any
+in-place-building setuptools recipe. Tell: `unzip -l` shows two `cpython-…-<archA>`
++ `cpython-…-<archB>` copies of the same module in one wheel. pymongo 4.17
+(fixed build.py 2026-07-14).
+
 ---
 
 ### Android wheel ships a dead `lib<pkg>-jni.so` (force-enabled component that can never work under flet)
@@ -943,6 +1089,363 @@ uuid-utils 0.17.0 `mobile.patch`.
 
 ## Runtime failures (on device/emulator/simulator)
 
+### Flet 0.86 changed Android packaging — `sitepackages.zip` + jniLibs relocation (the umbrella behind a whole class of "worked under 0.85, fails now" on-device failures)
+
+**Cause:** the recipe-tester migration to Flet 0.86 (flet-dev/flet#104) stopped
+extracting site-packages to disk. Now, on **Android**:
+- pure Python ships in a stored **`sitepackages.zip`** imported via `zipimport`;
+- native extensions are **relocated into the APK's `jniLibs/<abi>/lib<mangled>.so`**
+  and resolved by a `sys.meta_path` finder (`_sp_bootstrap._SorefFinder`) through a
+  per-module **`.soref`** marker left in the zip — written **only** for filenames
+  matching `\.(cpython-[^/]+|abi3)\.so$`;
+- `opt/` trees from `flet-lib*` wheels are copied to `jniLibs` by `copyOpt`, which
+  takes **only `**/*.so`** (non-`.so` data is dropped);
+- packages are compiled to `.pyc` and the `.py` source is stripped (except the app,
+  which sets `[tool.flet.compile] app = false`).
+
+Under 0.85 site-packages was a real directory (the `useLegacyPackaging` extract), so
+any loader/data-access that built a filesystem path from `__file__` worked; under
+0.86 `dirname(__file__)` is *inside* the zip and every such path misses — that's the
+"why only now." **iOS is unaffected** (its site-packages stay a real dir in the app
+bundle; iOS has its own `.fwork`/framework story). Match the specific symptom below;
+after a build, `unzip -l` the APK and check `assets/sitepackages.zip` /
+`assets/extract.zip` / `lib/<abi>/`.
+
+---
+
+### `NotADirectoryError: [Errno 20] Not a directory: '.../sitepackages.zip/<pkg>/<datafile>'` (Android, at import)
+
+**Cause:** the package reads a bundled **data file** (not a `.py`) via a real
+`__file__`-relative path — matplotlib `mpl-data/matplotlibrc`, astropy `CITATION`,
+scikit-learn `estimator.css`, thinc `backends/_custom_kernels.cu` (spacy pulls
+thinc). Under 0.86 the parent is `sitepackages.zip` (a file), so `open()`/
+`read_text()` on the child path raises NotADirectoryError.
+
+**Fix:** ship the package **extracted to disk** via serious_python's Android hatch.
+Declare it in the recipe's meta.yaml as a top-level list:
+```yaml
+extract_packages:
+  - matplotlib      # the IMPORT name (sklearn not scikit-learn; cv2 not opencv-python)
+```
+`stage_recipe.sh` reads it (via `read_meta_list.py`) into
+`[tool.flet.android].extract_packages`; serious_python unpacks those packages to
+disk (on `sys.path` before the zip) so `__file__` resolves to a real dir. Field is
+in `src/forge/schema/meta-schema.yaml`. Verified: matplotlib, astropy. **opencv-python**
+also needs `extract_packages: [cv2]` — but that alone is NOT enough for it; its
+loader has a separate config.py/native-name break (see the dedicated cv2 entry
+below). And it does NOT help when the missing data file lives in a *flet-lib\**
+`opt/` tree rather than the python package itself: **python-magic**
+(`could not find any valid magic files!` — `magic.mgc` is dropped by `copyOpt`
+because `copyOpt` copies only `**/*.so`); the fix there is to ship the data file
+**inside the python package's own wheel** + load it from memory — see the dedicated
+python-magic entry below.
+
+---
+
+### `RuntimeError: Failed to load shared library '.../<pkg>/lib/lib<X>.so'` / `dlopen failed: library "..." not found` (Android, at import — a **ctypes** loader that raises before its own jniLibs fallback)
+
+**Cause — NOT what the path suggests.** The failing path (`…/sitepackages.zip/<pkg>/lib/
+lib<X>.so` or `…/extract/<pkg>/lib/lib<X>.so`) is the path the loader *tried*, NOT where
+the `.so` is. Flet 0.86 **does relocate these ctypes libs into `jniLibs/<abi>/`** (verified:
+`unzip -l APK` shows `lib/arm64-v8a/libllama.so`, `libggml*.so`), so they ARE loadable —
+but only by **bare soname**. The bug is in the recipe's own ctypes loader: its main-load
+loop does `for lib_path in _candidate_paths(...): try: CDLL(str(lib_path)) except Exception:
+raise RuntimeError(...)` — it **raises on the FIRST (disk/zip) candidate's miss and never
+reaches the bare-soname jniLibs fallback that sits right below it**. (Regression: build-1
+guarded with `if lib_path.exists()` so it fell through; the iOS `.fwork` rework dropped the
+guard and added the raise.) llama-cpp-python (`libggml*`←`libllama`, `-DCMAKE_INSTALL_LIBDIR=
+llama_cpp/lib`) hit exactly this.
+
+**Fix — the loader, not packaging.** Change the main-load `except` to fall through (`pass`)
+instead of raising, so the loop ends and the existing `for _n in (f"lib{name}.so", …):
+CDLL(_n)` bare-soname fallback runs and the platform linker resolves it from jniLibs. Bump
+the recipe build number (it's a wheel change). iOS is unaffected (the `.fwork` candidate is
+tried first and succeeds). **`extract_packages` is a RED HERRING here** — I tried it first
+and it FAILED: it moved the package's `.pyc` to disk but the `.so` still went to jniLibs, so
+the raise-on-first-candidate still fired (path just changed from `sitepackages.zip/…` to
+`extract/…`). Verified on-device (Android arm64, `test_native_lib_callable` PASS) after the
+loader fall-through. Only reach for `extract_packages` when the missing thing is a **data
+file** read by `__file__` (the entry above), not a native lib.
+
+---
+
+### `RuntimeError: Unsupported platform` (or a loader taking the wrong branch) on Python **3.13+** Android only — `sys.platform == "android"`
+
+**Cause:** Python **3.13+ reports `sys.platform == "android"`** on Android (PEP 738); **3.12
+reports `"linux"`**. So any recipe loader (or upstream code) that gates on
+`sys.platform.startswith("linux")` or an explicit platform list (`== "linux"`, `in ("linux",
+"darwin", …)`) silently takes the wrong branch — or hits an `else: raise` — on a **py3.13
+Android** build, while the *same recipe passes on py3.12*. llama-cpp-python hit this: its ctypes
+`_candidate_paths` matched `linux/freebsd/darwin/ios/win32/else-raise` and raised `RuntimeError:
+Unsupported platform` at import on 3.13, before its jniLibs bare-soname fallback could run.
+
+**Fix:** add `or sys.platform == "android"` wherever `"linux"` is special-cased (Android is a
+Linux kernel, so the linux path is almost always what you want), and bump the build. This is a
+**general py3.12→3.13 tell** — grep a recipe's patches/loaders for `sys.platform` before trusting
+a 3.13 build. Distinct from the 3.13/3.14 Android **x86_64 `SIGSYS`/seccomp `open()`** crash,
+which is a *native* abort from python-build's mimalloc (fixed in the `20260712` snapshot), not a
+Python-level branch — that one shows up as a hard crash with no traceback, this one as a clean
+`RuntimeError`/`ModuleNotFoundError` with a full pytest traceback.
+
+---
+
+### `ModuleNotFoundError: No module named '<pkg>.<ext>'` / `cannot import name '<_ext>' … (most likely due to a circular import)` for a NATIVE submodule (Android)
+
+**Cause:** the extension `.so` ships **untagged** — `ncnn/ncnn.so`,
+`faiss/_swigfaiss.so`, `CoolProp/{CoolProp,_constants}.so` — rather than
+`*.cpython-*.so`/`*.abi3.so`. serious_python only relocates + writes a `.soref` for
+ABI-tagged names; a bare `NAME.so` is treated as a plain dependency lib, gets no
+`.soref`, and the import finder can't resolve it. CMake / SWIG / Cython / nanobind
+builds routinely emit untagged extensions (they can't derive the target SOABI when
+cross-compiling; setuptools/maturin tag theirs, which is why numpy/pandas/pyarrow are
+fine). The misleading "circular import" message is just Python's wording when a
+`from . import _ext` can't find the `.so`.
+
+**Fix:** none per-recipe — **forge `fix_wheel` (build.py, Android branch) ABI-tags
+any bare `.so` exporting `PyInit_<basename>`** (a genuine extension; `llvm-nm -D`
+discriminates it from a dependency lib, which is left untouched) to
+`<basename>.cpython-3X.so`, so serious_python writes its `.soref`. Just rebuild; the
+fix is generic and covers future CMake/SWIG/Cython recipes. If you hit this, confirm
+via `unzip -l` that the wheel ships a bare `.so` exporting `PyInit_*`. Verified:
+ncnn, faiss-cpu, coolprop, onnxruntime.
+
+**Subtlety — symbol-versioned `PyInit`:** a build applying a **linker version
+script** exports the init symbol *versioned* — `llvm-nm -D` prints
+`PyInit_onnxruntime_pybind11_state@@VERS_1.0`, not the bare name. forge's detector
+must match the base name *tolerating a `@version` suffix* (`tok == pyinit or
+tok.startswith(pyinit + "@")`); an exact-equality check silently misses it, the .so
+ships bare on **both** arches (not just x86_64), and you get `ModuleNotFoundError` on
+device even though `unzip -l` shows the .so present. Tell: `nm -D <so> | grep PyInit`
+shows a `@@`/`@` suffix. onnxruntime 1.27 (fixed build.py 2026-07-14).
+
+---
+
+### `OSError: Cannot load native module '<Pkg>.<mod>': Not found <mod>.cpython-3X.so, .abi3.so, .so, .fwork` (pycryptodome/pycryptodomex, Android)
+
+**Cause:** the `.abi3.so` extensions ARE relocated + `.soref`'d (a plain `import`
+would work), but pycryptodome's `Crypto/Util/_raw_api.py:load_pycryptodome_raw_lib`
+**ctypes-loads by a `__file__`-relative path** (`os.path.isfile` next to the module,
+inside the zip), never consulting the import system. General shape: any package with
+a custom dlopen-by-`__file__` loader for extensions that *are* correctly tagged.
+
+**Fix:** after the on-disk probes miss, ask the import system for the resolved
+on-device origin and dlopen that — no hardcoded soname mangling:
+```python
+import importlib.util
+spec = importlib.util.find_spec(name)      # name = "Crypto.Util._cpuid_c"
+if spec is not None and spec.origin:
+    return load_lib(spec.origin, cdecl)    # _SorefFinder set origin to the jniLibs/apk path
+```
+Extend the recipe's `mobile.patch` loader; keep the existing iOS `.fwork` branch (it
+wins first on iOS, where the path is real). Verified: pycryptodome, pycryptodomex.
+
+---
+
+### `cannot import name '<subdir>' from partially initialized module '<pkg>'` for an include-only namespace dir (Android)
+
+**Cause:** `<pkg>/__init__.py` does `from . import <subdir>`, but `<pkg>/<subdir>/`
+has **no importable member** — only Cython `.pxi` includes / `.h`/`.c` / data
+(compiled into a sibling `.so` at build time). Under normal CPython it's an empty
+PEP 420 namespace package; under 0.86 serious_python's `synthesizePackageInits()`
+only injects a synthetic `__init__` for dirs containing a `.py`/`.pyc`/`.soref`, so
+the include-only dir is invisible to `zipimport`. selectolax:
+`from . import lexbor, modest, parser` — `modest/` holds only `.pxi` (`include`d by
+`parser.pyx`); `lexbor`/`parser` are real `.so` and load fine.
+
+**Fix:** if the import is **vestigial** (no runtime API — the real modules are the
+sibling `.so`), drop it from `__init__` via `mobile.patch` (selectolax:
+`from . import lexbor, parser`). If the dir genuinely must be importable, ship an
+empty `<pkg>/<subdir>/__init__.py` — but verify the build's `find_packages` /
+`package_data` actually lands it in the wheel (selectolax's
+`find_packages(include=["selectolax"])` would NOT, which is why the drop was cleaner
+there). Verified: selectolax (drop).
+
+---
+
+### `ImportError: OpenCV loader: missing configuration file: ['config.py']` / `Bindings generation error. Submodule name should always start with a parent module name. Parent name: cv2.cv2. Submodule name: cv2` (opencv-python, Android)
+
+**Cause:** a *two-part* 0.86 break in cv2's stock loader
+(`cv2/__init__.py::bootstrap`). Stock OpenCV: (1) `exec()`s a `config.py` /
+`config-3.py` to discover a directory of `.so` files, then (2) pops the `cv2`
+package from `sys.modules` and **re-imports it as the top-level module `cv2`** so the
+native binary's `__name__` is exactly `cv2` — its compiled-in bindings register
+submodules (`cv2.dnn`, `cv2.gapi`, …) and assert each *starts with the parent name*.
+Under 0.86 Android both halves break: `config.py` is compiled to `config.pyc`, so
+`os.path.exists('config.py')` is False → **"missing configuration file"**; and the
+native `cv2.cv2` extension is relocated to `jniLibs` (importable **only** as the
+submodule `cv2.cv2` via a `cv2/cv2.soref` marker, never as top-level `cv2`). If you
+naively `import cv2.cv2`, OpenCV's C init sees parent name `cv2.cv2`, the compiled
+submodule `cv2` no longer starts with it, and it aborts with **"Submodule name
+should always start with a parent module name."** (The native `.so`'s DT_NEEDED are
+all system libs — `libcamera2ndk`/`libmediandk`/`liblog`/… — so this is **not** a
+dlopen failure; don't chase a missing lib.)
+
+**Fix:** patch `cv2/__init__.py` to insert a fast-path right after the
+`sys.OpenCV_LOADER = True` recursion guard that bypasses the config machinery and
+loads the native under the **required top-level name `cv2`**:
+```python
+import importlib.util as _ilu, importlib.machinery as _ilm
+_sub = _ilu.find_spec(__name__ + ".cv2")          # soref finder → real jniLibs .so path
+if _sub is not None and getattr(_sub, "origin", None):
+    _loader = _ilm.ExtensionFileLoader("cv2", _sub.origin)   # name MUST be "cv2", not "cv2.cv2"
+    _native = _ilu.module_from_spec(_ilu.spec_from_loader("cv2", _loader))
+    _loader.exec_module(_native)                  # runtime __name__ == "cv2" → C init happy
+    # relink _native.__dict__ into globals(), del sys.OpenCV_LOADER,
+    # then run __collect_extra_submodules()/__load_extra_py_code_for_module()
+    return
+# else fall through to the stock loader (desktop / non-0.86)
+```
+The recipe also declares **`extract_packages: [cv2]`**, but that is **defensive, not
+required for core cv2**: this loader loads the native `cv2` directly (no `config.py`
+read, no dir scan), and the only path that touches the package dir — cv2's OPTIONAL
+extra-submodule scan (`__collect_extra_submodules` → `os.listdir`, for `cv2.gapi`
+etc.) — is wrapped in `try/except` and **fails silently** when zipped. So `import cv2`
++ image ops (`imdecode`, …) work fine from `sitepackages.zip` WITHOUT `extract_packages`
+(verified: a consumer app with no EP classified on-device). Add `extract_packages: [cv2]`
+only if you use one of those extra submodules. Consumer apps must set it themselves in
+`[tool.flet.android] extract_packages` — the recipe's meta value only reaches the
+recipe-tester (via `stage_recipe.sh`), not `pip install` consumers. On
+desktop `find_spec('cv2.cv2')` is None → stock loader runs unchanged. General tell:
+any package whose loader **re-imports its own native under a specific top-level
+name** — reproduce the exact name via a fresh `ExtensionFileLoader(name, origin)`,
+never via `import pkg.pkg`. Verified on-device (arm64) 4/4 against the byte-identical
+4.10 loader; ported to the 5.0.0.93 recipe.
+
+**iOS has the SAME break, different relocation → the fast-path must handle both.**
+On iOS the native is framework-ized, not soref'd: serious_python leaves a
+`cv2/cv2.fwork` marker whose text is the **app-relative path to the framework
+binary** (e.g. `Frameworks/cv2.cv2.framework/cv2.cv2`). So `find_spec('cv2.cv2')`
+returns an origin ending in **`.fwork`** (not `.so`) — an Android-only fast-path
+that assumes a `.so` origin falls through and the stock loader recurses
+(`ERROR: recursion is detected during loading of "cv2" binary extensions`). Resolve
+it exactly as CPython's `AppleFrameworkLoader.create_module` does — read the
+`.fwork` text and `os.path.join(os.path.dirname(sys.executable), <that text>)` — to
+get the framework binary, then `ExtensionFileLoader("cv2", <framework binary>)`.
+(This is separate from, and downstream of, the forge `fix_wheel` MH_BUNDLE→MH_DYLIB
+conversion that makes cv2 *linkable* in the first place.) One local-repro gotcha:
+serious_python's per-arch native staging pulls the iphoneos-slice wheel from the
+index (NOT honoring `--find-links`/dist-test locally), so a hand-patched dist-test
+wheel won't take on a local `flet build ios-simulator` — verify opencv iOS in CI
+(where the freshly-built slice wheels are used), as coolprop iOS did.
+
+---
+
+### `AttributeError: module 'apsw' has no attribute 'Connection'` / a package whose `__init__` IS the native extension imports empty (Android) — a serious_python `_SorefFinder` gap
+
+**Cause:** the package's `__init__` is *itself* a C extension — apsw's setup builds
+`Extension("apsw.__init__", …)` → `apsw/__init__.cpython-*.so` (dotted import name
+`apsw`). Under 0.86 that `.so` is relocated to jniLibs and its marker is written at
+**`apsw/__init__.soref`**, but `_sp_bootstrap._SorefFinder.find_spec("apsw")` only
+probed `"<dotted>.soref"` (= `apsw.soref`) → miss → `None`. Meanwhile
+`synthesizePackageInits()` injects an **empty `apsw/__init__.py`**, which then wins,
+so `import apsw` yields an empty module and any `apsw.Connection` / `apsw.apswversion()`
+raises AttributeError. **This is a serious_python bug, not a recipe/forge bug** — the
+recipe's mobile.patch (SQLite amalgamation cross-compile) is unrelated; the `.so`
+exports `PyInit_apsw` (not `PyInit___init__`) on non-Windows, so it *can* be loaded
+under the top-level name.
+
+**Fix (in serious_python, `serious_python_android/python/_sp_bootstrap.py`):** when
+`"<dotted>.soref"` misses, fall back to **`"<dotted>/__init__.soref"`**; load via
+`ExtensionFileLoader(fullname, origin)` (its `PyInit_<name>` matches) and mark the
+result a **package** — set `spec.submodule_search_locations = [<winning sys.path
+entry>/<dotted>]` so pure-Python submodules (`apsw.ext`, `apsw._unicode`, …) resolve
+via the normal zipimport/FileFinder machinery (`_read_marker` must also return which
+entry it hit). The `_SorefFinder` sits at `meta_path[0]`, so once it resolves `apsw`
+it beats the synthesized empty `__init__`. Validated on-device (Android arm64) with a
+local serious_python override: apsw 3.53.2.0 imports + runs an in-memory SQLite
+round-trip 2/2. **Caveat:** the fix must land in a *released* serious_python before
+CI / real consumers get it — until then apsw stays red in CI (do not include it in a
+recipe CI dispatch). To test an unreleased serious_python locally, point the app at
+your checkout via `[tool.flet.flutter.pubspec.dependency_overrides]` (path deps for
+`serious_python` + `serious_python_android` + `serious_python_platform_interface`) in
+the generated pyproject.
+
+---
+
+### `magic.MagicException: could not find any valid magic files!` (python-magic, Android) — a data file that lives in a `flet-lib*` `opt/` tree
+
+**Cause:** the runtime data file a package needs ships in a **separate `flet-lib*`
+wheel's `opt/` tree**, not in the package itself, and 0.86's `copyOpt` copies **only
+`.so`** out of an `opt/` tree (and `splitSitePackages` skips `opt/` entirely), so the
+data file reaches **neither** jniLibs **nor** `sitepackages.zip`. python-magic:
+libmagic's compiled DB `magic.mgc` ships in `flet-libmagic`'s
+`opt/share/misc/magic.mgc`; the `.so` (`libmagic.so`) is relocated to jniLibs fine,
+but `magic.mgc` is dropped, so `magic_load(cookie, <missing path>)` /
+`magic_load(cookie, None)` (falls back to libmagic's compiled-in default, absent on
+device) fails. **`extract_packages` does NOT help** — extracting the *python* package
+to disk doesn't bring back a file that was never in it. iOS is unaffected (real dir).
+
+**Fix (two parts):** ship the data file **inside the consuming package's own wheel**
+(which rides 0.86's all-files `sitepackages.zip`, unlike an `opt/` tree), then load it
+in a way that survives the stored zip.
+- *Delivery:* forge's `PythonPackageBuilder` has no copy hook and `patch -p1` can't
+  carry a multi-MB binary, so copy it in from `setup.py` at build time, fed the path
+  via a meta `build.script_env` that templates the `flet-lib*` host dep's cross-env
+  path — `FLET_MAGIC_MGC: "{platlib}/opt/share/misc/magic.mgc"` (the `{platlib}/opt/…`
+  idiom; the `flet-lib*` host dep installs there). Add the file to `package_data`.
+- *Load:* real path when one exists (iOS/desktop/`extract_packages`), else read the
+  file's **bytes** via `importlib.resources.files(__package__).joinpath(...).read_bytes()`
+  (routes through `zipimport.get_data`, so it works from a stored zip) and hand them to
+  a **from-memory** API — for libmagic, bind `magic_load_buffers` (public in file
+  ≥ 5.32) and keep the ctypes buffer alive past the cookie (libmagic references it in
+  place; stash it on the object the module caches). Guard the binding
+  (`except AttributeError`) so import survives an older lib.
+Zero consumer config (no `extract_packages`). General tell: a package's runtime data
+lives in a sibling `flet-lib*` `opt/` and you see a "can't find <data>" at import →
+relocate the data into the consumer's wheel + load from memory. Verify with
+`nm -D lib<x>.so | grep <load_buffers_symbol>` (must be exported) and `unzip -l` the
+APK's `sitepackages.zip` for the data file. Verified on-device (arm64) 2/2:
+python-magic (`magic_load_buffers`, `magic.mgc` 10.3 MB in `sitepackages.zip`).
+
+---
+
+### `FileNotFoundError: Shared library with base name '<X>' not found` (ctypes-by-`__file__` loader, Android)
+
+**Cause:** the loader gates each candidate on `Path.exists()` for a
+`dirname(__file__)/lib` path — inside `sitepackages.zip` under 0.86, so every probe
+misses. The bundled libs (llama-cpp-python's libllama/libggml*) were relocated to
+`jniLibs` and are loadable by bare soname. Same 0.86 class as the `find_library()
+→ None` case (pysodium/opaque) below, different loader shape.
+
+**Fix:** after the on-disk probes miss, fall back to `ctypes.CDLL("lib<name>.so")`
+(bare soname → the Android linker resolves it from jniLibs), for both the dependency
+preload and the main lib; load `RTLD_GLOBAL` so preloaded deps satisfy the main
+lib's DT_NEEDED. Verified: llama-cpp-python (android). See also "Unable to find
+… shared library" (the `find_library`-returns-None sibling).
+
+---
+
+### `ImportError: dlopen failed: cannot locate symbol "<sym>" referenced by ".../lib/<abi>/lib<pkg>.so"` where `lib<pkg>.so` is the wheel's OWN extension (Android)
+
+**Cause:** a **jniLibs name collision**. A *top-level* Python extension module named
+`<pkg>` (e.g. `jq`) mangles to `lib<pkg>.so`; a bundled `flet-lib*` C library with
+the same base name (`libjq.so`) *also* lands at `lib/<abi>/lib<pkg>.so`. One clobbers
+the other — the extension (which references the C lib's symbols) overwrites the C
+lib, so its symbols vanish (`cannot locate symbol jq_teardown`). NOT a missing
+export — `llvm-nm -D` shows the C lib exports it fine; check `lib/<abi>/lib<pkg>.so`'s
+size to see which one won.
+
+**Fix:** make the extension **self-contained** so no colliding `lib<pkg>.so` ships.
+Static-link the flet-lib* into the extension: build the flet-lib* `--with-pic` and
+keep its `.a` (drop the `.so`); in the consumer switch `requirements.host` →
+**`host_build`** (build-time only, not a runtime dep) and patch the link
+`-l<name>` → `-l:lib<name>.a` (static). The extension's DT_NEEDED then lists no
+`lib<pkg>.so`. Verified: jq (static-links flet-libjq's libjq.a/libonig.a; flet-libjq
+build 11, jq build 3).
+
+**iOS caveat — `-l:NAME.a` is a GNU ld extension; Apple's ld64 does NOT support it**
+→ the iOS build dies `ld: library ':libjq.a' not found` on every Python. The jniLibs
+name collision that motivates `-l:` is **Android-only**, and since the `flet-lib*`
+ships *only* static `.a` (no `.so`/`.dylib`), a plain `-l<name>` resolves to the
+static archive just the same on iOS. So gate the flag by target platform in the
+consumer's `setup.py`: `-l:libX.a` on Android, `-lX` on iOS. Detect with
+`"ios" in sysconfig.get_platform()` (the crossenv reports the *target* platform, e.g.
+`ios-13.0-arm64-iphonesimulator`). Verify the iOS extension is self-contained with
+`otool -L` (no `libX` dylib dep) + `nm` (the `libX` symbols are `T`, defined). Any
+recipe that borrows this static-link pattern must apply the same per-platform gate.
+
+---
+
 ### iOS: `import <pkg>` → `symbol not found in flat namespace '…<Sym>…'` at dlopen (a CMake OBJECT library never made it into the `.framework`)
 
 **Cause:** the build is GREEN but a CMake `OBJECT` library's objects — meant to link
@@ -990,7 +1493,10 @@ iOS doesn't need this — Apple's clang resolves the C++ runtime to system libc+
 
 **Cause:** a pure-Python `ctypes` wrapper called `ctypes.util.find_library()`,
 which returns `None` on mobile (no ldconfig/compiler), so it gave up before
-trying to load the lib. This is the Pattern H case (pyzbar, python-magic, …).
+trying to load the lib. This is the Pattern H case (pyzbar, python-magic,
+pysodium, opaque, …); under Flet 0.86 it is the `find_library`-returns-None
+member of the `sitepackages.zip` class (umbrella entry at the top of this
+section).
 
 **Fix:** this needs the full Pattern H treatment, not a one-liner:
 1. the `flet-lib*` must be built **shared** (`lib<name>.so`), not static;
@@ -1077,6 +1583,30 @@ lazy_loader's own `_StubVisitor` rules). Validate on desktop by deleting all `.p
 from the installed package and re-running the tests. WATCH FOR any package using
 `attach_stub` — the pattern is spreading in scientific python (networkx does not).
 scikit-image `mobile.patch`.
+
+---
+
+### `ModuleNotFoundError: No module named '_posixshmem'` (iOS, at import of a multiprocessing user)
+
+**Cause:** a python-build gap, not a recipe bug. iOS CPython (flet's python-build)
+re-enables `_multiprocessing` (`build_ios.py` flips `py_cv_module__multiprocessing=n/a`
+→ `yes` — SemLock/sockets build fine on Darwin) but left **`_posixshmem` n/a**.
+`multiprocessing/resource_tracker.py` does an **unconditional `import _posixshmem`
+on posix**, so with `_multiprocessing` present but `_posixshmem` absent, *any*
+transitive `import multiprocessing` takes the consumer down on iOS. scikit-learn:
+`sklearn.utils.validation` → joblib → multiprocessing → `resource_tracker` →
+`ModuleNotFoundError: _posixshmem`. Affects **any** package that reaches
+multiprocessing (not sklearn-specific).
+
+**Fix (in python-build, not the recipe):** flip `py_cv_module__posixshmem=n/a` →
+`yes` in `darwin/build_ios.py`, right beside the existing `_multiprocessing` flip.
+`shm_open`/`shm_unlink` build fine on Darwin/iOS (the sandbox restricts *use*, not
+the build; nothing here uses shared memory), and upstream 3.13's official iOS
+support ships `_posixshmem`. Leave `_posixsubprocess` n/a (genuinely needs
+fork/exec). **Needs an iOS python-build rebuild + a new support run-id for CI to
+pick it up.** Tell: any iOS import traceback whose deepest frame is
+`multiprocessing/resource_tracker.py` importing a missing `_posix*` → it's this
+python-build gap, fix it there, don't patch the consuming recipe.
 
 ---
 

@@ -3,4 +3,7 @@ package:
   version: "0.4.10"
 
 build:
-  number: 10
+  number: 11
+
+patches:
+  - mobile.patch

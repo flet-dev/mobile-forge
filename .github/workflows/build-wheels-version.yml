@@ -37,7 +37,8 @@ on:
         description: |
           Python versions (comma-separated) whose recipe mobile tests should actually run.
           Versions in `python_versions` that aren't in this list still build wheels but skip the
-          APK/iOS-simulator test stage. Use "ALL" to run tests for every entry in `python_versions`:
+          APK/iOS-simulator test stage. Use "ALL" to run tests for every entry in `python_versions`.
+          Empty (or any value matching no python, e.g. "none") disables all mobile tests:
         required: false
         type: string
         default: "3.12"
@@ -48,6 +49,20 @@ on:
         required: false
         type: string
         default: ""
+      serious_python_ref:
+        description: |
+          Git ref of flet-dev/serious-python to pin the recipe-tester's
+          serious_python to for on-device tests (unreleased sp fix validation).
+          Empty = published serious_python:
+        required: false
+        type: string
+        default: ""
+      publish:
+        description: |
+          Publish the built wheels to pypi.flet.dev at the end of the run.
+        required: false
+        type: boolean
+        default: false
     secrets:
       GEMFURY_TOKEN:
         required: false
@@ -90,7 +105,8 @@ on:
         description: |
           Python versions (comma-separated) whose recipe mobile tests should actually run.
           Versions in `python_versions` that aren't in this list still build wheels but skip the
-          APK/iOS-simulator test stage. Use "ALL" to run tests for every entry in `python_versions`:
+          APK/iOS-simulator test stage. Use "ALL" to run tests for every entry in `python_versions`.
+          Empty (or any value matching no python, e.g. "none") disables all mobile tests:
         required: false
         default: "3.12"
       python_build_run_id:
@@ -99,6 +115,12 @@ on:
           python-build support tree, instead of the pinned date-keyed release tarball:
         required: false
         default: ""
+      publish:
+        description: |
+          Publish the built wheels to pypi.flet.dev at the end of the run.
+        type: boolean
+        required: false
+        default: false
 
 env:
   FORGE_NDK_VERSION: r27d  # used by forge for wheel cross-compile
@@ -409,7 +431,9 @@ jobs:
           fi
 
           # Gate on the caller-provided mobile_test_pythons list: only Python
-          # versions in that list actually run the APK/iOS-sim test step.
+          # versions in that list actually run the APK/iOS-sim test step. An empty
+          # list (or a non-matching sentinel like "none") matches no python, so
+          # every leg skips — i.e. mobile_test_pythons="" disables all mobile tests.
           if [[ "$MOBILE_TEST_PYTHONS" != "ALL" ]]; then
             allowed=""
             for v in $(echo "$MOBILE_TEST_PYTHONS" | tr ',' ' '); do
@@ -455,6 +479,7 @@ jobs:
           PKG_NAME: ${{ steps.detect-tests.outputs.pkg_name }}
           PKG_VERSION: ${{ steps.detect-tests.outputs.pkg_version }}
           INPUT_PYTHON_VERSION: ${{ inputs.python_version }}
+          SERIOUS_PYTHON_REF: ${{ inputs.serious_python_ref }}
         run: |
           set -euxo pipefail
 
@@ -478,9 +503,31 @@ jobs:
           done
 
           ./tests/recipe-tester/stage_recipe.sh "$PKG_NAME" "$PKG_VERSION"
+
+          # Seed the on-device Python runtime from the python-build run under test.
+          # When python_build_run_id is set, setup.sh kept that run's dart tarballs
+          # in downloads/. serious_python otherwise downloads the runtime from a
+          # HARDCODED flet-dev/python-build release; pre-seeding its cache (keyed by
+          # version at $FLET_CACHE_DIR/python-build/v<ver>/) with a fresh mtime makes
+          # the download's onlyIfModified check 304-skip, so `flet build` bundles THIS
+          # run's runtime -- validating an unreleased runtime fix with no release.
+          # Safe: if the CDN ignores the conditional and re-downloads, you just get
+          # the released runtime back (same result as before, never a false pass).
+          if ls "$GITHUB_WORKSPACE"/downloads/python-android-dart-*.tar.gz >/dev/null 2>&1; then
+              export FLET_CACHE_DIR="$GITHUB_WORKSPACE/.flet-cache"
+              for t in "$GITHUB_WORKSPACE"/downloads/python-android-dart-*.tar.gz; do
+                  ver=$(basename "$t" | sed -E 's/^python-android-dart-([0-9.]+)-.*/\1/')
+                  d="$FLET_CACHE_DIR/python-build/v$ver"
+                  mkdir -p "$d"
+                  cp "$t" "$d/"
+                  touch "$d/$(basename "$t")"
+                  echo "Seeded on-device runtime: $(basename "$t") -> $d"
+              done
+          fi
+
           cd tests/recipe-tester
           PIP_FIND_LINKS="$GITHUB_WORKSPACE/dist-test" \
-            uvx --prerelease allow --with 'flet-cli>=0.86.0.dev0' --with 'flet>=0.86.0.dev0' flet build apk -vv --yes --python-version "$(echo "$INPUT_PYTHON_VERSION" | cut -d. -f1-2)"
+            uvx --prerelease allow --with 'flet-cli' --with 'flet' flet build apk --arch x86_64 -vv --yes --python-version "$(echo "$INPUT_PYTHON_VERSION" | cut -d. -f1-2)"
 
       - name: Test on Android emulator (API 28, x86_64)
         if: matrix.platform == 'android' && steps.detect-tests.outputs.has_tests == 'true'
@@ -503,6 +550,7 @@ jobs:
           PKG_NAME: ${{ steps.detect-tests.outputs.pkg_name }}
           PKG_VERSION: ${{ steps.detect-tests.outputs.pkg_version }}
           INPUT_PYTHON_VERSION: ${{ inputs.python_version }}
+          SERIOUS_PYTHON_REF: ${{ inputs.serious_python_ref }}
         run: |
           set -euxo pipefail
 
@@ -519,9 +567,30 @@ jobs:
           done
 
           ./tests/recipe-tester/stage_recipe.sh "$PKG_NAME" "$PKG_VERSION"
+
+          # Seed the on-device iOS runtime from the python-build run under test
+          # (see the android step for the rationale). The darwin cache is
+          # date-keyed (v<ver>-<date>) and its download is a plain `[ ! -f ]`
+          # existence check, so we pin SERIOUS_PYTHON_BUILD_DATE to a sentinel we
+          # control and drop the fixed tarball at that exact cache path; prepare_ios.sh
+          # then finds it, skips the download, and extracts THIS run's runtime.
+          # Only fires when the tarball is present (python_build_run_id set); the
+          # sentinel is never fetched from a URL because the file already exists.
+          if ls "$GITHUB_WORKSPACE"/downloads/python-ios-dart-*.tar.gz >/dev/null 2>&1; then
+              export FLET_CACHE_DIR="$GITHUB_WORKSPACE/.flet-cache"
+              export SERIOUS_PYTHON_BUILD_DATE="seeded"
+              for t in "$GITHUB_WORKSPACE"/downloads/python-ios-dart-*.tar.gz; do
+                  ver=$(basename "$t" | sed -E 's/^python-ios-dart-([0-9.]+)\.tar\.gz$/\1/')
+                  d="$FLET_CACHE_DIR/python-build/v$ver-$SERIOUS_PYTHON_BUILD_DATE"
+                  mkdir -p "$d"
+                  cp "$t" "$d/"
+                  echo "Seeded on-device iOS runtime: $(basename "$t") -> $d"
+              done
+          fi
+
           cd tests/recipe-tester
           PIP_FIND_LINKS="$GITHUB_WORKSPACE/dist-test" \
-            uvx --prerelease allow --with 'flet-cli>=0.86.0.dev0' --with 'flet>=0.86.0.dev0' flet build ios-simulator -vv --yes --python-version "$(echo "$INPUT_PYTHON_VERSION" | cut -d. -f1-2)"
+            uvx --prerelease allow --with 'flet-cli' --with 'flet' flet build ios-simulator -vv --yes --python-version "$(echo "$INPUT_PYTHON_VERSION" | cut -d. -f1-2)"
 
       - name: Test on iOS Simulator
         if: matrix.platform == 'ios' && steps.detect-tests.outputs.has_tests == 'true'
@@ -544,7 +613,9 @@ jobs:
           retention-days: 90
 
       - name: Publish wheels
-        if: ${{ success() && hashFiles('dist/*.whl') != '' && github.event_name == 'push' && github.ref == 'refs/heads/main' && inputs.python_build_run_id == '' }}
+        # Publish when a caller explicitly opts in (`publish: true`),
+        # OR on the default automatic path (push to main).
+        if: ${{ success() && hashFiles('dist/*.whl') != '' && (inputs.publish || (github.event_name == 'push' && github.ref == 'refs/heads/main' && inputs.python_build_run_id == '')) }}
         shell: bash
         env:
           GEMFURY_TOKEN: ${{ secrets.GEMFURY_TOKEN }}

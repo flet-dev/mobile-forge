@@ -112,6 +112,19 @@ Both of these situations are chains — the second is easy to miss:
    (onnx's Requires-Dist includes ml_dtypes; ml-dtypes runs as both a package
    and a prebuild — that's fine and cheap).
 
+   **Silent variant — the dep resolves to an UNPATCHED published copy.** If B is
+   a *pure-Python* recipe that ALSO exists on pypi.flet.dev/PyPI, A's job won't
+   error at resolution — it silently pulls the published B (which lacks B's
+   not-yet-published 0.86 fix) and then fails at **runtime on device** with B's
+   own loader error, not `No matching distribution`. Seen with opaque →
+   `pysodium`: opaque's app pulled upstream pysodium, whose `__init__` raised
+   `ValueError: Unable to find libsodium` (no bare-soname fallback), even though
+   `flet-libsodium` was prebuilt. Fix: prebuild the **patched dep recipe** too so
+   its `-9999` wheel wins — `packages="opaque:"
+   prebuild_recipes="flet-libopaque,flet-libsodium,pysodium"`. Tell: a device
+   traceback whose failing frame is in a *dependency* package, not the one under
+   test → that dep is resolving to its unpatched published build.
+
 If a chain dep lives on a *different* branch, merge that branch in first
 (`git merge machine/<dep-branch>`) so the recipe dir exists for the prebuild.
 
@@ -191,8 +204,32 @@ the log.
 | `packages` | `"name:"` entries, comma-separated; `:` suffix means default version. `ALL` expands to every recipe |
 | `prebuild_recipes` | comma-separated, **ordered**, built per-job before packages |
 | `python_versions` | defaults to all three; narrow for a quick re-run (e.g. `3.12.13`) |
-| `mobile_test_pythons` | default `3.12` — leave it; never `ALL` on this fork |
+| `mobile_test_pythons` | default `3.12` — leave it; never `ALL` on this fork. Pass `""` to build wheels WITHOUT the on-device test (e.g. when the test can't pass yet because the fix lives in unreleased serious_python — you'll test locally) |
 | `archs` | default `android,iOS` |
+| `python_build_run_id` | a `flet-dev/python-build` Actions run-id whose artifacts to use instead of the pinned release; empty → the hardcoded FALLBACK in `build-wheels-version.yml` (grep `PYTHON_BUILD_RUN_ID: ${{ … || '<id>' }}`). Bump that fallback to ship an unreleased python-build fix to every job |
+
+## Testing recipes against UNRELEASED serious_python / python-build (pre-PR validation)
+
+When a recipe's green depends on an sp/python-build fix that isn't in a published
+release yet (e.g. sp #223 iOS framework relocation, python-build iOS `_posixshmem`),
+wire CI + local to the fix so recipes validate BEFORE the PR:
+- **python-build fix** → bump the `PYTHON_BUILD_RUN_ID` fallback constant in
+  `build-wheels-version.yml` to the python-build CI run that has it (verify that run
+  is `success` and has the `python-darwin-<ver>` / `python-android-<ver>` artifacts).
+- **serious_python fix** → add a `[tool.flet.flutter.pubspec.dependency_overrides]`
+  block to `tests/recipe-tester/pyproject.toml.tpl` with **git** deps for
+  serious_python + `_darwin` + `_android` + `_platform_interface`, each
+  `{ git = { url = "…/serious-python.git", ref = "<branch>", path = "src/<pkg>" } }`.
+  flet merges [tool.flet.flutter.pubspec] via a recursive merge, so the nested git
+  table passes through to the Flutter pubspec; dart pub clones the branch and runs its
+  darwin scripts. Mark it TEMPORARY — remove once sp is released. (Local old-Xcode
+  builds also need `device_info_plus`/`connectivity_plus` pins, but keep those OUT of
+  the committed template — add post-staging; CI's Xcode doesn't need them.)
+- The on-device iOS/APK test in CI still uses PUBLISHED sp, so it can't pass until the
+  release — dispatch wheel builds with `mobile_test_pythons=none` (see the footgun below)
+  and verify the recipe LOCALLY (git or path sp override + local flet-cli +
+  `--python-version 3.12`; see the local-recipe-testing skill). CI goes green only after
+  the sp/python-build release.
 
 ## Watching a run without babysitting
 
@@ -201,3 +238,33 @@ runs take 30min–3h) and print the conclusion + failed-job list when it
 completes. One watcher per run; kill stale watchers when you supersede a run,
 and remember a killed multi-line script may still fire its remaining lines —
 put dispatches *before* long build loops in scripts, or in separate commands.
+
+## Deploying (publishing wheels to pypi.flet.dev)
+
+Publishing is gated in `build-wheels-version.yml`'s **Publish wheels** step. It fires when
+either (a) `inputs.publish == true` (an explicit deploy dispatch), OR (b) the automatic path
+— a **push to `main`** with an **empty `python_build_run_id`**. `publish_to_pypi dist/*.whl`
+is **per matrix-job and 409-tolerant**: each (python × platform) job publishes its own wheels
+at the end, already-published (version+build) wheels 409-skip, and one job failing never
+blocks another's publish.
+
+- **Deploy via dispatch:** run on **origin (`flet-dev/mobile-forge`)** — that's where
+  `GEMFURY_TOKEN` lives; a `publish=true` run on a fork builds but the publish step has no
+  token. `gh workflow run build-wheels.yml -R flet-dev/mobile-forge --ref <branch> -f
+  packages=… -f publish=true -f mobile_test_pythons=none -f python_build_run_id=<run w/
+  dc76612> -f serious_python_ref=main`. (The `publish` boolean input is read from the
+  dispatched **ref**, so it works even before it's on `main`.)
+- **Bump before republishing an already-published version.** A recipe published at
+  `<ver>-<build>` will 409-skip on re-publish, so a forge/loader fix won't reach pypi.flet.dev
+  until the **build number is bumped** (pymongo/onnxruntime 1→2 for the fix_wheel fixes).
+- **Only ONE genuine build-order coupling** across a deploy set is `host_build` (build-time
+  static-link) deps — e.g. `jq` needs `flet-libjq`; put it in `prebuild_recipes` (it's built
+  into dist/ AND published). Runtime deps (opaque→pysodium, ncnn→opencv) don't need ordering
+  when tests are off. Scan with `grep -A6 host_build: recipes/*/meta.yaml`.
+- **Verify against pypi.flet.dev, not job conclusions.** A *cancelled* run's "success" jobs
+  are unreliable (early-cancel can leave gaps), and a per-job artifact-upload flake
+  (`Failed to CreateArtifact: … ENOTFOUND`) fails the job → skips its Publish. Check the
+  actual wheels — **with the filename normalized `-`→`_`** in the distribution name
+  (`opencv_python-…`, `scikit_learn-…`, `flet_libjq-…`; the project *URL* keeps the hyphen).
+  Allow a few minutes for Gemfury indexing after a Publish step reports `[success]`. Account
+  for single-platform recipes (`platforms: [ios]`, e.g. pyobjus → no android wheels expected).

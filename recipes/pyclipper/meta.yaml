@@ -1,0 +1,17 @@
+package:
+  name: pyclipper
+  version: "1.4.0"
+
+build:
+  number: 1
+  script_env:
+    _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
+
+# {% if sdk == 'android' %}
+requirements:
+  host:
+    # The extension is C++ (Cython language="c++" over the vendored Clipper
+    # sources) -> libc++_shared.so at runtime on Android (srsly/murmurhash
+    # wiring).
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}

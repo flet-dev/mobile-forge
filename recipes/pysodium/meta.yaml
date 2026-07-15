@@ -3,7 +3,10 @@ package:
   version: "0.7.18"
 
 build:
-  number: 10
+  number: 11
+
+patches:
+  - mobile.patch
 
 requirements:
   host:
