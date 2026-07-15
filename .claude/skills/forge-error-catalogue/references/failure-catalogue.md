@@ -1541,14 +1541,6 @@ uv run flet build apk  # rebuild
 
 ---
 
-### `ImportError: cannot import name '<ext>' from '<pkg>'` for a native `.so` — Android, Flet ≥ 0.86 (serious_python 4.3.0)
-
-**Cause:** the traceback shows the package loading from `…/sitepackages.zip/<pkg>/__init__.pyc` and the missing name is a **native pybind/Cython extension** whose `.so` IS in the wheel. serious_python 4.3.0 (Flet 0.86) relocates native extension modules out of the stored `sitepackages.zip` into `jniLibs/<abi>/lib<mangled>.so` and makes them importable via a `sys.meta_path` finder that reads `.soref` markers — but ONLY for **ABI-tagged** names: `serious_python_android/android/build.gradle.kts` matches `extTag = /\.(cpython-[^/]+|abi3)\.so$/`, and anything else falls into the `rel.endsWith(".so") -> dep` branch (copied to jniLibs as a plain dependency lib, **no `.soref`**, never importable). A shim that stages a pybind module under a **plain** name (`_pywrap_….so`, `onnxruntime_pybind11_state.so`) trips exactly this. Normal Cython/pybind recipes are unaffected — their extensions already carry the target `EXT_SUFFIX` (android cp312 = `.cpython-312.so`). iOS is unaffected (different migration path); the same recipe passing pre-0.86 or on iOS is the tell.
-
-**Fix:** name the extension with the target `EXT_SUFFIX` so serious_python recognizes it (`.cpython-*.so` is also a valid CPython extension suffix, so the `from <pkg> import <ext>` still resolves). In the PEP 517 shim, stage it as `f"<ext>{sysconfig.get_config_var('EXT_SUFFIX')}"` instead of a plain `.so` (crossenv returns the target suffix; the recipe already sets `_PYTHON_SYSCONFIGDATA_NAME`). If the recipe's `setup.py` builds `package_data` by globbing hardcoded plain names (onnxruntime's `data = [… for x in libs if glob(… x)]`), also patch that to wildcard the pybind name and package the real basename, else the retagged `.so` is dropped from the wheel. Precedent: `machine/tflite-runtime` (`_pywrap_tensorflow_interpreter_wrapper.cpython-312.so`) and `machine/onnxruntime` (shim retag + setup.py glob patch). Verify: `unzip -l <wheel> | grep '\.cpython-'`.
-
----
-
 ### App launches but `import X` shows old version
 
 **Cause:** flet-cli has a hash-based cache (`build/.hash/`) that decides whether to re-run the pip install step. If you only updated wheels in `dist/` but pyproject deps didn't change, the cache thinks nothing has changed.
@@ -1738,25 +1730,6 @@ ls dist/<pkg>-*  | sort
 Each `flet build <target>` resolves the target tag from `serious_python/bin/package_command.dart::platforms`. For `ios-simulator` on Apple Silicon: `ios-13.0-arm64-iphonesimulator`. For `apk`: one tag per configured arch (default: `android-24-arm64-v8a`, `android-24-armeabi-v7a`, `android-24-x86_64`).
 
 If the wheel for the right tag isn't there, build it: `forge <slice> <pkg>`.
-
----
-
-### `No matching distribution found for <pkg>` at APK build — the recipe has `excluded_arches`
-
-**Cause:** the recipe declares `excluded_arches` (e.g. onnxruntime drops
-`armeabi-v7a`), so no wheel is built for that ABI. But `flet build apk` defaults to
-**all** Android ABIs (`arm64-v8a`, `x86_64`, `armeabi-v7a`), and pip fails to resolve
-the package for the excluded ABI. The other-recipe tell: a recipe with all ABIs
-(tflite) passes while the excluded-ABI recipe fails at the *same* step. Only bites
-under the recipe-tester's app build (build wheels succeed on every leg).
-
-**Fix:** restrict the app's Android target to the built ABIs —
-`[tool.flet.android] target_arch = ["arm64-v8a", "x86_64"]` (drop the excluded ones;
-keep `x86_64` for the CI emulator). `tests/recipe-tester/stage_recipe.sh` now derives
-this automatically from the wheels present in `dist-test`/`dist` and writes it into
-the generated pyproject, so a recipe with `excluded_arches` no longer needs manual
-handling in CI. For a real consumer app, the author sets `target_arch` themselves —
-this is the mandatory `target_arch` note that belongs in the recipe's Consumer notes.
 
 ---
 
