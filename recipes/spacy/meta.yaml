@@ -16,3 +16,9 @@ requirements:
     # load time, which the device runtime doesn't provide unless we bundle it.
     - flet-libcpp-shared >=27.2.12479018
 # {% endif %}
+
+# spacy imports thinc (-> thinc/backends/_custom_kernels.cu) and reads its own
+# lang data via __file__; extract both.
+extract_packages:
+  - spacy
+  - thinc

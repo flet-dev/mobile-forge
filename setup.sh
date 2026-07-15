@@ -34,7 +34,7 @@ if ! command -v uv &> /dev/null; then
 fi
 
 # Pinned flet-dev/python-build release to consume (date-keyed YYYYMMDD, PBS-style).
-PYTHON_BUILD_RELEASE="${PYTHON_BUILD_RELEASE:-20260701}"
+PYTHON_BUILD_RELEASE="${PYTHON_BUILD_RELEASE:-20260714}"
 
 # Resolve a full X.Y.Z from a bare X.Y minor using the pinned release's
 # manifest.json (downloaded + cached under downloads/). Echoes the full version;
@@ -178,6 +178,12 @@ download_support() {
                 return 1
             fi
             mv "$stage/${tarball}" "downloads/${tarball}"
+            # Keep the on-device Python runtime tarballs (python-{android,ios}-dart-*)
+            # from the same artifact. serious_python normally downloads these from a
+            # hardcoded flet-dev/python-build RELEASE; keeping them here lets the
+            # recipe-tester step seed serious_python's cache with THIS run's runtime,
+            # so `flet build` validates an unreleased runtime fix (no release needed).
+            cp "$stage"/python-*-dart-*.tar.gz "downloads/" 2>/dev/null || true
             rm -rf "$stage"
         else
             local url="https://github.com/flet-dev/python-build/releases/download/${PYTHON_BUILD_RELEASE}/${tarball}"

@@ -1,0 +1,22 @@
+selectolax/__init__.py imports the `modest` submodule (`from . import lexbor,
+modest, parser`), but `selectolax/modest/` is only a directory of Cython `.pxi`
+include files, compiled into parser.cpython-*.so at build time (parser.pyx does
+`include "modest/*.pxi"`). There is no runtime `modest` module. Under normal
+CPython `from . import modest` resolves as an empty PEP 420 namespace package;
+under Flet 0.86 Android, site-packages ship as `sitepackages.zip` and
+serious-python only synthesizes an `__init__` for dirs that have an importable
+member (`.py`/`.pyc`/`.soref`), so the include-only `modest/` is invisible to
+zipimport and the import fails with "cannot import name 'modest' from partially
+initialized module 'selectolax'". Drop the vestigial import — `selectolax.modest`
+carries no runtime API; the engines are `selectolax.parser` (Modest backend) and
+`selectolax.lexbor`, both unaffected.
+
+diff --git a/selectolax/__init__.py b/selectolax/__init__.py
+--- a/selectolax/__init__.py
++++ b/selectolax/__init__.py
+@@ -5,4 +5,4 @@
+ __email__ = "me@rushter.com"
+ __version__ = "0.4.10"
+
+-from . import lexbor, modest, parser
++from . import lexbor, parser

@@ -1,0 +1,24 @@
+# Rust (PyO3 / maturin) recipe.
+#
+# Use when:
+#   - upstream pyproject.toml has `build-system.requires` including `maturin`
+#     or `setuptools-rust`
+#   - The package compiles Rust code with PyO3 bindings
+#
+# Forge's compile_env() (build.py:382-410) sets CARGO_BUILD_TARGET,
+# CARGO_TARGET_<TRIPLE>_LINKER, PYO3_CROSS_PYTHON_VERSION, and PYO3_CROSS_LIB_DIR
+# automatically. The recipe just needs to surface _PYTHON_SYSCONFIGDATA_NAME
+# so PyO3 picks the right sysconfig for the target ABI.
+#
+# Setup requirement: Rust targets for both platforms must be installed:
+#   rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
+#   rustup target add aarch64-linux-android arm-linux-androideabi \
+#                     x86_64-linux-android i686-linux-android
+
+package:
+  name: <name>
+  version: <version>
+
+build:
+  script_env:
+    _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'

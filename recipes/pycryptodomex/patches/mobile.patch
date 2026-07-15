@@ -1,16 +1,34 @@
+pycryptodomex is the sister package of pycryptodome (same code under the
+Cryptodome.* namespace); this patch mirrors recipes/pycryptodome/patches/mobile.patch.
+Its native modules are ctypes-loaded (not imported) by
+Cryptodome/Util/_raw_api.py:load_pycryptodome_raw_lib, which probes os.path.isfile()
+for the .so next to the package's __file__. This makes that work on mobile:
+
+1. setup.py: add install_requires=['cffi']. Upstream declares none, so pip does
+   not pull cffi and _raw_api falls back to ctypes.pythonapi.PyObject_GetBuffer,
+   which fails on Android ("undefined symbol: PyObject_GetBuffer" — Flet loads
+   libpython with RTLD_LOCAL). See recipes/pycryptodomex/meta.yaml.
+
+2. _raw_api.py: locate the native module when it is NOT a plain file on disk:
+   - iOS (serious-python frameworks): a `.fwork` text marker names the embedded
+     framework binary next to sys.executable.
+   - Android (Flet 0.86): the package ships inside sitepackages.zip, so every
+     os.path.isfile() probe misses; serious-python relocated the extension into
+     the APK's jniLibs and left a `.soref` marker resolved by a sys.meta_path
+     finder. Ask importlib for the resolved on-device origin and dlopen it.
+
 diff --git a/lib/Cryptodome/Util/_raw_api.py b/lib/Cryptodome/Util/_raw_api.py
-index e0065c3..3b14e00 100644
 --- a/lib/Cryptodome/Util/_raw_api.py
 +++ b/lib/Cryptodome/Util/_raw_api.py
 @@ -30,6 +30,7 @@
- 
+
  import os
  import abc
 +import pathlib
  import sys
  from Cryptodome.Util.py3compat import byte_string
  from Cryptodome.Util._file_system import pycryptodome_filename
-@@ -302,13 +303,17 @@ def load_pycryptodome_raw_lib(name, cdecl):
+@@ -302,16 +303,34 @@
      split = name.split(".")
      dir_comps, basename = split[:-1], split[-1]
      attempts = []
@@ -29,6 +47,23 @@ index e0065c3..3b14e00 100644
              return load_lib(full_name, cdecl)
          except OSError as exp:
              attempts.append("Cannot load '%s': %s" % (filename, str(exp)))
++    # mobile-forge (Android/Flet 0.86): the extension ships inside sitepackages.zip,
++    # so the os.path.isfile() probes above all miss. serious_python relocated it into
++    # the APK's jniLibs and left a ``.soref`` marker resolved by a sys.meta_path
++    # finder -- ask the import system for the resolved on-device origin and load it.
++    try:
++        import importlib.util
++        spec = importlib.util.find_spec(name)
++    except Exception:
++        spec = None
++    if spec is not None and getattr(spec, "origin", None):
++        try:
++            return load_lib(spec.origin, cdecl)
++        except OSError as exp:
++            attempts.append("Cannot load '%s': %s" % (spec.origin, str(exp)))
+     raise OSError("Cannot load native module '%s': %s" % (name, ", ".join(attempts)))
+
+
 diff --git a/setup.py b/setup.py
 --- a/setup.py
 +++ b/setup.py

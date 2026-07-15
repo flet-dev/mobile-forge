@@ -13,3 +13,7 @@ requirements:
 patches:
   - android-cython-cpow.patch
 # {% endif %}
+
+# astropy reads astropy/CITATION via a real __file__ path at import.
+extract_packages:
+  - astropy
