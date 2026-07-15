@@ -8,12 +8,7 @@ following the sequence Termux proved for Android (their python-onnxruntime
    wrapping setuptools.build_meta that first runs the CMake build (source =
    ./cmake, binary dir = the source ROOT, args from FORGE_CMAKE_ARGS) so the
    staged python package lands in ./onnxruntime/capi/ where the root
-   setup.py expects it, then delegates wheel assembly to setuptools. The
-   shim also retags the pybind module to the target EXT_SUFFIX (e.g.
-   onnxruntime_pybind11_state.cpython-312.so): serious_python's android
-   packager only relocates ABI-tagged (cpython-*/abi3) extension modules
-   into jniLibs with an importable .soref marker, so a plain '<name>.so' is
-   misfiled as a dependency lib and never becomes importable on device.
+   setup.py expects it, then delegates wheel assembly to setuptools.
 
 2. cmake/CMakeLists.txt (Termux 0004): find Python COMPONENTS Development
    before Development.Module -- under a crossenv, the Module-only lookup
@@ -22,16 +17,13 @@ following the sequence Termux proved for Android (their python-onnxruntime
 3. mlas sqnbitgemm avx2 header (Termux 0006): include onnxruntime_config.h
    for the x86_64 lane.
 
-4. setup.py: two changes. (a) extend the packaged-libs predicate from
-   ("Linux", "AIX") to also match "Android"/"iOS" -- under the crossenv
-   platform.system() reports the TARGET OS, which matches no upstream
-   branch, so `libs` stays empty and the build goes green while the wheel
-   silently ships WITHOUT the pybind .so (Termux hand-installs it post-hoc
-   instead; we fix the predicate). The Darwin branch stays intact for real
-   macOS builds. (b) the package_data glob keys off the plain `libs` names,
-   so after the shim retags the pybind module (item 1) it would no longer
-   match -- wildcard the pybind name when globbing and package the real
-   basename, so the tagged .so is actually included.
+4. setup.py: extend the packaged-libs predicate from ("Linux", "AIX") to
+   also match "Android"/"iOS" -- under the crossenv platform.system()
+   reports the TARGET OS, which matches no upstream branch, so `libs`
+   stays empty and the build goes green while the wheel silently ships
+   WITHOUT the pybind .so (Termux hand-installs it post-hoc instead; we
+   fix the predicate). The Darwin branch stays intact for real macOS
+   builds.
 
 Deliberately NOT taken from Termux: their 0001/0002 (system abseil and
 protobuf -- we want the FetchContent vendored builds) and 0003 (Android
@@ -44,7 +36,7 @@ protoc_mac_universal v21.12 on macOS hosts.
 diff -ruN a/_forge/forge_ort_backend.py b/_forge/forge_ort_backend.py
 --- a/_forge/forge_ort_backend.py	1970-01-01 01:00:00
 +++ b/_forge/forge_ort_backend.py	2026-07-08 18:23:28
-@@ -0,0 +1,100 @@
+@@ -0,0 +1,75 @@
 +"""mobile-forge PEP 517 shim for onnxruntime.
 +
 +Upstream produces wheels via ci_build/build.py: CMake builds the tree and
@@ -63,12 +55,10 @@ diff -ruN a/_forge/forge_ort_backend.py b/_forge/forge_ort_backend.py
 +  slice 1's architecture (the e_machine mismatch the first CI run caught).
 +"""
 +
-+import glob
 +import os
 +import shlex
 +import shutil
 +import subprocess
-+import sysconfig
 +
 +from setuptools import build_meta as _orig
 +from setuptools.build_meta import *  # noqa: F401,F403
@@ -107,29 +97,6 @@ diff -ruN a/_forge/forge_ort_backend.py b/_forge/forge_ort_backend.py
 +    # cheap, idempotent, and guarantees the CURRENT ABI wins.
 +    shutil.copytree(os.path.join(bindir, "onnxruntime"), "onnxruntime",
 +                    dirs_exist_ok=True)
-+    # Tag the pybind extension with the target EXT_SUFFIX (e.g.
-+    # .cpython-312.so) so serious_python's android packager treats it as an
-+    # importable extension module: its jniLibs/.soref meta_path finder only
-+    # relocates cpython-*/abi3 names -- a plain '<name>.so' is misfiled as a
-+    # dependency lib and never becomes importable.
-+    _capi = os.path.join("onnxruntime", "capi")
-+    _ext = sysconfig.get_config_var("EXT_SUFFIX") or ".so"
-+    _target = "onnxruntime_pybind11_state" + _ext
-+    _plain = os.path.join(_capi, "onnxruntime_pybind11_state.so")
-+    if os.path.exists(_plain):
-+        os.replace(_plain, os.path.join(_capi, _target))
-+    # forge reuses the source tree across slices, so a prior slice's tagged
-+    # .so lingers -- on iOS the per-slice suffixes differ (iphoneos vs
-+    # iphonesimulator) and the wheel would ship BOTH, breaking
-+    # serious_python's .so->framework conversion. Drop every
-+    # onnxruntime_pybind11_state*.so that isn't this slice's, in BOTH the
-+    # source package dir AND setuptools' persistent build/lib (build_py
-+    # copies but never deletes, so build/lib -- which the wheel is packed
-+    # from -- accumulates across slices).
-+    for _dir in (_capi, os.path.join("build", "lib", "onnxruntime", "capi")):
-+        for _f in glob.glob(os.path.join(_dir, "onnxruntime_pybind11_state*.so")):
-+            if os.path.basename(_f) != _target:
-+                os.remove(_f)
 +
 +
 +def get_requires_for_build_wheel(config_settings=None):
@@ -194,17 +161,3 @@ diff -ruN a/setup.py b/setup.py
      libs = [
          "onnxruntime_pybind11_state.so",
          "libdnnl.so.2",
-@@ -540,4 +540,12 @@
-     ]
- else:
--    data = [path.join("capi", x) for x in libs if glob(path.join("onnxruntime", "capi", x))]
-+    # mobile-forge: pybind module ships with the target EXT_SUFFIX (e.g.
-+    # .cpython-312.so) so serious_python relocates it as an importable
-+    # extension. Glob wildcards the plain pybind name and we package the
-+    # real basename (package_data must name the on-disk file).
-+    data = []
-+    for x in libs:
-+        _pat = "onnxruntime_pybind11_state*.so" if x == "onnxruntime_pybind11_state.so" else x
-+        for f in glob(path.join("onnxruntime", "capi", _pat)):
-+            data.append(path.join("capi", path.basename(f)))
-     ext_modules = []
