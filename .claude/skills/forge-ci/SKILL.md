@@ -226,9 +226,10 @@ wire CI + local to the fix so recipes validate BEFORE the PR:
   builds also need `device_info_plus`/`connectivity_plus` pins, but keep those OUT of
   the committed template — add post-staging; CI's Xcode doesn't need them.)
 - The on-device iOS/APK test in CI still uses PUBLISHED sp, so it can't pass until the
-  release — dispatch wheel builds with `mobile_test_pythons=""` and verify the recipe
-  LOCALLY (git or path sp override + local flet-cli + `--python-version 3.12`; see the
-  local-recipe-testing skill). CI goes green only after the sp/python-build release.
+  release — dispatch wheel builds with `mobile_test_pythons=none` (see the footgun below)
+  and verify the recipe LOCALLY (git or path sp override + local flet-cli +
+  `--python-version 3.12`; see the local-recipe-testing skill). CI goes green only after
+  the sp/python-build release.
 
 ## Watching a run without babysitting
 
@@ -237,3 +238,33 @@ runs take 30min–3h) and print the conclusion + failed-job list when it
 completes. One watcher per run; kill stale watchers when you supersede a run,
 and remember a killed multi-line script may still fire its remaining lines —
 put dispatches *before* long build loops in scripts, or in separate commands.
+
+## Deploying (publishing wheels to pypi.flet.dev)
+
+Publishing is gated in `build-wheels-version.yml`'s **Publish wheels** step. It fires when
+either (a) `inputs.publish == true` (an explicit deploy dispatch), OR (b) the automatic path
+— a **push to `main`** with an **empty `python_build_run_id`**. `publish_to_pypi dist/*.whl`
+is **per matrix-job and 409-tolerant**: each (python × platform) job publishes its own wheels
+at the end, already-published (version+build) wheels 409-skip, and one job failing never
+blocks another's publish.
+
+- **Deploy via dispatch:** run on **origin (`flet-dev/mobile-forge`)** — that's where
+  `GEMFURY_TOKEN` lives; a `publish=true` run on a fork builds but the publish step has no
+  token. `gh workflow run build-wheels.yml -R flet-dev/mobile-forge --ref <branch> -f
+  packages=… -f publish=true -f mobile_test_pythons=none -f python_build_run_id=<run w/
+  dc76612> -f serious_python_ref=main`. (The `publish` boolean input is read from the
+  dispatched **ref**, so it works even before it's on `main`.)
+- **Bump before republishing an already-published version.** A recipe published at
+  `<ver>-<build>` will 409-skip on re-publish, so a forge/loader fix won't reach pypi.flet.dev
+  until the **build number is bumped** (pymongo/onnxruntime 1→2 for the fix_wheel fixes).
+- **Only ONE genuine build-order coupling** across a deploy set is `host_build` (build-time
+  static-link) deps — e.g. `jq` needs `flet-libjq`; put it in `prebuild_recipes` (it's built
+  into dist/ AND published). Runtime deps (opaque→pysodium, ncnn→opencv) don't need ordering
+  when tests are off. Scan with `grep -A6 host_build: recipes/*/meta.yaml`.
+- **Verify against pypi.flet.dev, not job conclusions.** A *cancelled* run's "success" jobs
+  are unreliable (early-cancel can leave gaps), and a per-job artifact-upload flake
+  (`Failed to CreateArtifact: … ENOTFOUND`) fails the job → skips its Publish. Check the
+  actual wheels — **with the filename normalized `-`→`_`** in the distribution name
+  (`opencv_python-…`, `scikit_learn-…`, `flet_libjq-…`; the project *URL* keeps the hyphen).
+  Allow a few minutes for Gemfury indexing after a Publish step reports `[success]`. Account
+  for single-platform recipes (`platforms: [ios]`, e.g. pyobjus → no android wheels expected).
