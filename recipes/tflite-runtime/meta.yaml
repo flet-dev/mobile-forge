@@ -78,3 +78,10 @@ requirements:
 
 patches:
   - mobile.patch
+
+test:
+  # The tests run real inference and import numpy, which the wheel itself
+  # requires — but the recipe-tester installs only flet + pytest + the recipe,
+  # so declare it here. (Replaces the former tests/requirements.txt.)
+  requires:
+    - numpy
