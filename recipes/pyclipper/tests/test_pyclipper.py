@@ -14,7 +14,12 @@ def test_intersection():
 
     assert len(solution) == 1
     # intersection of the two squares is the 50x50 box (190..240, 150..200)
-    assert sorted(map(tuple, solution[0])) == [(190, 150), (190, 200), (240, 150), (240, 200)]
+    assert sorted(map(tuple, solution[0])) == [
+        (190, 150),
+        (190, 200),
+        (240, 150),
+        (240, 200),
+    ]
 
 
 def test_offset():
@@ -22,8 +27,11 @@ def test_offset():
     import pyclipper
 
     pco = pyclipper.PyclipperOffset()
-    pco.AddPath([[0, 0], [100, 0], [100, 100], [0, 100]],
-                pyclipper.JT_MITER, pyclipper.ET_CLOSEDPOLYGON)
+    pco.AddPath(
+        [[0, 0], [100, 0], [100, 100], [0, 100]],
+        pyclipper.JT_MITER,
+        pyclipper.ET_CLOSEDPOLYGON,
+    )
     solution = pco.Execute(10)
 
     assert len(solution) == 1
