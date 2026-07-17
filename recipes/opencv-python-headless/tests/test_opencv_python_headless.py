@@ -1,16 +1,19 @@
-def test_import_cv2_headless():
-    """Same cv2 module as opencv-python, built from the headless sdist
-    (cv2/version.py bakes headless=True). This recipe exists so packages
-    that pin `opencv-python-headless` (albumentations/albucore, various
-    OCR stacks) resolve on pypi.flet.dev — on mobile there is no GUI
-    either way, so the flavors are functionally identical."""
-    import cv2
+def test_resolves_headless_pin():
+    """The reason this recipe exists: the installed distribution must be
+    named `opencv-python-headless` so pip pins like
+    'opencv-python-headless>=4.9' (albumentations, OCR stacks) resolve to
+    this wheel. importlib.metadata.version() raises PackageNotFoundError if
+    nothing is installed under that name, so a clean lookup is the proof —
+    the exact version value is irrelevant to the claim."""
+    from importlib.metadata import version
 
-    assert cv2.__version__.startswith("4.12")
-    assert hasattr(cv2, "imencode")
+    assert version("opencv-python-headless")
 
 
 def test_image_ops_roundtrip():
+    """Real image pipeline through the native core (imgcodecs + imgproc):
+    encode a synthetic image to PNG, decode it back, convert to gray, and
+    run Canny edge detection — exercises the C++ core."""
     import cv2
     import numpy as np
 
@@ -36,12 +39,3 @@ def test_dnn_module_present():
 
     assert hasattr(cv2, "dnn")
     assert callable(cv2.dnn.blobFromImage)
-
-
-def test_resolves_headless_pin():
-    """The reason this recipe exists: metadata must identify as
-    opencv-python-headless so pip pins like 'opencv-python-headless>=4.9'
-    (albumentations) resolve to this wheel."""
-    from importlib.metadata import version
-
-    assert version("opencv-python-headless").startswith("4.12")

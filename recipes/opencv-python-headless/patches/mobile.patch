@@ -1,21 +1,79 @@
+Make opencv-python-headless 5.0 cross-compile AND load on Flet's mobile targets.
+
+This is the headless twin of the opencv-python recipe: the headless sdist ships
+the identical C++/CMake/loader source (only the GUI/highgui build config differs,
+which is baked into the sdist), so this patch is byte-for-byte the opencv-python
+5.0 mobile.patch. The design notes below apply unchanged; on-device figures cited
+are from the opencv-python validation that this mirrors.
+
+1. Enable the cv2 Python bindings on Android/iOS (opencv disables the python
+   modules on ANDROID / APPLE_FRAMEWORK by default; keep only the WINRT guard),
+   and qualify OpenCV types with cv:: in the binding sources. The cv:: bit is
+   iOS/macOS-only: Apple's <MacTypes.h> defines a global `typedef char* Ptr;`
+   that clashes with cv::Ptr under `using namespace cv;`. We fix the hand-written
+   binding helpers (pyopencv_*/shadow_umat.hpp), pycompat.hpp's CV_PY macros, and
+   gen2.py's generated code (prefix_ambiguous_ios, incl. Ptr< nested inside other
+   templates such as std::vector<Ptr<...>>). OpenCV 5 dropped the python2 module
+   (adjusted guard) and the old setup.py cv2.data haarcascades hunk (5.0
+   restructured cv2.data packaging), so that hunk is gone.
+
+2. Skip the vendored MLAS (Microsoft Linear Algebra Subprograms, new in OpenCV 5)
+   on the iOS APPLE_FRAMEWORK build. MLAS builds as an OBJECT library whose
+   objects are meant to link straight into opencv_dnn, but they do NOT propagate
+   into the iOS .framework binary, so `import cv2` dies at dlopen with an
+   undefined `MlasGemmBatch` symbol. Gating add_subdirectory(3rdparty/mlas) on
+   NOT APPLE_FRAMEWORK leaves HAVE_MLAS=0 there, so the MlasGemmBatch call sites
+   compile out and opencv_dnn falls back to its built-in SGEMM. Android keeps
+   MLAS (it static-links fine; verified on-device).
+
+3. Teach the cv2 loader (modules/python/package/cv2/__init__.py) to boot under
+   Flet 0.86. OpenCV's stock bootstrap exec()s a config.py to discover a directory
+   of `.so` files, then pops the cv2 package and re-imports it as the top-level
+   module "cv2" so the native binary loads under that exact name (its compiled-in
+   bindings register submodules like `cv2.dnn` and assert each starts with the
+   parent name). Under Flet 0.86 Android neither half survives: `config.py` is
+   compiled to `config.pyc` (so `os.path.exists('config.py')` is False ->
+   "missing configuration file"), and the native `cv2.cv2` extension is relocated
+   to jniLibs (importable only as the submodule `cv2.cv2` via a `cv2/cv2.soref`
+   marker, never as top-level `cv2`). Loading it as `cv2.cv2` makes OpenCV abort
+   with "Submodule name should always start with a parent module name. Parent
+   name: cv2.cv2. Submodule name: cv2". iOS breaks the same way but relocates the
+   native into a `.framework` instead: serious_python leaves a `cv2/cv2.fwork`
+   marker whose text is the app-relative path to the framework binary, so the
+   stock loader recurses ("recursion is detected during loading of cv2 binary
+   extensions") on the pop-and-reimport. The fix inserts a fast-path right after
+   the recursion guard: resolve the relocated extension via `find_spec('cv2.cv2')`
+   (Android: the soref finder yields the real jniLibs `.so`; iOS: the FileFinder
+   yields the `.fwork` marker path -> read it and join with
+   `dirname(sys.executable)` to get the framework binary, exactly as CPython's
+   AppleFrameworkLoader does), then load it through a fresh
+   `ExtensionFileLoader("cv2", origin)` so its runtime `__name__` is the required
+   top-level "cv2", relink its symbols onto the package, and load the extra pure-
+   python submodules. On desktop / non-0.86 builds `find_spec('cv2.cv2')` returns
+   None and the stock loader runs unchanged. Pairs with `extract_packages: [cv2]`
+   in meta.yaml so the package ships as a real dir (the extra-submodule scan does
+   `os.listdir` on it). Verified on-device: Android arm64 4/4. iOS bundle->dylib
+   link + framework packaging validated locally; loader `.fwork` resolution
+   mirrors AppleFrameworkLoader (CI-confirmed alongside the coolprop iOS pass).
+
 diff --git a/opencv/CMakeLists.txt b/opencv/CMakeLists.txt
-index f5e39b4..1bd8629 100644
+index d6812aa..7555914 100644
 --- a/opencv/CMakeLists.txt
 +++ b/opencv/CMakeLists.txt
-@@ -674,7 +674,7 @@ endif()
+@@ -593,7 +593,7 @@ set(OPENCV_EXTRA_MODULES_PATH "" CACHE PATH "Where to look for additional OpenCV
  ocv_cmake_hook(POST_CMAKE_BUILD_OPTIONS)
  
  # --- Python Support ---
 -if(NOT IOS AND NOT XROS)
 +if(NOT XROS)
    include(cmake/OpenCVDetectPython.cmake)
+   include(cmake/OpenCVDetectDLPack.cmake)
  endif()
- 
 diff --git a/opencv/cmake/OpenCVDetectPython.cmake b/opencv/cmake/OpenCVDetectPython.cmake
-index a23fba6..4eb1126 100644
+index 4e3cfa3..1ddf28d 100644
 --- a/opencv/cmake/OpenCVDetectPython.cmake
 +++ b/opencv/cmake/OpenCVDetectPython.cmake
-@@ -123,7 +123,6 @@ if(NOT ${found})
+@@ -115,7 +115,6 @@ if(NOT ${found})
    if(_found)
      set(_version_major_minor "${_version_major}.${_version_minor}")
  
@@ -23,7 +81,7 @@ index a23fba6..4eb1126 100644
        ocv_check_environment_variables(${library_env} ${include_dir_env})
        if(NOT ${${library_env}} STREQUAL "")
            set(PYTHON_LIBRARY "${${library_env}}")
-@@ -144,8 +143,8 @@ if(NOT ${found})
+@@ -153,8 +152,8 @@ if(NOT ${found})
          # Copy outputs
          set(_libs_found ${PYTHONLIBS_FOUND})
          set(_libraries ${PYTHON_LIBRARIES})
@@ -34,7 +92,7 @@ index a23fba6..4eb1126 100644
          set(_debug_libraries ${PYTHON_DEBUG_LIBRARIES})
          set(_libs_version_string ${PYTHONLIBS_VERSION_STRING})
          set(_debug_library ${PYTHON_DEBUG_LIBRARY})
-@@ -173,9 +172,8 @@ if(NOT ${found})
+@@ -182,9 +181,8 @@ if(NOT ${found})
          unset(PYTHON_INCLUDE_DIR CACHE)
          unset(PYTHON_INCLUDE_DIR2 CACHE)
        endif()
@@ -45,7 +103,7 @@ index a23fba6..4eb1126 100644
        if(CMAKE_HOST_UNIX)
          execute_process(COMMAND ${_executable} -c "from sysconfig import *; print(get_path('purelib'))"
                          RESULT_VARIABLE _cvpy_process
-@@ -240,7 +238,7 @@ if(NOT ${found})
+@@ -246,7 +244,7 @@ if(NOT ${found})
                            OUTPUT_STRIP_TRAILING_WHITESPACE)
          endif()
        endif()
@@ -54,6 +112,53 @@ index a23fba6..4eb1126 100644
    endif()
  
    # Export return values
+diff --git a/opencv/modules/core/misc/python/pyopencv_cuda.hpp b/opencv/modules/core/misc/python/pyopencv_cuda.hpp
+index ab451b0..306e1fd 100644
+--- a/opencv/modules/core/misc/python/pyopencv_cuda.hpp
++++ b/opencv/modules/core/misc/python/pyopencv_cuda.hpp
+@@ -38,7 +38,7 @@ CV_PY_FROM_CLASS(cuda::HostMem)
+ CV_PY_FROM_CLASS_PTR(cuda::GpuMat::Allocator)
+ 
+ template<>
+-bool fillDLPackTensor(const Ptr<cv::cuda::GpuMat>& src, DLManagedTensor* tensor, const DLDevice& device)
++bool fillDLPackTensor(const cv::Ptr<cv::cuda::GpuMat>& src, DLManagedTensor* tensor, const DLDevice& device)
+ {
+     if ((device.device_type != -1 && device.device_type != kDLCUDA) || device.device_id != 0)
+     {
+@@ -60,7 +60,7 @@ bool fillDLPackTensor(const Ptr<cv::cuda::GpuMat>& src, DLManagedTensor* tensor,
+ }
+ 
+ template<>
+-bool fillDLPackTensor(const Ptr<cv::cuda::GpuMatND>& src, DLManagedTensor* tensor, const DLDevice& device)
++bool fillDLPackTensor(const cv::Ptr<cv::cuda::GpuMatND>& src, DLManagedTensor* tensor, const DLDevice& device)
+ {
+     if ((device.device_type != -1 && device.device_type != kDLCUDA) || device.device_id != 0)
+     {
+@@ -151,20 +151,20 @@ bool parseDLPackTensor(DLManagedTensor* tensor, cv::cuda::GpuMatND& obj, bool co
+ }
+ 
+ template<>
+-int GetNumDims(const Ptr<cv::cuda::GpuMat>& src) { return 3; }
++int GetNumDims(const cv::Ptr<cv::cuda::GpuMat>& src) { return 3; }
+ 
+ template<>
+-int GetNumDims(const Ptr<cv::cuda::GpuMatND>& src) { return src->dims; }
++int GetNumDims(const cv::Ptr<cv::cuda::GpuMatND>& src) { return src->dims; }
+ 
+ static PyObject* pyDLPackGpuMat(PyObject* self, PyObject* py_args, PyObject* kw) {
+-    Ptr<cv::cuda::GpuMat> * self1 = 0;
++    cv::Ptr<cv::cuda::GpuMat> * self1 = 0;
+     if (!pyopencv_cuda_GpuMat_getp(self, self1))
+         return failmsgp("Incorrect type of self (must be 'cuda_GpuMat' or its derivative)");
+     return to_dlpack(*(self1), self, py_args, kw);
+ }
+ 
+ static PyObject* pyDLPackGpuMatND(PyObject* self, PyObject* py_args, PyObject* kw) {
+-    Ptr<cv::cuda::GpuMatND> * self1 = 0;
++    cv::Ptr<cv::cuda::GpuMatND> * self1 = 0;
+     if (!pyopencv_cuda_GpuMatND_getp(self, self1))
+         return failmsgp("Incorrect type of self (must be 'cuda_GpuMatND' or its derivative)");
+     return to_dlpack(*(self1), self, py_args, kw);
 diff --git a/opencv/modules/core/misc/python/pyopencv_umat.hpp b/opencv/modules/core/misc/python/pyopencv_umat.hpp
 index 2e91cd5..9905bd0 100644
 --- a/opencv/modules/core/misc/python/pyopencv_umat.hpp
@@ -67,11 +172,37 @@ index 2e91cd5..9905bd0 100644
  {
      //dst.reset(new UMat(src->getUMat(ACCESS_RW)));
      dst.reset(new UMat());
+diff --git a/opencv/modules/core/misc/python/shadow_umat.hpp b/opencv/modules/core/misc/python/shadow_umat.hpp
+index b194aac..6e5b48e 100644
+--- a/opencv/modules/core/misc/python/shadow_umat.hpp
++++ b/opencv/modules/core/misc/python/shadow_umat.hpp
+@@ -18,7 +18,7 @@ public:
+     CV_WRAP UMat(Size size, int type, const Scalar& s, UMatUsageFlags usageFlags = USAGE_DEFAULT);
+ 
+     //! Mat is mappable to UMat
+-    CV_WRAP_MAPPABLE(Ptr<Mat>);
++    CV_WRAP_MAPPABLE(cv::Ptr<Mat>);
+ 
+     //! returns the OpenCL queue used by OpenCV UMat
+     CV_WRAP_PHANTOM(static void* queue());
+diff --git a/opencv/modules/dnn/CMakeLists.txt b/opencv/modules/dnn/CMakeLists.txt
+index a765483..eb26ac6 100644
+--- a/opencv/modules/dnn/CMakeLists.txt
++++ b/opencv/modules/dnn/CMakeLists.txt
+@@ -500,7 +500,7 @@ foreach(_v OPENCV_DNN_MLAS_ENABLED OPENCV_DNN_MLAS_SKIP_REASON
+            MLAS_HAS_ASM MLAS_HAS_POWER10 MLAS_HAS_RISCV64_RVV)
+   unset(${_v} CACHE)
+ endforeach()
+-if(NOT EMSCRIPTEN)
++if(NOT EMSCRIPTEN AND NOT APPLE_FRAMEWORK)
+   add_subdirectory("${OpenCV_SOURCE_DIR}/3rdparty/mlas" "${CMAKE_BINARY_DIR}/3rdparty/mlas")
+ endif()
+ if(HAVE_MLAS)
 diff --git a/opencv/modules/dnn/misc/python/pyopencv_dnn.hpp b/opencv/modules/dnn/misc/python/pyopencv_dnn.hpp
-index d729cd8..346b079 100644
+index 0cc2fe6..9b27f1c 100644
 --- a/opencv/modules/dnn/misc/python/pyopencv_dnn.hpp
 +++ b/opencv/modules/dnn/misc/python/pyopencv_dnn.hpp
-@@ -117,14 +117,14 @@ public:
+@@ -133,14 +133,14 @@ public:
          }
      }
  
@@ -87,9 +218,9 @@ index d729cd8..346b079 100644
 +        return cv::Ptr<dnn::Layer>(new pycvLayer(params, it->second.back()));
      }
  
-     virtual bool getMemoryShapes(const std::vector<std::vector<int> > &inputs,
+     virtual void forward(InputArrayOfArrays inputs_arr, OutputArrayOfArrays outputs_arr, OutputArrayOfArrays) CV_OVERRIDE
 diff --git a/opencv/modules/python/CMakeLists.txt b/opencv/modules/python/CMakeLists.txt
-index 93eab8c..e41b720 100644
+index da3d082..923578b 100644
 --- a/opencv/modules/python/CMakeLists.txt
 +++ b/opencv/modules/python/CMakeLists.txt
 @@ -3,7 +3,7 @@
@@ -98,14 +229,14 @@ index 93eab8c..e41b720 100644
  
 -if(ANDROID OR APPLE_FRAMEWORK OR WINRT)
 +if(WINRT)
-   ocv_module_disable_(python2)
    ocv_module_disable_(python3)
    return()
+ elseif(BUILD_opencv_world OR (WIN32 AND CMAKE_BUILD_TYPE STREQUAL "Debug"))
 diff --git a/opencv/modules/python/src2/cv2.cpp b/opencv/modules/python/src2/cv2.cpp
-index a7837a6..21ab682 100644
+index 129b961..2653ffd 100644
 --- a/opencv/modules/python/src2/cv2.cpp
 +++ b/opencv/modules/python/src2/cv2.cpp
-@@ -25,16 +25,16 @@ typedef std::vector<int> vector_int;
+@@ -23,16 +23,16 @@ typedef std::vector<int> vector_int;
  typedef std::vector<float> vector_float;
  typedef std::vector<double> vector_double;
  typedef std::vector<size_t> vector_size_t;
@@ -125,8 +256,8 @@ index a7837a6..21ab682 100644
  typedef std::vector<Rect2d> vector_Rect2d;
  typedef std::vector<RotatedRect> vector_RotatedRect;
  typedef std::vector<KeyPoint> vector_KeyPoint;
-@@ -47,7 +47,7 @@ typedef std::vector<std::string> vector_string;
- typedef std::vector<Scalar> vector_Scalar;
+@@ -51,7 +51,7 @@ typedef std::vector<MSTEdge> vector_MSTEdge;
+ #endif // HAVE_OPENCV_GEOMETRY
  
  typedef std::vector<std::vector<char> > vector_vector_char;
 -typedef std::vector<std::vector<Point> > vector_vector_Point;
@@ -135,10 +266,10 @@ index a7837a6..21ab682 100644
  typedef std::vector<std::vector<Point3f> > vector_vector_Point3f;
  typedef std::vector<std::vector<DMatch> > vector_vector_DMatch;
 diff --git a/opencv/modules/python/src2/cv2_convert.cpp b/opencv/modules/python/src2/cv2_convert.cpp
-index 35766b4..5d7758f 100644
+index 01d48a3..ae5a264 100644
 --- a/opencv/modules/python/src2/cv2_convert.cpp
 +++ b/opencv/modules/python/src2/cv2_convert.cpp
-@@ -753,7 +753,7 @@ PyObject* pyopencv_from(const std::string& value)
+@@ -770,7 +770,7 @@ PyObject* pyopencv_from(const std::string& value)
  // --- Size
  
  template<>
@@ -147,7 +278,7 @@ index 35766b4..5d7758f 100644
  {
      RefWrapper<int> values[] = {RefWrapper<int>(sz.width),
                                  RefWrapper<int>(sz.height)};
-@@ -761,7 +761,7 @@ bool pyopencv_to(PyObject* obj, Size& sz, const ArgInfo& info)
+@@ -778,7 +778,7 @@ bool pyopencv_to(PyObject* obj, Size& sz, const ArgInfo& info)
  }
  
  template<>
@@ -156,7 +287,7 @@ index 35766b4..5d7758f 100644
  {
      return Py_BuildValue("(ii)", sz.width, sz.height);
  }
-@@ -783,7 +783,7 @@ PyObject* pyopencv_from(const Size_<float>& sz)
+@@ -800,7 +800,7 @@ PyObject* pyopencv_from(const Size_<float>& sz)
  // --- Rect
  
  template<>
@@ -165,7 +296,7 @@ index 35766b4..5d7758f 100644
  {
      RefWrapper<int> values[] = {RefWrapper<int>(r.x), RefWrapper<int>(r.y),
                                  RefWrapper<int>(r.width),
-@@ -792,7 +792,7 @@ bool pyopencv_to(PyObject* obj, Rect& r, const ArgInfo& info)
+@@ -809,7 +809,7 @@ bool pyopencv_to(PyObject* obj, Rect& r, const ArgInfo& info)
  }
  
  template<>
@@ -174,7 +305,7 @@ index 35766b4..5d7758f 100644
  {
      return Py_BuildValue("(iiii)", r.x, r.y, r.width, r.height);
  }
-@@ -939,14 +939,14 @@ PyObject* pyopencv_from(const Range& r)
+@@ -956,14 +956,14 @@ PyObject* pyopencv_from(const Range& r)
  // --- Point
  
  template<>
@@ -192,10 +323,10 @@ index 35766b4..5d7758f 100644
      return Py_BuildValue("(ii)", p.x, p.y);
  }
 diff --git a/opencv/modules/python/src2/gen2.py b/opencv/modules/python/src2/gen2.py
-index 29a9195..c5ee777 100755
+index c8e12c6..49106c0 100755
 --- a/opencv/modules/python/src2/gen2.py
 +++ b/opencv/modules/python/src2/gen2.py
-@@ -42,7 +42,7 @@ gen_template_check_self = Template("""
+@@ -43,7 +43,7 @@ gen_template_check_self = Template("""
          return failmsgp("Incorrect type of self (must be '${name}' or its derivative)");
      ${pname} _self_ = ${cvt}(self1);
  """)
@@ -204,7 +335,7 @@ index 29a9195..c5ee777 100755
          if(self) """)
  
  gen_template_call_constructor = Template("""self->v.reset(new ${cname}${py_args})""")
-@@ -435,7 +435,7 @@ class ClassInfo(object):
+@@ -439,7 +439,7 @@ class ClassInfo(object):
          return 'CVPY_TYPE({}, {}, {}, {}, {}, {}, "{}")\n'.format(
              self.export_name,
              self.class_id,
@@ -213,7 +344,7 @@ index 29a9195..c5ee777 100755
              self.original_name if self.issimple else "Ptr",
              baseptr,
              constructor_name,
-@@ -446,7 +446,7 @@ class ClassInfo(object):
+@@ -450,7 +450,7 @@ class ClassInfo(object):
  
  def handle_ptr(tp):
      if tp.startswith('Ptr_'):
@@ -222,7 +353,7 @@ index 29a9195..c5ee777 100755
      return tp
  
  
-@@ -736,6 +736,16 @@ class FuncVariant(object):
+@@ -745,6 +745,19 @@ class FuncVariant(object):
                  self.args[argno].py_outputarg = True
          self.py_outlist = outlist
  
@@ -235,11 +366,14 @@ index 29a9195..c5ee777 100755
 +        r = r.replace(f"<{cn}>", f"<cv::{cn}>")
 +        if r.startswith(f"{cn}("):
 +            r = f"cv::{r}"
++    # also qualify any bare Ptr< nested inside other templates
++    # (e.g. std::vector<Ptr<CChecker>>) which the leading check above misses
++    r = re.sub(r"(?<![:\w])Ptr<", "cv::Ptr<", r)
 +    return r
  
  class FuncInfo(object):
      def __init__(self, classname, name, cname, isconstructor, namespace, is_static):
-@@ -841,8 +851,8 @@ class FuncInfo(object):
+@@ -850,8 +863,8 @@ class FuncInfo(object):
                  if not self.is_static:
                      code += gen_template_check_self.substitute(
                          name=selfinfo.name,
@@ -250,7 +384,7 @@ index 29a9195..c5ee777 100755
                          cvt='' if selfinfo.issimple else '*'
                      )
                  fullname = selfinfo.wname + "." + fullname
-@@ -894,7 +904,7 @@ class FuncInfo(object):
+@@ -918,7 +931,7 @@ class FuncInfo(object):
                  else:
                      if tp in all_classes:
                          tp_classinfo = all_classes[tp]
@@ -259,7 +393,7 @@ index 29a9195..c5ee777 100755
                          arg_type_info = ArgTypeInfo(cname_of_value, FormatStrings.object, defval0, True)
                          assert not (a.is_smart_ptr and tp_classinfo.issimple), "Can't pass 'simple' type as Ptr<>"
                          if not a.is_smart_ptr and not tp_classinfo.issimple:
-@@ -944,9 +954,9 @@ class FuncInfo(object):
+@@ -968,9 +981,9 @@ class FuncInfo(object):
                  if a.outputarg and not a.inputarg:
                      defval = ""
                  if defval:
@@ -271,7 +405,7 @@ index 29a9195..c5ee777 100755
  
                  if not code_args.endswith("("):
                      code_args += ", "
-@@ -974,7 +984,7 @@ class FuncInfo(object):
+@@ -998,7 +1011,7 @@ class FuncInfo(object):
                  code_prelude = ""
                  code_fcall = ""
                  if v.rettype:
@@ -280,7 +414,7 @@ index 29a9195..c5ee777 100755
                      code_fcall += "retval = "
                  if not v.isphantom and ismethod and not self.is_static:
                      code_fcall += "_self_->" + self.cname
-@@ -1390,11 +1400,11 @@ class PythonWrapperGenerator(object):
+@@ -1431,11 +1444,11 @@ class PythonWrapperGenerator(object):
                  self.code_types.write(gen_template_map_type_cvt.substitute(name=classinfo.name, cname=classinfo.cname))
              else:
                  mappable_code = "\n".join([
@@ -295,10 +429,10 @@ index 29a9195..c5ee777 100755
                  )
                  self.code_types.write(code)
 diff --git a/opencv/modules/python/src2/pycompat.hpp b/opencv/modules/python/src2/pycompat.hpp
-index 05a3909..6d49fcc 100644
+index c936f5e..b5a89c0 100644
 --- a/opencv/modules/python/src2/pycompat.hpp
 +++ b/opencv/modules/python/src2/pycompat.hpp
-@@ -138,7 +138,7 @@ bool pyopencv_to(PyObject* dst, TYPE& src, const ArgInfo& info)
+@@ -147,7 +147,7 @@ bool pyopencv_to(PyObject* dst, TYPE& src, const ArgInfo& info)
  {                                                                                                     \
      if (!dst || dst == Py_None)                                                                       \
          return true;                                                                                  \
@@ -307,7 +441,7 @@ index 05a3909..6d49fcc 100644
                                                                                                        \
      if (!pyopencv_to(dst, ptr, info)) return false;                                                   \
      src = *ptr;                                                                                       \
-@@ -149,7 +149,7 @@ bool pyopencv_to(PyObject* dst, TYPE& src, const ArgInfo& info)
+@@ -158,7 +158,7 @@ bool pyopencv_to(PyObject* dst, TYPE& src, const ArgInfo& info)
  template<>                                                                                            \
  PyObject* pyopencv_from(const TYPE& src)                                                              \
  {                                                                                                     \
@@ -316,7 +450,7 @@ index 05a3909..6d49fcc 100644
                                                                                                        \
      *ptr = src;                                                                                       \
      return pyopencv_from(ptr);                                                                        \
-@@ -161,7 +161,7 @@ bool pyopencv_to(PyObject* dst, TYPE*& src, const ArgInfo& info)
+@@ -170,7 +170,7 @@ bool pyopencv_to(PyObject* dst, TYPE*& src, const ArgInfo& info)
  {                                                                                                     \
      if (!dst || dst == Py_None)                                                                       \
          return true;                                                                                  \
@@ -325,7 +459,7 @@ index 05a3909..6d49fcc 100644
                                                                                                        \
      if (!pyopencv_to(dst, ptr, info)) return false;                                                   \
      src = ptr;                                                                                        \
-@@ -171,7 +171,7 @@ bool pyopencv_to(PyObject* dst, TYPE*& src, const ArgInfo& info)
+@@ -180,7 +180,7 @@ bool pyopencv_to(PyObject* dst, TYPE*& src, const ArgInfo& info)
  #define CV_PY_FROM_CLASS_PTR(TYPE)                                                                    \
  static PyObject* pyopencv_from(TYPE*& src)                                                            \
  {                                                                                                     \
@@ -335,37 +469,99 @@ index 05a3909..6d49fcc 100644
  
  #define CV_PY_TO_ENUM(TYPE)                                                                           \
 diff --git a/opencv/modules/videoio/misc/python/pyopencv_videoio.hpp b/opencv/modules/videoio/misc/python/pyopencv_videoio.hpp
-index e729c86..c5779d3 100644
+index a4bc8e5..b86efd8 100644
 --- a/opencv/modules/videoio/misc/python/pyopencv_videoio.hpp
 +++ b/opencv/modules/videoio/misc/python/pyopencv_videoio.hpp
 @@ -23,7 +23,7 @@ bool pyopencv_to(PyObject *o, std::vector<cv::VideoCaptureAPIs>& apis, const Arg
-
+ 
  template<> bool pyopencv_to(PyObject* obj, cv::VideoCapture& stream, const ArgInfo& info)
  {
 -    Ptr<VideoCapture> * obj_getp = nullptr;
 +    cv::Ptr<VideoCapture> * obj_getp = nullptr;
      if (!pyopencv_VideoCapture_getp(obj, obj_getp))
          return (failmsgp("Incorrect type of self (must be 'VideoCapture' or its derivative)") != nullptr);
-
+ 
 @@ -117,7 +117,7 @@ private:
  };
-
+ 
  template<>
 -bool pyopencv_to(PyObject* obj, Ptr<cv::IStreamReader>& p, const ArgInfo&)
 +bool pyopencv_to(PyObject* obj, cv::Ptr<cv::IStreamReader>& p, const ArgInfo&)
  {
      if (!obj)
          return false;
-diff --git a/setup.py b/setup.py
-index 48d5a65..125b9b4 100644
---- a/setup.py
-+++ b/setup.py
-@@ -140,7 +140,7 @@ def main():
-         [ r"python/cv2/py.typed" ] if sys.version_info >= (3, 6) else []
-         ,
-         "cv2.data": [  # OPENCV_OTHER_INSTALL_PATH
--            ("etc" if os.name == "nt" else "share/opencv4") + r"/haarcascades/.*\.xml"
-+            ("etc" if os.name == "nt" else "sdk/etc" if platform.system() == "Android" else "share/opencv4") + r"/haarcascades/.*\.xml"
-         ],
-         "cv2.gapi": [
-             "python/cv2" + r"/gapi/.*\.py"
+@@ -147,7 +147,7 @@ static PyObject* pycvVideoEnter(PyObject* self, PyObject* /*args*/, PyObject* /*
+ }
+ 
+ static PyObject* pycvVideoCaptureExit(PyObject* self, PyObject* /*args*/, PyObject* /*kw*/) {
+-    Ptr<cv::VideoCapture>* obj_getp = nullptr;
++    cv::Ptr<cv::VideoCapture>* obj_getp = nullptr;
+     if (pyopencv_VideoCapture_getp(self, obj_getp) && obj_getp && *obj_getp) {
+         (*obj_getp)->release();
+     }
+@@ -155,7 +155,7 @@ static PyObject* pycvVideoCaptureExit(PyObject* self, PyObject* /*args*/, PyObje
+ }
+ 
+ static PyObject* pycvVideoWriterExit(PyObject* self, PyObject* /*args*/, PyObject* /*kw*/) {
+-    Ptr<cv::VideoWriter>* obj_getp = nullptr;
++    cv::Ptr<cv::VideoWriter>* obj_getp = nullptr;
+     if (pyopencv_VideoWriter_getp(self, obj_getp) && obj_getp && *obj_getp) {
+         (*obj_getp)->release();
+     }
+
+diff --git a/opencv/modules/python/package/cv2/__init__.py b/opencv/modules/python/package/cv2/__init__.py
+--- a/opencv/modules/python/package/cv2/__init__.py
++++ b/opencv/modules/python/package/cv2/__init__.py
+@@ -75,6 +75,52 @@ def bootstrap():
+         print(sys.path)
+         raise ImportError('ERROR: recursion is detected during loading of "cv2" binary extensions. Check OpenCV installation.')
+     sys.OpenCV_LOADER = True
++    # --- mobile-forge (Flet 0.86) fast-path -------------------------------
++    # Under Flet 0.86 the native cv2 extension is relocated out of the wheel:
++    # Android -> jniLibs (a cv2/cv2.soref marker, origin is a real .so); iOS ->
++    # a framework (a cv2/cv2.fwork marker whose text is the app-relative path to
++    # the framework binary). config.py is also compiled to config.pyc, so the
++    # stock loader (which exec()s config.py and re-imports as top-level "cv2")
++    # recurses/fails. Resolve the relocated native and load it under the required
++    # top-level name "cv2" (OpenCV's compiled bindings hard-require that name).
++    try:
++        import importlib.util as _ilu
++        import importlib.machinery as _ilm
++        _sub_spec = _ilu.find_spec(__name__ + ".cv2")
++    except Exception:
++        _sub_spec = None
++    _origin = getattr(_sub_spec, "origin", None) if _sub_spec is not None else None
++    if _origin and _origin.endswith(".fwork"):
++        # iOS: the .fwork holds the app-relative framework-binary path; resolve it
++        # exactly as CPython's AppleFrameworkLoader does.
++        try:
++            with open(_origin, "rb") as _fwf:
++                _rel = _fwf.read().decode("utf-8").strip()
++            _origin = os.path.join(os.path.dirname(sys.executable), _rel)
++        except Exception:
++            _origin = None
++    if _origin:
++        _dbg = hasattr(sys, "OpenCV_LOADER_DEBUG")
++        _loader = _ilm.ExtensionFileLoader("cv2", _origin)
++        _spec = _ilu.spec_from_loader("cv2", _loader)
++        _native = _ilu.module_from_spec(_spec)
++        _loader.exec_module(_native)
++        _g = globals()
++        setattr(sys.modules[__name__], "_native", _native)
++        for _k, _v in _native.__dict__.items():
++            if _k not in ("__file__", "__loader__", "__spec__", "__name__", "__package__") and _k not in _g:
++                _g[_k] = _v
++        try:
++            del sys.OpenCV_LOADER
++        except Exception:
++            pass
++        try:
++            for _s in __collect_extra_submodules(_dbg):
++                __load_extra_py_code_for_module("cv2", _s, _dbg)
++        except Exception:
++            pass
++        return
++    # --- end mobile-forge fast-path ---------------------------------------
+ 
+     DEBUG = False
+     if hasattr(sys, 'OpenCV_LOADER_DEBUG'):
