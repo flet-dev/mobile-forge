@@ -1,0 +1,37 @@
+pysodium loads libsodium via ctypes.util.find_library('sodium'), which returns
+None on Android (no ld cache) and on iOS (the library is framework-ized), so
+LoadLibrary(None) yields a nameless handle and __init__ raises "Unable to find
+libsodium". flet-libsodium bundles the library and serious-python surfaces it
+under a bundled soname (Android jniLibs libsodium.so / iOS libsodium.fwork /
+desktop libsodium.dylib); fall back to loading those directly when
+find_library() comes up empty.
+
+diff --git a/pysodium/__init__.py b/pysodium/__init__.py
+--- a/pysodium/__init__.py
++++ b/pysodium/__init__.py
+@@ -30,8 +30,23 @@
+ import ctypes
+ import ctypes.util
+
+-sodium = ctypes.cdll.LoadLibrary(ctypes.util.find_library('sodium') or ctypes.util.find_library('libsodium'))
+-if not sodium._name:
++# mobile-forge: on Android/iOS ctypes.util.find_library() cannot locate the
++# bundled libsodium (Android has no ld cache; iOS framework-izes it), returning
++# None -> LoadLibrary(None) yields a nameless handle and the check below raises.
++# flet-libsodium surfaces the lib under these bundled names (Android jniLibs /
++# iOS .fwork shim / desktop .dylib), so fall back to loading them directly.
++_found = ctypes.util.find_library('sodium') or ctypes.util.find_library('libsodium')
++if _found:
++    sodium = ctypes.cdll.LoadLibrary(_found)
++else:
++    sodium = None
++    for _cand in ('libsodium.so', 'libsodium.fwork', 'libsodium.dylib'):
++        try:
++            sodium = ctypes.cdll.LoadLibrary(_cand)
++            break
++        except OSError:
++            sodium = None
++if sodium is None or not sodium._name:
+     raise ValueError('Unable to find libsodium')
+
+ sodium.sodium_version_string.restype = ctypes.c_char_p

@@ -1,0 +1,60 @@
+package:
+  name: ncnn
+  version: "1.0.20260526"
+
+build:
+  number: 2
+  script_env:
+    _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
+    # setup.py appends EXTRA_CMAKE_ARGS after its own args, so our overrides
+    # win (it force-enables NCNN_VULKAN=ON -> we turn it back OFF for v1:
+    # CPU/NEON is the mobile baseline; Vulkan needs per-device driver luck).
+    # The vendored pybind11 is v3 = new FindPython -> explicit Python_*
+    # triple (pywhispercpp tell); setup.py's own Python_EXECUTABLE points at
+    # the crossenv python already, the include/lib pins make it airtight.
+# {% if sdk == 'android' %}
+    CMAKE_TOOLCHAIN_FILE: '{NDK_ROOT}/build/cmake/android.toolchain.cmake'
+    EXTRA_CMAKE_ARGS: >-
+      -DANDROID_ABI={ANDROID_ABI}
+      -DANDROID_NATIVE_API_LEVEL={ANDROID_API_LEVEL}
+      -DANDROID_STL=c++_shared
+      -DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DCMAKE_MODULE_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DPython_EXECUTABLE={CROSS_VENV_PYTHON}
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.so
+      -DNCNN_VULKAN=OFF
+# {% else %}
+    # ninja pip pkg crashes importing on the iOS crossenv (duckdb tell).
+    CMAKE_GENERATOR: Unix Makefiles
+    # NCNN_SIMPLEOMP = ncnn's own minimal OpenMP runtime, designed for
+    # exactly this case (AppleClang has no -fopenmp); threading works
+    # without any libomp. Android keeps real NDK OpenMP instead.
+    EXTRA_CMAKE_ARGS: >-
+      -DCMAKE_SYSTEM_NAME=iOS
+      -DCMAKE_OSX_SYSROOT={{ sdk }}
+      -DCMAKE_OSX_DEPLOYMENT_TARGET={{ sdk_version }}
+      -DCMAKE_OSX_ARCHITECTURES={{ arch }}
+      -DPython_EXECUTABLE={CROSS_VENV_PYTHON}
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.dylib
+      -DNCNN_VULKAN=OFF
+      -DNCNN_SIMPLEOMP=ON
+# {% endif %}
+
+requirements:
+  build:
+    # setup.py drives CMake directly (pybind11 archetype); seed the shims
+    # for forge's --no-isolation builds (opencv-python precedent).
+    - cmake
+    - ninja
+# {% if sdk == 'android' %}
+  host:
+    # ncnn is C++ -> libc++_shared.so at runtime. OpenMP needs no host dep:
+    # the NDK links libomp STATICALLY here (verified: 124 omp_* symbols
+    # defined in ncnn.so, none undefined).
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
+
+patches:
+  - pin-version-date.patch

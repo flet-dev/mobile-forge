@@ -793,6 +793,74 @@ class Builder(ABC):
                     )
         log(self.log_file, f"[{self.cross_venv}] {so_path.name}: 16KB alignment OK")
 
+    def _bundle_to_dylib(self, so_path: Path) -> bool:
+        """Convert a thin `MH_BUNDLE` Mach-O extension to `MH_DYLIB` in place.
+
+        Injects an `LC_ID_DYLIB` load command into the header's free padding and
+        flips the filetype byte. Returns True if a conversion was made, False if
+        the file is not a thin little-endian `MH_BUNDLE` (already a dylib, a fat
+        binary, or not Mach-O — all left untouched). The caller must re-sign
+        (`codesign --force --sign -`) afterwards, since the edit invalidates the
+        linker's ad-hoc signature.
+        """
+        MH_MAGIC_64 = 0xFEEDFACF
+        MH_BUNDLE = 0x8
+        MH_DYLIB = 0x6
+        LC_ID_DYLIB = 0xD
+        LC_SEGMENT_64 = 0x19
+
+        data = bytearray(so_path.read_bytes())
+        if len(data) < 32 or struct.unpack_from("<I", data, 0)[0] != MH_MAGIC_64:
+            return False  # not a thin 64-bit LE Mach-O (fat/other -> leave alone)
+        (_magic, _cpu, _sub, filetype, ncmds, sizeofcmds, flags, _res) = (
+            struct.unpack_from("<IiiIIIII", data, 0)
+        )
+        if filetype != MH_BUNDLE:
+            return False  # already MH_DYLIB (LDSHARED-honoring backends) or other
+
+        # Bound the free header space by the lowest section file offset in __TEXT
+        # (its data follows the load commands; we must not overwrite it).
+        lc_end = 32 + sizeofcmds
+        min_fileoff = len(data)
+        off = 32
+        for _ in range(ncmds):
+            cmd, cmdsize = struct.unpack_from("<II", data, off)
+            if (
+                cmd == LC_SEGMENT_64
+                and data[off + 8 : off + 24].split(b"\0")[0] == b"__TEXT"
+            ):
+                nsects = struct.unpack_from("<I", data, off + 8 + 16 + 8 * 4)[0]
+                soff = off + 72  # section_64 records follow the 72-byte segment cmd
+                for _s in range(nsects):
+                    sect_fileoff = struct.unpack_from("<I", data, soff + 48)[0]
+                    if sect_fileoff and sect_fileoff < min_fileoff:
+                        min_fileoff = sect_fileoff
+                    soff += 80
+            off += cmdsize
+
+        name = b"@rpath/" + so_path.name.encode()
+        raw = name + b"\0"
+        raw += b"\0" * ((-len(raw)) % 8)
+        cmdsize_new = 24 + len(raw)  # dylib_command header (24) + padded name
+        if (min_fileoff - lc_end) < cmdsize_new:
+            raise RuntimeError(
+                f"{so_path.name}: not enough Mach-O header padding to inject "
+                f"LC_ID_DYLIB ({min_fileoff - lc_end} < {cmdsize_new}); cannot "
+                f"convert MH_BUNDLE -> MH_DYLIB in place."
+            )
+
+        # dylib_command: cmd, cmdsize, name.offset(24), timestamp, cur_ver, compat_ver
+        idcmd = (
+            struct.pack("<IIIIII", LC_ID_DYLIB, cmdsize_new, 24, 0, 0x10000, 0x10000)
+            + raw
+        )
+        data[lc_end : lc_end + cmdsize_new] = idcmd
+        struct.pack_into(
+            "<IIII", data, 12, MH_DYLIB, ncmds + 1, sizeofcmds + cmdsize_new, flags
+        )
+        so_path.write_bytes(data)
+        return True
+
     def fix_wheel(self, wheel_dir: Path):
 
         log(self.log_file, f"[{self.cross_venv}] Fixing wheel contents")
@@ -809,6 +877,75 @@ class Builder(ABC):
         if self.cross_venv.sdk == "android":
             env = self.compile_env()
 
+            # Drop foreign-arch extension modules that leaked into this wheel.
+            # setuptools' in-place `build_ext` writes NAME.cpython-<ver>-<triplet>.so
+            # into the (reused) unpacked-sdist source tree; when forge builds each
+            # ABI from that same tree, a prior slice's arch-tagged .so lingers and
+            # bdist_wheel globs it into the next slice's wheel (pymongo: the x86_64
+            # wheel carried the arm64 `_cbson`/`_cmessage` byte-for-byte). Downstream
+            # serious_python strips the arch off the SOABI tag when writing `.soref`
+            # markers, so two arches collide on one `<name>.soref` and Gradle fails
+            # with "duplicate entry". A per-arch wheel must be arch-pure — keep only
+            # this target's platform triplet.
+            keep_triplet = self.cross_venv.platform_triplet
+            foreign_triplets = "|".join(
+                re.escape(triplet)
+                for triplet in self.cross_venv.ANDROID_PLATFORM_TRIPLET.values()
+                if triplet != keep_triplet
+            )
+            foreign_ext_re = re.compile(rf"\.cpython-\d+-(?:{foreign_triplets})\.so$")
+            for so in wheel_dir.glob("**/*.so"):
+                if foreign_ext_re.search(so.name):
+                    log(
+                        self.log_file,
+                        f"[{self.cross_venv}] Dropping foreign-arch extension "
+                        f"{so.name}",
+                    )
+                    so.unlink()
+
+            # ABI-tag bare CPython extension modules so serious_python's Android
+            # packaging recognizes them. That packaging only relocates a native
+            # module into jniLibs and writes the `.soref` marker its on-device
+            # importer resolves for extensions whose filename carries a CPython
+            # ABI tag (`*.cpython-*.so` / `*.abi3.so`); a bare `NAME.so` is
+            # treated as a plain dependency library, gets no `.soref`, and so
+            # fails to import on-device (ModuleNotFoundError). CMake / SWIG /
+            # Cython / nanobind builds routinely emit un-tagged extensions
+            # (ncnn, faiss, coolprop, ...) because they can't derive the target
+            # SOABI when cross-compiling. Rename ONLY genuine extension modules —
+            # those exporting `PyInit_<basename>` — so real dependency
+            # libraries bundled alongside them are left untouched.
+            ext_tag_re = re.compile(r"\.(cpython-[^/]+|abi3)\.so$")
+            ext_suffix = f".cpython-3{sys.version_info.minor}.so"
+            nm = Path(env["STRIP"]).with_name("llvm-nm")
+            for so in wheel_dir.glob("**/*.so"):
+                if ext_tag_re.search(so.name):
+                    continue  # already ABI-tagged
+                module = so.name[: -len(".so")]
+                try:
+                    symbols = subprocess.check_output(
+                        [str(nm), "-D", "--defined-only", str(so)], text=True
+                    )
+                except (subprocess.CalledProcessError, OSError):
+                    continue  # not an analyzable ELF; leave it alone
+                # Match `PyInit_<module>`, tolerating a symbol-version suffix.
+                # A build applying a linker version script exports the init
+                # symbol versioned (onnxruntime: `PyInit_..._state@@VERS_1.0`),
+                # which an exact-equality check would miss — leaving the module
+                # bare, unrecognized by serious_python, and unimportable on-device.
+                pyinit = f"PyInit_{module}"
+                if any(
+                    tok == pyinit or tok.startswith(pyinit + "@")
+                    for tok in symbols.split()
+                ):
+                    tagged = so.with_name(module + ext_suffix)
+                    log(
+                        self.log_file,
+                        f"[{self.cross_venv}] ABI-tagging extension "
+                        f"{so.name} -> {tagged.name}",
+                    )
+                    so.rename(tagged)
+
             for so in wheel_dir.glob("**/*.so"):
                 log(self.log_file, f"[{self.cross_venv}] Stripping {so}")
                 self.cross_venv.run(
@@ -824,6 +961,34 @@ class Builder(ABC):
             # Verify 16KB page alignment (required by Google Play)
             for so in wheel_dir.glob("**/*.so"):
                 self._check_elf_alignment(so)
+
+        elif self.cross_venv.host_os == "iOS":
+            # Convert MH_BUNDLE Python extensions to MH_DYLIB so serious_python's
+            # darwin packaging can frameworkize AND link them. iOS CPython's
+            # sysconfig sets LDSHARED='...-dynamiclib -F . -framework Python', which
+            # setuptools/Cython/meson/maturin honor (-> MH_DYLIB); but CMake /
+            # scikit-build recipes (opencv, ncnn, coolprop, faiss, ...) link a
+            # Python MODULE with Apple's default -bundle (-> MH_BUNDLE), ignoring
+            # LDSHARED. serious_python turns every site-packages .so into a
+            # `.framework` binary that SwiftPM LINKS (a Package.swift binaryTarget
+            # the plugin target depends on), and `ld` rejects a bundle with
+            # "Unsupported mach-o filetype (only MH_OBJECT and MH_DYLIB can be
+            # linked)". Injecting an LC_ID_DYLIB and flipping the header filetype
+            # makes the extension a linkable dylib; dlopen (the import path) works
+            # on both filetypes, so nothing downstream regresses. serious_python's
+            # own `install_name_tool -id` then overwrites the placeholder id.
+            for so in wheel_dir.glob("**/*.so"):
+                if self._bundle_to_dylib(so):
+                    log(
+                        self.log_file,
+                        f"[{self.cross_venv}] MH_BUNDLE -> MH_DYLIB: {so.name}",
+                    )
+                    # The header edit invalidates the linker's ad-hoc signature;
+                    # re-sign ad-hoc so dyld/codesign accept the dylib.
+                    self.cross_venv.run(
+                        self.log_file,
+                        ["codesign", "--force", "--sign", "-", str(so)],
+                    )
 
         # Normalize a dotted distribution name (e.g. "zope.interface" -> "zope-interface")
         # to its PEP 503 canonical form in the wheel METADATA. pypi.flet.dev (Gemfury)
@@ -923,7 +1088,7 @@ class SimplePackageBuilder(Builder):
     def make_wheel(self):
         build_num = str(self.package.meta["build"]["number"])
         name = canonicalize_name(self.package.name)
-        version = canonicalize_version(self.package.version)
+        version = canonicalize_version(self.package.version, strip_trailing_zero=False)
         info_path = (
             self.build_path / "wheel" / f"{name.replace('-', '_')}-{version}.dist-info"
         )

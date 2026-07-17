@@ -1,12 +1,14 @@
+{% set version = "3.13.1" %}
+
 package:
   name: flet-libgeos
-  version: "3.13.1"
+  version: '{{ version }}'
 
 build:
   number: 1
 
 source:
-  url: http://download.osgeo.org/geos/geos-3.13.1.tar.bz2
+  url: http://download.osgeo.org/geos/geos-{{ version }}.tar.bz2
 
 requirements:
   build:

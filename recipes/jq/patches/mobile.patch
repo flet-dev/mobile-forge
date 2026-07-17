@@ -1,0 +1,34 @@
+The jq Python extension is the top-level module `jq`, which serious-python
+mangles to jniLibs `libjq.so` on Android — the same basename as a shared libjq.
+A dynamic `-ljq` link therefore bundles a `libjq.so` that collides with (and is
+clobbered by) the extension's own relocated `libjq.so`, so `import jq` loses
+jq_teardown. Static-link jq + oniguruma into the extension instead (flet-libjq
+ships PIC static archives — see recipes/flet-libjq/build.sh): the extension is
+self-contained and no libjq.so is bundled at runtime. JQPY_USE_SYSTEM_LIBS still
+selects flet-libjq's prebuilt libs, now via `-l:libjq.a` (static) not `-ljq`.
+
+diff --git a/setup.py b/setup.py
+index c79e917..7c2dd1b 100644
+--- a/setup.py
++++ b/setup.py
+@@ -103,7 +103,19 @@ use_system_libs = bool(os.environ.get("JQPY_USE_SYSTEM_LIBS"))
+ 
+ if use_system_libs:
+     jq_build_ext = build_ext
+-    link_args_deps = ["-ljq", "-lonig"]
++    # mobile-forge: static-link flet-libjq's prebuilt archives so the extension is
++    # self-contained (flet-libjq ships ONLY static .a -- see recipes/flet-libjq/
++    # build.sh). On Android the `jq` module mangles to jniLibs `libjq.so` -- the
++    # same basename a shared libjq would take -- so force the exact static archive
++    # via GNU ld's `-l:NAME.a` to be certain nothing bundles a colliding libjq.so.
++    # Apple's ld64 has no `-l:` syntax (and iOS has no jniLibs name collision), so
++    # there use plain `-ljq`/`-lonig`, which resolve to flet-libjq's static .a since
++    # no shared lib is shipped.
++    import sysconfig as _sysconfig
++    if "ios" in _sysconfig.get_platform():
++        link_args_deps = ["-ljq", "-lonig"]
++    else:
++        link_args_deps = ["-l:libjq.a", "-l:libonig.a"]
+     extra_objects = []
+ else:
+     jq_build_ext = jq_with_deps_build_ext
