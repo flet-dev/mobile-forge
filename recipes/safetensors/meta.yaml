@@ -6,3 +6,10 @@ build:
   number: 1
   script_env:
     _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
+
+test:
+  # numpy is an upstream extra (safetensors[numpy]), not a Requires-Dist, but
+  # the numpy/safe_open path is what downstream consumers (model2vec) use — so
+  # install it for the on-device test.
+  requires:
+    - numpy

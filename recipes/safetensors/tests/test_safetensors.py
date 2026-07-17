@@ -50,9 +50,8 @@ def test_serialize_file_roundtrip(tmp_path):
 def test_numpy_safe_open_roundtrip(tmp_path):
     """The numpy integration + mmap safe_open path is what downstream
     consumers (model2vec) use."""
-    import pytest
+    import numpy as np
 
-    np = pytest.importorskip("numpy")
     from safetensors import safe_open
     from safetensors.numpy import load, save_file
 
