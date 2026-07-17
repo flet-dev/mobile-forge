@@ -29,6 +29,12 @@ build:
       -DPYTHON3_LIBRARIES={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.so
       -DPYTHON3_NUMPY_INCLUDE_DIRS={platlib}/numpy/_core/include
 # {% else %}
+    # iOS only: BUILD_opencv_rgbd=OFF below gates out the rgbd module, whose
+    # hand-written pyopencv_linemod.hpp uses a bare Ptr<> that clashes with
+    # Apple MacTypes.h under `using namespace cv`. Android has no MacTypes.h so
+    # it keeps rgbd. Full rationale in patches/mobile.patch preamble.
+    # (This comment MUST stay OUTSIDE the >- scalar below — a `#` inside a YAML
+    # folded scalar is literal text, and its quotes break shlex-split of CMAKE_ARGS.)
     CMAKE_ARGS: >-
       -DAPPLE_FRAMEWORK=ON
       -DCMAKE_SYSTEM_NAME=iOS
@@ -44,13 +50,6 @@ build:
       -DENABLE_TESTING=OFF
       -DBUILD_EXAMPLES=OFF
       -DWITH_OPENCL=OFF
-      # contrib-only, iOS-only: the rgbd module ships a HAND-WRITTEN binding
-      # helper (pyopencv_linemod.hpp) with bare `std::vector<Ptr<...>>`, which
-      # clashes with Apple <MacTypes.h>'s global `typedef char* Ptr;` under
-      # `using namespace cv` (the same MacTypes clash the mobile.patch fixes for
-      # core/dnn/videoio; gen2.py's generated bindings are fixed generically, but
-      # this hand-written helper isn't). Android has no MacTypes.h so it keeps
-      # rgbd. To restore rgbd on iOS instead, patch those 4 lines to `cv::Ptr<...>`.
       -DBUILD_opencv_rgbd=OFF
       -DOPENCV_FORCE_PYTHON_LIBS=ON
       -DPYTHON3_INCLUDE_PATH={HOST_PYTHON_HOME}/include/python{py_version_short}
