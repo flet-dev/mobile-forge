@@ -15,7 +15,8 @@ Convention in mobile-forge:
 - Keep tests deterministic and network-free (fixed seeds; no downloads; asset
   files only if tiny and shipped in the recipe's tests/ dir)
 - Test-only deps (e.g. numpy for a package that doesn't require it) go in
-  tests/requirements.txt — one PEP 508 spec per line
+  meta.yaml under `test.requires` (a list of PEP 508 specs) — NOT a
+  tests/requirements.txt file (that is no longer read)
 
 Replace <package> with the import name (NOT the PyPI name — these can differ).
 """

@@ -147,7 +147,7 @@ for i in $(seq 1 30); do grep EXIT "$DATA/Library/Caches/console.log" 2>/dev/nul
 - **Big models (MBs): drop next to the test locally; the test discovers it by presence and skips otherwise.** Precedent sherpa-onnx `silero_vad.onnx` (2.2 MB): `if not os.path.exists(model): pytest.skip("silero_vad.onnx not bundled")`. CI (no asset) skips; your local loop runs REAL inference. `.gitignore` has `recipes/*/tests/*.onnx` so the asset can never be committed (that would silently flip the CI skip into a real run and embed MBs in git history) — extend the pattern for other formats.
 - **Tiny models (~KB): COMMIT them so CI runs real inference too.** Precedent tflite-runtime's 1 KB `dense_relu.tflite` (generated with desktop TF at a fixed seed, expected outputs asserted).
 
-Test-only deps — packages the tests import that are NOT in the recipe's Requires-Dist (e.g. numpy) — go in the recipe's meta.yaml `test.requires` (a list of PEP 508 specs; this replaced the former `recipes/<pkg>/tests/requirements.txt`, and `stage_recipe.sh` now errors on a stale one). `stage_recipe.sh` injects them into the generated tester `pyproject.toml` `dependencies` (read via `read_meta_list.py`). Each must resolve for the MOBILE target: pure-Python from PyPI, or a recipe on pypi.flet.dev / seeded into `dist/`.
+Test-only deps — packages the tests import that are NOT in the recipe's Requires-Dist (e.g. numpy) — go in the recipe's meta.yaml `test.requires` (a list of PEP 508 specs).
 
 Path-hungry packages (read bundled DATA via `__file__`) also need a top-level meta.yaml `extract_packages:` list on Android — see `forge-error-catalogue` § the `sitepackages.zip` class.
 
