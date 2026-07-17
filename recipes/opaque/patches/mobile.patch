@@ -1,3 +1,16 @@
+opaque 1.0.0 ships two mobile-hostile things this patch fixes:
+
+1. setup.py declares `install_requires = ("pysodium")` — a bare string, not a
+   tuple (missing trailing comma), which setuptools treats inconsistently;
+   rewritten to a proper list so pip reliably pulls the pysodium dependency.
+
+2. opaque/__init__.py loads libopaque via ctypes.util.find_library('opaque'),
+   which returns None on Android (no ld cache) and iOS (the library is
+   framework-ized), so LoadLibrary(None) yields a nameless handle and __init__
+   raises "Unable to find libopaque". flet-libopaque bundles the library; fall
+   back to the bundled sonames serious-python surfaces (identical to the
+   pysodium fix).
+
 diff --git a/setup.py b/setup.py
 --- a/setup.py
 +++ b/setup.py
@@ -10,3 +23,31 @@ diff --git a/setup.py b/setup.py
      classifiers=["Development Status :: 4 - Beta",
                   "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
                   "Topic :: Security :: Cryptography",
+diff --git a/opaque/__init__.py b/opaque/__init__.py
+--- a/opaque/__init__.py
++++ b/opaque/__init__.py
+@@ -26,9 +26,21 @@
+ import ctypes.util
+ from ctypes import c_uint16
+
+-opaquelib = ctypes.cdll.LoadLibrary(ctypes.util.find_library('opaque') or ctypes.util.find_library('libopaque'))
+-
+-if not opaquelib._name:
++# mobile-forge: ctypes.util.find_library() cannot locate the bundled libopaque
++# on Android (no ld cache) or iOS (framework-ized), returning None; fall back to
++# the bundled sonames flet-libopaque surfaces (see the identical pysodium fix).
++_found = ctypes.util.find_library('opaque') or ctypes.util.find_library('libopaque')
++if _found:
++    opaquelib = ctypes.cdll.LoadLibrary(_found)
++else:
++    opaquelib = None
++    for _cand in ('libopaque.so', 'libopaque.fwork', 'libopaque.dylib'):
++        try:
++            opaquelib = ctypes.cdll.LoadLibrary(_cand)
++            break
++        except OSError:
++            opaquelib = None
++if opaquelib is None or not opaquelib._name:
+     raise ValueError('Unable to find libopaque')
+
+ from pysodium import (crypto_core_ristretto255_SCALARBYTES, crypto_scalarmult_SCALARBYTES,

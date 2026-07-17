@@ -1,0 +1,53 @@
+# C-extension with patches and/or native-lib deps.
+#
+# Use when:
+#   - Upstream setup.py reaches for /usr/include, uses pkg-config, hardcodes
+#     macOS framework paths, or has platform-conditional logic that doesn't
+#     handle mobile
+#   - OR you need to wire env vars (OPENSSL_DIR, WITH_XML2_CONFIG, etc.)
+#     to point at peer-built flet-lib* recipes
+#
+# patches/ goes in the same dir as this meta.yaml. Patch files are applied
+# in order via `patch -p1 --ignore-whitespace --quiet` after source unpack.
+
+package:
+  name: <name>
+  version: <version>
+
+# Optional: pull peer-built deps into the crossenv so their /opt/include and
+# /opt/lib are added to CFLAGS/LDFLAGS automatically.
+requirements:
+  build:
+    # Build-time tools (run on the host laptop). Common: ninja, meson, Cython.
+    - <tool> <version-spec>
+  host:
+    # Target-arch peer deps. Other recipes — typically flet-lib*, openssl,
+    # libffi, libsodium etc. Version specifiers per build.py:67-78:
+    #   `name 1.2.3`  →  name==1.2.3
+    #   `name >=1.2`  →  name>=1.2
+    #   `name ^1.2`   →  name>=1.2 (caret style)
+    - <peer-dep> <version-spec>
+# {% if sdk == 'android' %}
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
+
+# Patches in `patches/` to apply after unpacking. Convention:
+#   - mobile.patch                — single patch, all versions
+#   - mobile-X.Y.x.patch          — version-stream-specific (select via Jinja)
+patches:
+  - mobile.patch
+
+# Optional script_env — env vars passed to the upstream build script.
+# Special handling (build.py:444-449): CFLAGS, CPPFLAGS, LDFLAGS get APPENDED
+# to forge's base values. Everything else is set verbatim.
+#
+# Placeholders available (str.format at build time):
+#   {platlib}, {prefix}, {sysconfigdata_name}, {NDK_ROOT} (android),
+#   {MESON_CROSS_FILE} (only set during meson builds),
+#   {sdk}, {arch}, {py_version_short}
+build:
+  script_env:
+    OPENSSL_DIR: '{platlib}/opt'
+# {% if sdk == 'android' %}
+    LDFLAGS: '-llog'
+# {% endif %}

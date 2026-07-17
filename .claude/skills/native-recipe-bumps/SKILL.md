@@ -1,6 +1,6 @@
 ---
 name: native-recipe-bumps
-description: Playbook for bumping native-library recipes in mobile-forge (libxml2, libxslt, openssl-class C deps and their consumers). Covers the Jinja-templated meta.yaml pattern for version-conditional URLs / patches / host pins, the build.sh quirks for cross-compiling autotools projects to iOS and Android (NDK r27d, API 24, Python 3.12), and the recurring pitfalls (iconv on Android, iOS static-only builds, bash 3.2 + set -u, etc).
+description: Playbook for bumping native-library recipes in mobile-forge (libxml2, libxslt, openssl-class C deps and their consumers). Covers the Jinja-templated meta.yaml pattern for version-conditional URLs / patches / host pins, the build.sh quirks for cross-compiling autotools projects to iOS and Android (NDK r27d, API 24, Python 3.12), and the recurring pitfalls (iconv on Android, iOS static-only builds, bash 3.2 + set -u, etc). USE THIS SKILL when bumping the version of an EXISTING recipe — especially `flet-lib*` ones. Sibling skills — `new-mobile-recipe`: creating a recipe from scratch (use that instead for new packages); `forge-error-catalogue`: error → fix mappings when the bumped build fails; `local-recipe-testing`: on-device verification; `forge-ci`: pushing/dispatching the bump.
 ---
 
 # Bumping native-library recipes in mobile-forge
@@ -81,6 +81,8 @@ build:
 ```
 
 `numpy/meta.yaml` writes `sdk == 'iOS'` — that branch never matches the values that are actually passed (the per-slice SDK names). Don't copy that comparison; use `sdk == 'iphoneos'` / `sdk == 'iphonesimulator'` / `sdk == 'android'`.
+
+When a bump adds a platform-gated dep to a list that would otherwise be EMPTY on the other platform, guard the whole KEY (`host:`), not just the entry — an empty rendered list is `None` and fails schema validation. See the `forge-error-catalogue` entry "`None is not of type 'array'`".
 
 ## Patches
 
@@ -230,3 +232,10 @@ When a build mostly succeeds and dies in cleanup, look at the last `<<< Return c
 - `recipes/lxml/` — version-conditional libxml2/libxslt host pins; SDK-conditional `LDFLAGS=-liconv`; carries `mobile.patch` for the macOS SDK include filter.
 - `recipes/flet-libopaque/` — minimal `{% set version %}` + URL template, no version branching needed.
 - `recipes/numpy/` — selective patch via Jinja + override-version (`{% if version and version < (2, 0) %}`); shows the override-driven pattern when versions need to be flippable from the CLI rather than the meta.yaml itself.
+
+Newer `flet-lib*` shapes worth knowing when bumping (fork branches; read via `git show <branch>:<path>`):
+
+- `machine/audioflux:recipes/flet-libfftw/` — classic autotools build.sh, both platforms.
+- `machine/h5py:recipes/flet-libhdf5/` — **CMake** build.sh. Two bump-relevant tells: build.sh recipes must declare their tools in `requirements.build` (`[cmake]` — the pip shim isn't seeded otherwise), and hdf5 1.14.3 is the cross-compile floor (older versions run target codegen binaries on the host).
+- `machine/sherpa-onnx:recipes/flet-libonnxruntime/` — **prebuilt-repackage**: no compile at all; `source.url` points at upstream's official mobile archive and build.sh restages it. Bumping = new archive URL + re-verifying 16KB `LOAD` alignment of the prebuilt `.so` (`llvm-readelf -l`). Note forge strips the archive's leading path component on unpack.
+- `machine/onnxruntime:recipes/onnxruntime/` — the `{% set version = "X.Y.Z" %}`-as-first-line idiom reused in `package.version` AND `source.url`, making a bump a one-line edit. Prefer this shape for any new recipe you touch.

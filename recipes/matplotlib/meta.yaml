@@ -15,7 +15,7 @@ requirements:
 # {% endif %}
 
 build:
-  number: 1
+  number: 2
 # {% if sdk == 'android' and arch in ['armeabi-v7a', 'x86'] %}
   script_env:
     CPPFLAGS: -Wno-c++11-narrowing
@@ -24,5 +24,10 @@ build:
     - -Csetup-args=--cross-file
     - -Csetup-args={MESON_CROSS_FILE}
 
-# potential issues:
-# https://github.com/godotengine/godot/pull/101036/files
+# matplotlib reads mpl-data/matplotlibrc (+ fonts/styles) via a real __file__
+# path at import; extract it so those reads resolve outside Flet 0.86's zip.
+extract_packages:
+  - matplotlib
+
+patches:
+  - mobile.patch

@@ -1,0 +1,48 @@
+# Native library (flet-lib*) recipe.
+#
+# Use when:
+#   - You need a C/C++ library that isn't on PyPI and no recipe provides it yet
+#   - You want to package its headers + .a/.so as a wheel that other Python
+#     recipes can depend on via requirements.host
+#
+# A flet-lib* wheel contains opt/include/ + opt/lib/, no Python code.
+# build.sh must install into $PREFIX (= <build>/wheel/opt). Forge wraps the
+# resulting opt/ tree into a wheel with py3-none-<platform-tag>.
+#
+# Companion files: build.sh (required for any recipe with a build.sh), and
+# any config.sub/config.patch in patches/ to fix autotools triplet detection.
+
+# Use a single conditional block at top to drive version-conditional patches/deps.
+# Future bumps then only edit the version line.
+# {% set version = "<X.Y.Z>" %}
+# {% if version.startswith('X.Y.') %}
+# {%   set patch = "config-X.Y.x.patch" %}
+# {% else %}
+# {%   set patch = "config.patch" %}
+# {% endif %}
+
+package:
+  name: flet-lib<libname>
+  version: '{{ version }}'
+
+source:
+  # No PyPI fallback — must specify a real URL. Common patterns:
+  #   - GitHub release tarball
+  #   - Project download page (curl, libsodium)
+  #   - GNOME sources (libxml2, libxslt): use HTTPS, structure is /sources/<lib>/<X.Y>/<lib>-<X.Y.Z>.tar.xz
+  url: https://example.com/libZZZ-{{ version }}.tar.gz
+
+# Start at 1 (the schema default and repo convention); bump when only the
+# recipe changes, not the upstream version. Never 0 — that suppresses the
+# wheel's build tag entirely.
+build:
+  number: 1
+
+patches:
+  - {{ patch }}
+
+# Optional: peer deps (transitive C deps that another flet-lib* provides).
+# Example: flet-libcurl depends on flet-libpsl.
+# requirements:
+#   host:
+#     - flet-libdep <version>

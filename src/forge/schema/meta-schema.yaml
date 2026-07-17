@@ -93,6 +93,21 @@ properties:
       Patches to apply to the code. Each entry is a filename in the
       `patches` folder of the recipe.
 
+  extract_packages:
+    type: array
+    default: []
+    items:
+      type: string
+    description: >-
+      Android only. Import-relative paths (usually the package's import name)
+      to ship EXTRACTED to disk instead of inside Flet 0.86's compressed
+      `sitepackages.zip`. Needed for "path-hungry" packages that read bundled
+      DATA files through a real `__file__` path (rather than
+      `importlib.resources`) — inside the zip such reads fail with
+      `NotADirectoryError`. Consumed by the recipe-tester
+      (`tests/recipe-tester/stage_recipe.sh` -> flet build
+      `[tool.flet.android].extract_packages`); forge's build itself ignores it.
+
   build:
     type: object
     default: {}
@@ -184,6 +199,27 @@ properties:
           build time, so the consuming app must not also bundle the (unused)
           `flet-*` wheel at runtime.
 
+    additionalProperties: false
+
+  test:
+    type: object
+    default: {}
+    properties:
+      requires:
+        type: array
+        default: []
+        items:
+          type: string
+        description: >-
+          Test-only dependencies: packages the recipe's tests import but the
+          package itself does NOT declare in Requires-Dist (e.g. numpy for a
+          recipe whose numpy integration is extra-gated upstream). PEP 508
+          specs; each must resolve for the MOBILE target (pure-Python from PyPI,
+          or a recipe published on pypi.flet.dev / seeded into dist/) — the same
+          constraint a real app faces. Injected into the recipe-tester's
+          generated pyproject `dependencies` by
+          `tests/recipe-tester/stage_recipe.sh`. Replaces the former
+          per-recipe `tests/requirements.txt`.
     additionalProperties: false
 
   about:

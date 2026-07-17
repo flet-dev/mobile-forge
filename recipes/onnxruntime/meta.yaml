@@ -1,0 +1,97 @@
+{% set version = "1.27.0" %}
+
+package:
+  name: onnxruntime
+  version: '{{ version }}'
+  # Termux's python-onnxruntime was the Android existence proof and patch
+  # donor. Termux builds 32-bit arm, but only with BUILD_UNIT_TESTS=OFF dodging
+  # -Wshorten-64-to-32 errors; upstream ships no 32-bit builds and the
+  # test surface there is unowned. Keep the matrix honest.
+  excluded_arches:
+    - armeabi-v7a
+
+build:
+  number: 2
+  script_env:
+    _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
+    # Consumed by the patch-added PEP 517 shim (_forge/forge_ort_backend.py),
+    # which cmake-configures ./cmake into the source root and builds before
+    # setuptools packages ./onnxruntime/capi/*. Design choices vs Termux:
+    # BUILD_SHARED_LIB=OFF statically absorbs everything into the single
+    # onnxruntime_pybind11_state.so (no libonnxruntime.so bundling, no
+    # rpath/preload dance — Termux symlinks a system prefix we don't have);
+    # that requires XNNPACK=OFF (its install-export breaks static builds,
+    # per Termux's own notes) and we keep NNAPI off too — the default CPU
+    # EP (MLAS, NEON-optimized) is the dependable mobile baseline.
+# {% if sdk == 'android' %}
+    FORGE_CMAKE_ARGS: >-
+      -GNinja
+      -DCMAKE_BUILD_TYPE=Release
+      -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+      -DCMAKE_TOOLCHAIN_FILE={NDK_ROOT}/build/cmake/android.toolchain.cmake
+      -DANDROID_ABI={ANDROID_ABI}
+      -DANDROID_NATIVE_API_LEVEL={ANDROID_API_LEVEL}
+      -DANDROID_STL=c++_shared
+      -DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DCMAKE_MODULE_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DPython_EXECUTABLE={CROSS_VENV_PYTHON}
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.so
+      -DPython_NumPy_INCLUDE_DIR={platlib}/numpy/_core/include
+      -DPYBIND11_USE_CROSSCOMPILING=TRUE
+      -Donnxruntime_ENABLE_PYTHON=ON
+      -Donnxruntime_BUILD_SHARED_LIB=OFF
+      -Donnxruntime_USE_XNNPACK=OFF
+      -Donnxruntime_USE_NNAPI_BUILTIN=OFF
+      -Donnxruntime_BUILD_UNIT_TESTS=OFF
+# {% else %}
+    # iOS lane: same shim, apple toolchain args; the shim keys its build
+    # dir on SYSROOT+ARCHITECTURES here. No -GNinja (iOS lane defaults to
+    # Unix Makefiles — the faiss/duckdb/pywhispercpp tell). CoreML EP
+    # explicitly off for v1: MLAS CPU parity with the android wheel.
+    FORGE_CMAKE_ARGS: >-
+      -DCMAKE_BUILD_TYPE=Release
+      -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+      -DCMAKE_SYSTEM_NAME=iOS
+      -DCMAKE_OSX_SYSROOT={{ sdk }}
+      -DCMAKE_OSX_DEPLOYMENT_TARGET={{ sdk_version }}
+      -DCMAKE_OSX_ARCHITECTURES={{ arch }}
+      -DPython_EXECUTABLE={CROSS_VENV_PYTHON}
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.dylib
+      -DPython_NumPy_INCLUDE_DIR={platlib}/numpy/_core/include
+      -DPYBIND11_USE_CROSSCOMPILING=TRUE
+      -Donnxruntime_ENABLE_PYTHON=ON
+      -Donnxruntime_BUILD_SHARED_LIB=OFF
+      -Donnxruntime_USE_XNNPACK=OFF
+      -Donnxruntime_USE_NNAPI_BUILTIN=OFF
+      -Donnxruntime_USE_COREML=OFF
+      -Donnxruntime_BUILD_UNIT_TESTS=OFF
+# {% endif %}
+
+source:
+  # No sdist on PyPI — GitHub tag tarball; the ~45 FetchContent deps come from
+  # cmake/deps.txt (SHA1-pinned) at configure time, incl. a HOST protoc (protoc_mac_universal v21.12)
+  # when cross-compiling with no ONNX_CUSTOM_PROTOC_EXECUTABLE set.
+  url: https://github.com/microsoft/onnxruntime/archive/refs/tags/v{{ version }}.tar.gz
+
+requirements:
+  build:
+    # PEP 517 requires setuptools/wheel/packaging + the cmake/ninja shims;
+    # forge builds with --no-isolation.
+    - setuptools
+    - wheel
+    - packaging
+    - cmake
+    - ninja
+  host:
+    # pybind numpy caster + Python_NumPy_INCLUDE_DIR above.
+    - numpy ^2.0.0
+# {% if sdk == 'android' %}
+    # C++17 everywhere -> libc++_shared.so at runtime
+    # (android only; iOS links the system libc++).
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
+
+patches:
+  - mobile.patch

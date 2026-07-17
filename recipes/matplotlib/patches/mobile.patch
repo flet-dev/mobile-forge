@@ -1,0 +1,84 @@
+matplotlib ft2font crashes at launch on iOS (SIGSEGV before Py_Initialize).
+
+matplotlib's vendored pybind11 enum helper (src/_enums.h) declares each enum
+(Kerning/LoadFlags/FaceFlags/StyleFlags in ft2font_wrapper.cpp) via the
+P11X_DECLARE_ENUM macro, which expands to a namespace-scope global whose
+initializer runs `py::gil_scoped_acquire` + `pybind11::cast` — i.e. it touches
+the Python C-API from a C++ STATIC INITIALIZER.
+
+On desktop/Android the extension is dlopen'd at import (interpreter already up),
+so that is harmless. But serious_python links each extension into the iOS app as
+a framework, and dyld runs its C++ static initializers at APP LAUNCH — before
+Py_Initialize(). The GIL acquire then dereferences the not-yet-created
+interpreter (_PyRuntime still zero) and the app SIGSEGVs before any Python runs
+(0-byte console.log; crash report bottoms in dyld runInitializers ->
+_GLOBAL__sub_I_ft2font_wrapper.cpp -> gil_scoped_acquire -> PyGILState_Ensure).
+
+Fix: record each enum spec as plain C++ data at static-init (no GIL, no
+pybind11::cast) and defer ALL Python work to bind_enums(), which already runs
+inside PYBIND11_MODULE (at import, interpreter live). Same observable behaviour
+on every platform; only WHEN the Python objects are built changes.
+
+--- a/src/_enums.h
++++ b/src/_enums.h
+@@ -32,18 +32,35 @@
+   namespace {
+     namespace py = pybind11;
+ 
+-    // Holder is (py_base_cls, [(name, value), ...]) before module init;
+-    // converted to the Python class object after init.
++    // Enum specs collected at static-init as PLAIN C++ DATA — no Python C-API
++    // is touched here. This matters on iOS: serious_python links each extension
++    // as a framework whose C++ static initializers dyld runs at APP LAUNCH,
++    // before Py_Initialize(). Upstream acquired the GIL and called
++    // pybind11::cast in the static initializer (see P11X_DECLARE_ENUM below),
++    // dereferencing the not-yet-created interpreter -> SIGSEGV before any Python
++    // ran. We record the raw (base_cls, [(name, value), ...]) here and defer ALL
++    // Python work to bind_enums(), which runs from PYBIND11_MODULE (at import,
++    // interpreter live). Desktop/Android are unaffected (same end state).
++    using enum_spec =
++      std::pair<std::string, std::vector<std::pair<std::string, long>>>;
++    auto enum_specs = std::unordered_map<std::string, enum_spec>{};
++
++    // Python enum CLASS objects, built by bind_enums() at import; read by the
++    // type_caster below at call time.
+     auto enums = std::unordered_map<std::string, py::object>{};
+ 
+     auto bind_enums(py::module mod) -> void
+     {
+-      for (auto& [py_name, spec]: enums) {
+-        auto const& [py_base_cls, pairs] =
+-          spec.cast<std::pair<std::string, py::object>>();
+-        mod.attr(py::cast(py_name)) = spec =
++      for (auto& [py_name, spec]: enum_specs) {
++        auto const& [py_base_cls, pairs] = spec;
++        auto py_pairs = py::list{};
++        for (auto const& [k, v]: pairs) {
++          py_pairs.append(py::make_tuple(k, v));
++        }
++        enums[py_name] =
+           py::module::import("enum").attr(py_base_cls.c_str())(
+-            py_name, pairs, py::arg("module") = mod.attr("__name__"));
++            py_name, py_pairs, py::arg("module") = mod.attr("__name__"));
++        mod.attr(py::cast(py_name)) = enums[py_name];
+       }
+     }
+   }
+@@ -56,13 +73,13 @@
+     namespace { \
+       [[maybe_unused]] auto const P11X_CAT(enum_placeholder_, __COUNTER__) = \
+         [](auto args) { \
+-          py::gil_scoped_acquire gil; \
+           using int_t = std::underlying_type_t<decltype(args[0].second)>; \
+-          auto pairs = std::vector<std::pair<std::string, int_t>>{}; \
++          auto pairs = std::vector<std::pair<std::string, long>>{}; \
+           for (auto& [k, v]: args) { \
+-            pairs.emplace_back(k, int_t(v)); \
++            pairs.emplace_back(k, static_cast<long>(int_t(v))); \
+           } \
+-          p11x::enums[py_name] = pybind11::cast(std::pair{py_base_cls, pairs}); \
++          p11x::enum_specs[py_name] = \
++            std::make_pair(std::string{py_base_cls}, pairs); \
+           return 0; \
+         } (std::vector{std::pair __VA_ARGS__}); \
+     } \
