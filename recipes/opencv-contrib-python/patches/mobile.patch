@@ -3,8 +3,8 @@ Make opencv-contrib-python 5.0 cross-compile AND load on Flet's mobile targets.
 This is the contrib twin of the opencv-python recipe. The contrib sdist ships
 the identical `opencv/` source tree (it only ADDS `opencv_contrib/` and points
 the build's extra-modules path at it), so this patch is byte-for-byte the
-opencv-python 5.0 mobile.patch and touches only `opencv/` files — the 14 hunks
-apply unchanged. The generated bindings for the contrib modules are handled by
+opencv-python 5.0 mobile.patch and touches only `opencv/` files — all 14 files
+(38 hunks) apply unchanged. The generated bindings for the contrib modules are handled by
 the same gen2.py fix (note 1). One contrib-only iOS wrinkle is NOT patched here
 but gated in meta.yaml instead: the rgbd module's hand-written
 `pyopencv_linemod.hpp` uses bare `std::vector<Ptr<...>>` and would hit the Apple
