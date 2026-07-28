@@ -193,6 +193,20 @@ Seen repeatedly on this fork; all are safe to retry once:
 - **`gh workflow run` returns HTTP 500** — retry after ~20s; then verify with
   `gh run list` that exactly one run was created (a 500 can be
   create-then-error).
+- **`User for pypi.flet.dev:` → `EOFError: EOF when reading a line`** in a
+  `Build wheels` step — pypi.flet.dev intermittently answers a `pip install
+  … --extra-index-url https://pypi.flet.dev …` query with **HTTP 401** (auth
+  challenge) instead of 404/200; headless pip then prompts for a username and
+  dies on EOF. It hits build-*tool* resolution (`build wheel
+  scikit-build-core…`) or a hosted dep (`flet-libcpp-shared…`), so it can red
+  any leg regardless of package. TELL it apart from a real failure by the
+  **scattered pattern**: the *same* install command succeeds on sibling legs
+  (e.g. all 3.14 green, one 3.12/3.13 red) because only some of the parallel
+  jobs got 401'd. Pure transient — `gh run rerun <id> --failed` clears it
+  (seen on rapidfuzz 3.14.5: 3/6 legs red on attempt 1, all 6 green on rerun,
+  no code change). Same root cause blocks *local* android cmake builds, where
+  it's not transient — see the `forge-error-catalogue` skill (`User for
+  pypi.flet.dev:` entry).
 
 Real failures reproduce on rerun. Don't retry more than once without reading
 the log.
