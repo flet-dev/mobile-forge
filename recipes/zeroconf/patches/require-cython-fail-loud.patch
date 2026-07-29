@@ -1,0 +1,23 @@
+Make REQUIRE_CYTHON actually fail the build on compile errors.
+
+zeroconf's Cython extensions are optional by design: build_ext.py guards the
+cythonize() step with REQUIRE_CYTHON, but BuildExt.build_extensions() wraps the
+actual C compilation in a bare try/except that only logs "Failed to build
+cython extensions" — even when REQUIRE_CYTHON is set. Under a cross-compile,
+any toolchain error at that stage would therefore produce a GREEN build that
+silently ships a pure-Python wheel with zero .so files (the same silent-
+fallback class as rapidfuzz's RAPIDFUZZ_BUILD_EXTENSION).
+
+The recipe sets REQUIRE_CYTHON=1 in build.script_env; this patch extends the
+env var's contract to the compile stage so a broken cross-compile fails loudly
+instead. Upstream behaviour without REQUIRE_CYTHON is unchanged.
+
+--- a/build_ext.py
++++ b/build_ext.py
+@@ -51,6 +51,8 @@
+         try:
+             super().build_extensions()
+         except Exception:
++            if os.environ.get("REQUIRE_CYTHON"):
++                raise
+             _LOGGER.info("Failed to build cython extensions")
