@@ -1,0 +1,15 @@
+package:
+  name: ifaddr
+  version: "0.2.0"
+
+build:
+  number: 1
+
+requirements:
+  build:
+    # setup.py-only sdist (no [build-system] table) — seed the legacy
+    # setuptools backend into the build env.
+    - setuptools
+
+patches:
+  - ios-bsd-sockaddr.patch
