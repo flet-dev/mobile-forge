@@ -1,0 +1,18 @@
+package:
+  name: zeroconf
+  version: "0.150.0"
+
+build:
+  number: 1
+  script_env:
+    # zeroconf's Cython extensions are optional-by-default (SKIP_CYTHON /
+    # swallowed build errors). Force them: a wheel without the 18 accelerator
+    # .so files would be a silent pure-Python fallback.
+    REQUIRE_CYTHON: "1"
+
+requirements:
+  build:
+    - cython
+
+patches:
+  - require-cython-fail-loud.patch

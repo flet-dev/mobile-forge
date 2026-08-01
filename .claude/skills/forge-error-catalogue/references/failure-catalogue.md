@@ -421,6 +421,26 @@ This forces forge to pip-install them before invoking `python -m build`.
 
 ---
 
+### `BackendUnavailable: Cannot import 'setuptools.build_meta'` / `Backend 'setuptools.build_meta:__legacy__' is not available`
+
+**Cause:** the sdist is **setup.py-only** — no `pyproject.toml` `[build-system]` table at all
+(ifaddr 0.2.0). PEP 517 then falls back to the legacy setuptools backend, but forge only
+auto-seeds `build-system.requires` from pyproject — which doesn't exist — so setuptools is
+absent from the build env and `python -m build --no-isolation` dies before doing anything.
+
+**Fix:** seed it explicitly:
+
+```yaml
+requirements:
+  build:
+    - setuptools
+```
+
+Same lever as the `setuptools_scm` entry above; the tell that it's THIS variant is the
+`:__legacy__` suffix in the error.
+
+---
+
 ### Rust: `error[E0463]: can't find crate for 'core'`
 
 **Cause:** the package pins a specific toolchain via `rust-toolchain.toml` (often
@@ -1219,6 +1239,30 @@ a 3.13 build. Distinct from the 3.13/3.14 Android **x86_64 `SIGSYS`/seccomp `ope
 which is a *native* abort from python-build's mimalloc (fixed in the `20260712` snapshot), not a
 Python-level branch — that one shows up as a hard crash with no traceback, this one as a clean
 `RuntimeError`/`ModuleNotFoundError` with a full pytest traceback.
+
+---
+
+### iOS: a pure-Python ctypes lib silently returns NOTHING (empty list / zero results) — `platform.system() == "iOS"` misses a `"Darwin"` gate
+
+**Cause:** the flet iOS runtime reports `platform.system() == "iOS"` (PEP 730 semantics; the
+iOS twin of the `sys.platform == "android"` entry above). Pure-Python libraries that select
+**Darwin/BSD-specific ctypes struct layouts or codepaths** via `platform.system() == "Darwin"`
+silently fall into their Linux branch on a Darwin ABI. Canonical case: **ifaddr** picks its
+`sockaddr` ctypes layout this way — the BSD layout has a leading one-byte `sa_len` +
+one-byte `sa_family`, the Linux one a two-byte `sa_family` — so on iOS every `sa_family`
+read is garbage, no address ever matches AF_INET/AF_INET6, and `get_adapters()` returns an
+**empty list with no exception**. Downstream, zeroconf's `Zeroconf()` then dies with
+`RuntimeError: No interfaces to listen on…`. macOS desktop and the Android leg both pass, so
+the recipe looks fine everywhere except on the iOS device/simulator run.
+
+**Fix:** patch the detection to include iOS — e.g.
+`platform.system() in ("Darwin", "iOS", "iPadOS")` — and, when the offender is a *dependency*
+rather than the recipe package, ship it as its own recipe: a platform-tagged
+(`cp3X-cp3X-ios_*`/`android_*`) wheel of a pure-Python package **outranks PyPI's
+`py3-none-any` at the same version**, so the fix delivers transparently to every consumer
+(ifaddr recipe, `recipes/ifaddr/patches/ios-bsd-sockaddr.patch`). Grep candidates for
+`platform.system()` before trusting an iOS leg; a lib that behaves right on macOS is NOT
+thereby proven right on iOS.
 
 ---
 

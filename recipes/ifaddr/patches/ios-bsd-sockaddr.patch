@@ -1,0 +1,27 @@
+Treat iOS/iPadOS as BSD when selecting the sockaddr ctypes layout.
+
+ifaddr picks between two ctypes struct layouts at import time: the BSD one
+(leading sa_len byte, one-byte sa_family — used on every Darwin-ABI system)
+and the Linux/Windows one (two-byte sa_family). The switch tests
+platform.system() == "Darwin", but Flet's iOS Python runtime reports "iOS"
+(PEP 730 semantics), so ifaddr silently falls into the Linux layout on
+iOS devices and simulators. Parsing Darwin-ABI getifaddrs results with the
+Linux layout means sa_family never matches AF_INET/AF_INET6, no address
+ever parses, and get_adapters() returns an EMPTY list — which in turn makes
+zeroconf's Zeroconf() constructor fail with "RuntimeError: No interfaces to
+listen on" (observed on the iOS simulator via the recipe-tester).
+
+The ABI is identical to macOS; only the platform string differs. Extend the
+check to "iOS"/"iPadOS". No upstream fix exists as of 0.2.0 (2026-07).
+
+--- a/ifaddr/_shared.py	2022-06-15 23:08:21
++++ b/ifaddr/_shared.py	2026-07-29 20:45:36
+@@ -118,7 +118,7 @@
+         )
+ 
+ 
+-if platform.system() == "Darwin" or "BSD" in platform.system():
++if platform.system() in ("Darwin", "iOS", "iPadOS") or "BSD" in platform.system():
+ 
+     # BSD derived systems use marginally different structures
+     # than either Linux or Windows.
