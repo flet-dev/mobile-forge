@@ -1,0 +1,57 @@
+package:
+  name: rapidfuzz
+  version: "3.14.5"
+
+build:
+  number: 1
+  script_env:
+    # rapidfuzz SILENTLY ships a pure-Python wheel (no compiled .so) unless CMake
+    # is detected AND the C++ build succeeds. Force the extension so a broken
+    # cross-build fails loudly instead of shipping the slow scalar-Python path.
+    # (Runtime implementation selection is a *separate* knob — RAPIDFUZZ_IMPLEMENTATION
+    # — deliberately left unpinned so the compiled module auto-wins at import.)
+    RAPIDFUZZ_BUILD_EXTENSION: "1"
+# {% if sdk == 'android' %}
+    CMAKE_ARGS: >-
+      -DCMAKE_TOOLCHAIN_FILE={NDK_ROOT}/build/cmake/android.toolchain.cmake
+      -DANDROID_ABI={ANDROID_ABI}
+      -DANDROID_NATIVE_API_LEVEL={ANDROID_API_LEVEL}
+      -DANDROID_STL=c++_shared
+      -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/env
+      -DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DCMAKE_MODULE_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DPython_EXECUTABLE={CROSS_VENV_PYTHON}
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.so
+# {% else %}
+    # The `ninja` pip package crashes importing on the iOS crossenv python
+    # (sysconfig.get_preferred_scheme('user') -> 'posix_user' invalid on iOS),
+    # so use the Makefiles generator on iOS; scikit-build-core then never imports
+    # ninja. (Android keeps Ninja, which works there.)
+    CMAKE_GENERATOR: Unix Makefiles
+    CMAKE_ARGS: >-
+      -DCMAKE_SYSTEM_NAME=iOS
+      -DCMAKE_OSX_SYSROOT={{ sdk }}
+      -DCMAKE_OSX_DEPLOYMENT_TARGET={{ sdk_version }}
+      -DCMAKE_OSX_ARCHITECTURES={{ arch }}
+      -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/env
+      -DPython_EXECUTABLE={CROSS_VENV_PYTHON}
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.dylib
+# {% endif %}
+
+requirements:
+  build:
+    # rapidfuzz builds via scikit-build-core + CMake (Ninja generator); with
+    # forge's `--no-isolation` these must live in the build venv. scikit-build-core
+    # and Cython come from the package's own build-system.requires; the PyPI sdist
+    # ships pre-transpiled .cpp, so Cython never re-runs during the build.
+    - cmake
+    - ninja
+# {% if sdk == 'android' %}
+  host:
+    # rapidfuzz's compiled extensions are C++ (the vendored, header-only
+    # rapidfuzz-cpp + Taskflow submodules bundled in the sdist). On Android the
+    # .so links libc++_shared.so, which the device runtime doesn't provide unless bundled.
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}

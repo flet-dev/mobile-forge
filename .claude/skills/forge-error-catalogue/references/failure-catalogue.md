@@ -1107,6 +1107,39 @@ uuid-utils 0.17.0 `mobile.patch`.
 
 ---
 
+### `User for pypi.flet.dev:` → `EOFError: EOF when reading a line` during a forge build (build-tool / host-dep resolution)
+
+**Symptom:** a build dies not while compiling but while `(build-)pip install …
+--extra-index-url https://pypi.flet.dev …` resolves build tools
+(`build wheel scikit-build-core>=0.11`, `cmake ninja`) or a hosted dep
+(`flet-libcpp-shared>=…`). The tail is `Looking in indexes: https://pypi.org/simple,
+https://pypi.flet.dev` → `User for pypi.flet.dev:` → `EOFError: EOF when reading a
+line`.
+
+**Cause:** pypi.flet.dev sometimes answers a simple-index query with **HTTP 401**
+(auth challenge) instead of 404/200; headless pip treats 401 as "need credentials",
+prompts for a username, and gets EOF (no TTY). It is the *index*, not the recipe —
+the failing package is often a generic build tool that isn't even hosted there.
+
+**Two flavours, different fixes:**
+- **Locally, deterministic on a FRESH cross-venv.** A `forge android:<abi> <cmake-recipe>`
+  in a venv that has no cached `cmake`/`ninja` hits the 401 every time (iOS often
+  slips through only because its venv already cached them from a prior build). It
+  blocks *every* CMake recipe equally (duckdb/pyzmq too) and never reaches compile —
+  so **validate the Android/v7a build in CI, not locally**, in an env where
+  pypi.flet.dev 401s. The `flet-lib*` host dep itself downloads fine (it *is* hosted).
+- **In CI, transient/scattered.** The same 401 flakes only *some* of the parallel
+  jobs; the identical install succeeds on sibling legs (e.g. all 3.14 green, one
+  3.12/3.13 red). Pure infra — `gh run rerun <id> --failed` clears it (rapidfuzz
+  3.14.5: 3/6 red → all 6 green on rerun, no code change). See the `forge-ci` skill's
+  "Infra flakes vs real failures".
+
+**Tell it apart from a real failure:** the traceback ends in `handle_401` /
+`ask_input` / `EOFError`, and the crash is *before* any `Building CXX object` line.
+A real recipe break reproduces on rerun and names a compiler/CMake error.
+
+---
+
 ## Runtime failures (on device/emulator/simulator)
 
 ### Flet 0.86 changed Android packaging — `sitepackages.zip` + jniLibs relocation (the umbrella behind a whole class of "worked under 0.85, fails now" on-device failures)

@@ -77,7 +77,10 @@ instead of re-deriving it.
   re-sign; setuptools/Cython/meson already ship dylib), **Apple `MacTypes.h` `Ptr` vs `cv::Ptr` ambiguity** (iOS-only;
   hand-written + gen2.py-generated code), **opencv-5 KleidiCV `armv8-a` on x86_64**
   and **hardcoded `CMAKE_SYSTEM_PROCESSOR` → ARM asm on the x86_64 sim** (per-arch
-  fix), **Rust crate with no `target_os="ios"` backend** (`mac_address`, cfg-gate it).
+  fix), **Rust crate with no `target_os="ios"` backend** (`mac_address`, cfg-gate it),
+  **`User for pypi.flet.dev:` → `EOFError` at build-tool/host-dep resolution** (the
+  index 401s, not the recipe — deterministic locally on a fresh cmake cross-venv,
+  transient/scattered in CI where a rerun clears it).
 - **Runtime failures** (device/emulator/simulator) — **the Flet 0.86 Android
   `sitepackages.zip` class** (its umbrella entry explains "why only now"):
   `NotADirectoryError` on a bundled data file → **`extract_packages`** meta field;
