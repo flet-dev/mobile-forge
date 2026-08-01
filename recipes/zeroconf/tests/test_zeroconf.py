@@ -2,17 +2,6 @@ import socket
 import threading
 
 
-def test_import():
-    """zeroconf imports and exposes its primary public API classes."""
-    from zeroconf import (  # noqa: F401
-        IPVersion,
-        ServiceBrowser,
-        ServiceInfo,
-        ServiceListener,
-        Zeroconf,
-    )
-
-
 def test_cython_extensions_compiled():
     """The Cython accelerator modules are real compiled extensions, not the
     pure-Python fallback (upstream's build swallows compile errors by design,
@@ -111,7 +100,13 @@ def test_register_and_browse_loopback():
     on a second instance in the same process — a full register/announce/query/
     response cycle over real multicast sockets, no external network required
     (mDNS multicast loops back on the local host)."""
-    from zeroconf import IPVersion, ServiceBrowser, ServiceInfo, ServiceStateChange, Zeroconf
+    from zeroconf import (
+        IPVersion,
+        ServiceBrowser,
+        ServiceInfo,
+        ServiceStateChange,
+        Zeroconf,
+    )
 
     type_ = "_forgetest._tcp.local."
     svc_name = "zc-recipe-test._forgetest._tcp.local."
@@ -136,7 +131,9 @@ def test_register_and_browse_loopback():
         )
         server.register_service(info)
         browser = ServiceBrowser(client, type_, handlers=[on_change])
-        assert found.wait(timeout=20), "registered service was not discovered within 20s"
+        assert found.wait(timeout=20), (
+            "registered service was not discovered within 20s"
+        )
     finally:
         if browser is not None:
             browser.cancel()
