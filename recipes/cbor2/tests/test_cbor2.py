@@ -2,13 +2,13 @@ import cbor2
 
 
 def test_roundtrip():
-    """dumps/loads round-trips a nested structure through the Rust extension."""
+    """Dumps/loads round-trips a nested structure through the Rust extension."""
     data = {"key": [1, 2.5, "three", b"four", True, None]}
     assert cbor2.loads(cbor2.dumps(data)) == data
 
 
 def test_known_vector():
-    """decodes a canonical CBOR test vector (RFC 8949 appendix A)."""
+    """Decodes a canonical CBOR test vector (RFC 8949 appendix A)."""
     assert cbor2.loads(bytes.fromhex("a201020304")) == {1: 2, 3: 4}
     assert cbor2.dumps("IETF") == bytes.fromhex("6449455446")
 
@@ -23,6 +23,6 @@ def test_tag():
 
 
 def test_bignum():
-    """integers beyond 64 bits use the bignum tag path (num-bigint in Rust)."""
+    """Integers beyond 64 bits use the bignum tag path (num-bigint in Rust)."""
     big = 2**100 + 7
     assert cbor2.loads(cbor2.dumps(big)) == big
