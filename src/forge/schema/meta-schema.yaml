@@ -61,6 +61,16 @@ properties:
         properties:
           url:
             type: string
+          strip:
+            type: integer
+            minimum: 0
+            description: >-
+              Number of leading path components to strip when unpacking, like
+              `tar --strip-components`. Defaults to 1 (drop the archive's single
+              top-level wrapper directory, the common case for sdists and source
+              tarballs). Set to 0 for prebuilt release archives whose files sit
+              at the archive root with no wrapper directory, so root-level files
+              (e.g. a static library beside an `include/` dir) are not dropped.
         additionalProperties: false
         description: >-
           Download and unpack an archive from a URL. Use when there is no PyPI
