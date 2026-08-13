@@ -1,0 +1,31 @@
+{% set version = "2.0.0" %}
+
+package:
+  name: flet-libcurl-impersonate
+  version: '{{ version }}'
+  # Prebuilt curl-impersonate static mega-archive (a single libcurl-impersonate.a
+  # bundling patched curl + BoringSSL + nghttp2/nghttp3/ngtcp2 + brotli + zstd +
+  # zlib) for consumers that statically link it — the curl-cffi recipe. This is a
+  # link-time (host_build) dependency only; nothing is shipped to the device.
+  #
+  # Upstream publishes a per-(arch, platform) asset for exactly our slices, EXCEPT
+  # armeabi-v7a — there is no 32-bit ARM Android build of curl-impersonate.
+  excluded_arches:
+    - armeabi-v7a
+
+source:
+# {% if sdk == 'iphoneos' %}
+  url: https://github.com/lexiforest/curl-impersonate/releases/download/v{{ version }}/libcurl-impersonate-v{{ version }}.arm64-apple-ios.tar.gz
+# {% elif sdk == 'iphonesimulator' %}
+  url: https://github.com/lexiforest/curl-impersonate/releases/download/v{{ version }}/libcurl-impersonate-v{{ version }}.{{ arch }}-apple-ios-simulator.tar.gz
+# {% else %}
+  # Android: arm64-v8a -> aarch64, x86_64 -> x86_64.
+  url: https://github.com/lexiforest/curl-impersonate/releases/download/v{{ version }}/libcurl-impersonate-v{{ version }}.{% if arch == 'arm64-v8a' %}aarch64{% else %}{{ arch }}{% endif %}-linux-android.tar.gz
+# {% endif %}
+  # The release tarballs hold libcurl-impersonate.a + include/curl/ at the archive
+  # root (no wrapper directory), so unpack verbatim rather than stripping a
+  # nonexistent top-level component.
+  strip: 0
+
+build:
+  number: 0

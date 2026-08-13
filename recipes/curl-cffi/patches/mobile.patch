@@ -1,0 +1,90 @@
+Cross-compile curl-cffi for iOS and Android under mobile-forge.
+
+curl-cffi's scripts/build.py selects the target arch by inspecting the build
+host's platform.uname(), and chooses the static-link recipe (Apple -force_load
+vs ELF --whole-archive, and whether to add -lc++) from the host's
+platform.system(). Under mobile-forge the build host (macOS or Linux) is never
+the wheel's target, so both of those are wrong for every slice.
+
+This patch adds a single opt-in lever, IMPERSONATE_FORGE_TARGET (set to "ios" or
+"android" by the recipe's build.script_env). When present:
+
+  * detect_arch() returns a synthesized target entry (static link, obj_name
+    libcurl-impersonate.a) and takes the prebuilt mega-archive + headers from
+    IMPERSONATE_BUILD_DIR (staged into {platlib}/opt by the
+    flet-libcurl-impersonate recipe). The GitHub download is skipped because the
+    .a already exists there, so the build is fully offline and never leaks a
+    stale arch across forge's reused source tree.
+
+  * the link recipe is forced to the target's: Darwin (-force_load + -lc++) for
+    iOS, ELF --whole-archive + -lc++ for Android.
+
+  * on iOS (the first-ever curl-cffi iOS build) the extension additionally links
+    the Apple system libraries the curl-impersonate iOS archive depends on:
+    Security + CoreFoundation (USE_APPLE_SECTRUST) and libiconv + libicucore
+    (USE_APPLE_IDN). Real-macOS builds don't need these and are untouched.
+
+Upstream behaviour is unchanged whenever IMPERSONATE_FORGE_TARGET is unset.
+
+--- a/scripts/build.py	2026-08-01 14:46:08
++++ b/scripts/build.py	2026-08-13 11:17:48
+@@ -31,6 +31,27 @@
+     with open(Path(__file__).parent.parent / "libs.json") as f:
+         archs = json.loads(f.read())
+ 
++    # mobile-forge cross-compilation: the build host (macOS/Linux) is not the
++    # wheel's target, so the host uname cannot select the target arch. When
++    # IMPERSONATE_FORGE_TARGET is set, synthesize the target entry directly and
++    # take the prebuilt libcurl-impersonate.a + include/ from IMPERSONATE_BUILD_DIR
++    # (staged by the flet-libcurl-impersonate recipe); the network download is
++    # skipped because <libdir>/libcurl-impersonate.a already exists.
++    forge_target = os.environ.get("IMPERSONATE_FORGE_TARGET")
++    if forge_target in ("ios", "android"):
++        build_dir = os.path.expanduser(os.environ["IMPERSONATE_BUILD_DIR"])
++        return {
++            "system": "Darwin" if forge_target == "ios" else "Linux",
++            "machine": platform.uname().machine,
++            "pointer_size": struct.calcsize("P") * 8,
++            "link_type": "static",
++            "obj_name": "libcurl-impersonate.a",
++            "libc": "android" if forge_target == "android" else None,
++            "libdir": build_dir,
++            "sysname": "",
++            "arch": "",
++        }
++
+     uname = platform.uname()
+     uname_system = "Android" if is_android_env() else uname.system
+     glibc_flavor = "gnueabihf" if uname.machine in ["armv7l", "armv6l"] else "gnu"
+@@ -181,6 +202,13 @@
+ 
+ ffibuilder = FFI()
+ system = platform.system()
++# mobile-forge: the link recipe (force_load vs --whole-archive, -lc++) must match
++# the wheel's target, not the macOS/Linux build host running this script.
++_forge_target = os.environ.get("IMPERSONATE_FORGE_TARGET")
++if _forge_target == "android":
++    system = "Linux"  # ELF --whole-archive branch; -lc++ added via is_android
++elif _forge_target == "ios":
++    system = "Darwin"  # -force_load + -lc++, correct for the iOS toolchain
+ root_dir = Path(__file__).parent.parent
+ download_libcurl()
+ 
+@@ -193,6 +221,17 @@
+             f"-Wl,-force_load,{static_libs[0]}",
+             "-lc++",
+         ]
++        if _forge_target == "ios":
++            # First-ever iOS build: curl-impersonate's iOS mega-archive is built
++            # with USE_APPLE_SECTRUST + USE_APPLE_IDN, so the consuming extension
++            # must pull in the matching Apple system libraries (Security +
++            # CoreFoundation for SecTrust, libiconv + libicucore for Apple IDN).
++            extra_link_args += [
++                "-framework", "Security",
++                "-framework", "CoreFoundation",
++                "-liconv",
++                "-licucore",
++            ]
+     elif is_android:
+         extra_link_args = [
+             "-Wl,--whole-archive",
