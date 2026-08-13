@@ -81,6 +81,7 @@ Match the package to one of these shapes. Each maps to a template in `templates/
 | C-ext that links a lib via a `*-config` tool | Compiled C-ext whose `setup.py` shells out to `pg_config`/`mysql_config`/… (psycopg2→libpq, mysqlclient→libmysqlclient) | A **static+PIC** `flet-lib*` (`build-flet-lib.sh` + `-fPIC`) shipping a config-shim, + consumer `script_env`/patch; see Pattern I |
 | CMake giant, **no sdist AND no setup.py/pyproject.toml** | Upstream's only wheel path is a host==target build script (onnxruntime's `ci_build/build.py`, TF's `build_pip_package_with_cmake.sh`) | No template — copy from `recipes/onnxruntime/` or `recipes/tflite-runtime/` (branches `machine/onnxruntime` / `machine/tflite-runtime`); see "PEP 517 shim" deep-dive below |
 | **Prebuilt-repackage + host_build chain**  | Upstream publishes official prebuilt mobile archives of the native lib AND the consumer's own cmake links + re-ships the `.so` (flet-libonnxruntime→sherpa-onnx) | `build.sh` repackager + consumer `requirements.host_build`; copy from `recipes/flet-libonnxruntime/` + `recipes/sherpa-onnx/` (branch `machine/sherpa-onnx`); see "prebuilt-repackage" deep-dive below |
+| **cffi/ctypes consumer of a prebuilt archive** | The package's own build DOWNLOADS a prebuilt static lib keyed by the build host's `uname` and statically links it (curl-cffi → curl-impersonate); breaks under cross because host≠target | `flet-lib*` prebuilt-repackage dep (`source.strip: 0` for root-level tarballs) + `requirements.host_build` + a `mobile.patch` opt-in env lever that steers arch/link off the forge target; copy from `recipes/flet-libcurl-impersonate/` + `recipes/curl-cffi/` (branch `curl-cffi`); see deep-dive below |
 
 If unsure, start with **minimal C-extension** and let the build tell you what's missing. Iterate up the table as failures surface.
 
@@ -110,6 +111,18 @@ The shim's load-bearing rules (each one bought with a failed build):
 **CI consequence:** this is a chain recipe — plain push strands it; see "CI: push vs dispatch" in Phase 7.
 
 **Real example:** `machine/sherpa-onnx:recipes/flet-libonnxruntime/` + `machine/sherpa-onnx:recipes/sherpa-onnx/` (patches `android-no-jni.patch` + `android-preload-ort.patch`).
+
+### Shape deep-dive: cffi/ctypes consumer that self-detects arch + downloads a prebuilt archive (curl-cffi → flet-libcurl-impersonate)
+
+**When:** the Python package's own build **downloads a prebuilt static lib keyed by the build host's `platform.uname()`** and statically links it (curl-cffi's `scripts/build.py` matches `uname` against a `libs.json`, downloads `libcurl-impersonate-v{ver}.{arch}-{sysname}.tar.gz`, and `--whole-archive`/`-force_load`s it into a cffi extension). This CANNOT work unpatched under forge: the build host (macOS/Linux) is never the wheel's target, so `uname`-based arch selection and any host-`platform.system()`-driven link recipe are wrong for every slice.
+
+The shape that works — a `flet-lib*` prebuilt-repackage dep + a small opt-in patch:
+
+1. **A `flet-lib*` recipe stages the prebuilt archive per slice** via `source.url` (one tarball per `(sdk, arch)` — Jinja-map `arm64-v8a`→`aarch64` etc.) into `$PREFIX` (=`wheel/opt`), so the consumer sees `{platlib}/opt/`. **`source.strip: 0`** when the tarball's files sit at the archive **root** with no wrapper dir (a prebuilt `.a` beside an `include/` — forge's default `strip=1` splits `path.split("/",1)[1]` and IndexError-**drops** every root-level file, keeping only `include/…`→`…`; verify empirically, it fails silently otherwise). Each upstream tarball is usually already thin per-slice → no `lipo`. `excluded_arches` any slice with no upstream binary (curl-impersonate has no `armeabi-v7a`).
+2. **The consumer declares it `requirements.host_build`** and points the package's own "where's the lib" env var at it (`IMPERSONATE_BUILD_DIR: '{platlib}/opt'`) so the package's **download is skipped** (the `.a` already exists there) — fully offline, and no CI `tmplibdir`-reuse arch leak.
+3. **A minimal `mobile.patch` adds ONE opt-in lever** (an env var the recipe's `script_env` sets, e.g. `IMPERSONATE_FORGE_TARGET: ios|android`) that (a) makes the arch-detect return a synthesized target entry instead of scanning `uname`, and (b) forces the target's static-link recipe (Apple `-force_load`+`-lc++` for iOS, ELF `--whole-archive`+`-lc++` for Android — the Android branch is the one the macOS host gets wrong). Guard it so upstream behaviour is unchanged when the var is unset. **iOS extra:** a static archive built with Apple SecTrust / Apple IDN needs the consuming extension to link `-framework Security -framework CoreFoundation -liconv -licucore` (see `forge-error-catalogue` § iOS undefined `_SecTrust*`/`_iconv`/`_uidna_*`).
+
+**Real example:** branch `curl-cffi` — `recipes/flet-libcurl-impersonate/` (build.sh, `source.strip: 0`) + `recipes/curl-cffi/` (`patches/mobile.patch`, 3 hunks). World-first curl-cffi iOS wheels; on-device 3/3 both platforms. Needed one forge-core change: exposing `source.strip` in `src/forge/schema/meta-schema.yaml` (the code already honored it).
 
 ### Naming
 

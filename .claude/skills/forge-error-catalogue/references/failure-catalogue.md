@@ -122,6 +122,37 @@ If upstream hardcodes `-L/usr/lib/X` somewhere, write a `mobile.patch` to strip 
 
 ---
 
+### iOS `Undefined symbols: _SecTrustEvaluateWithError / _iconv / _uidna_nameToASCII_UTF8 / _kCFTypeArrayCallBacks` linking a prebuilt Apple-built static lib
+
+**Cause:** a prebuilt static archive built for iOS with Apple's native TLS trust store (`USE_APPLE_SECTRUST`) and/or Apple IDN (`USE_APPLE_IDN`) — e.g. curl-impersonate's `libcurl-impersonate.a` — has undefined references into Apple **system** libraries that its objects do NOT carry. When you statically link that `.a` into a Python extension, those symbols surface as `ld: Undefined symbols for architecture arm64`. The symbol → library map:
+
+- `_SecTrust*`, `_SecCertificate*`, `_SecPolicy*` → `-framework Security`
+- `_kCFType*`, `_CFRelease`, `CFString*`, `CFArray*` → `-framework CoreFoundation`
+- `_iconv`, `_iconv_open`, `_iconv_close` → `-liconv`
+- `_uidna_*` (ICU International Domain Names) → `-licucore`
+
+(The real-macOS build of the same package usually does NOT need these — macOS uses a different verify/IDN path — so upstream's link args omit them, and this is iOS-only.)
+
+**Fix:** append the frameworks/libs to the extension's link args, gated to iOS. They resolve from the SDK sysroot (`.tbd` stubs in `usr/lib` + `System/Library/Frameworks`) with no extra `-L`/`-F`. In a cffi recipe this is a `mobile.patch` hunk on the `extra_link_args` list; in a `setup.py`/CMake recipe it can also ride in `script_env` `LDFLAGS`. Precedent: `recipes/curl-cffi/patches/mobile.patch` (branch `curl-cffi`) adds `["-framework","Security","-framework","CoreFoundation","-liconv","-licucore"]` for the iOS slice only.
+
+---
+
+### `source.url` prebuilt tarball unpacks with the top-level files MISSING (`.a`/`.so` gone, only `include/…` present)
+
+**Cause:** forge's `unpack_source` defaults to `strip=1` (`member.path.split("/", 1)[1]`), which assumes a single top-level wrapper directory. A prebuilt **release** tarball often has its files at the archive **root** (`libX.a`, `libX.so`, `include/X/…` with no wrapper dir). At `strip=1` the root-level files have no `/` → `split(...)[1]` IndexErrors → they are silently **dropped**, while `include/x.h` → `x.h`. build.sh then can't find the `.a`.
+
+**Symptoms:** build.sh's own guard (`[ ! -f libX.a ]`) trips, or a downstream link fails with the lib missing, even though the tarball clearly contains it.
+
+**Fix:** set `strip: 0` on the source object so forge extracts verbatim:
+```yaml
+source:
+  url: https://.../libX-<arch>.tar.gz
+  strip: 0
+```
+(The `strip` key requires forge with the `source.strip` schema addition — on the `curl-cffi` branch / after it merges.) Verify the actual behavior empirically before trusting either value: replicate `members()` from `src/forge/build.py` on the real tarball. Precedent: `recipes/flet-libcurl-impersonate/` (branch `curl-cffi`).
+
+---
+
 ### `ImportError: dlopen failed: library "/abs/path/.../libpython3.12.so" not found` (Android, at runtime)
 
 **Cause:** The Android `libpython3.12.so` from the `flet-dev/python-build` tarball is built without a SONAME (no `-Wl,-soname,libpython3.12.so` at libpython link time). When a recipe uses CMake's `target_link_libraries(... Python::Python)` to link explicitly against libpython (which pyzmq does on Android via `EXTRA_PYTHON_COMPONENT=Development.Embed`), the linker can't use a SONAME and falls back to using the input argument as DT_NEEDED. With `-DPython_LIBRARY=<absolute path>`, that path gets embedded verbatim. At runtime, Android's loader looks for the absolute build-host path and fails.

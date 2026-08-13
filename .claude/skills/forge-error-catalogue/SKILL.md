@@ -78,6 +78,11 @@ instead of re-deriving it.
   hand-written + gen2.py-generated code), **opencv-5 KleidiCV `armv8-a` on x86_64**
   and **hardcoded `CMAKE_SYSTEM_PROCESSOR` → ARM asm on the x86_64 sim** (per-arch
   fix), **Rust crate with no `target_os="ios"` backend** (`mac_address`, cfg-gate it),
+  **iOS undefined `_SecTrust*`/`_iconv`/`_uidna_*` linking a prebuilt Apple-built
+  static lib → `-framework Security -framework CoreFoundation -liconv -licucore`**
+  (curl-impersonate archive; iOS-only, the macOS build omits them),
+  **`source.url` prebuilt tarball unpacks with root-level `.a`/`.so` MISSING →
+  `source.strip: 0`** (default strip=1 drops files with no wrapper dir),
   **`User for pypi.flet.dev:` → `EOFError` at build-tool/host-dep resolution** (the
   index 401s, not the recipe — deterministic locally on a fresh cmake cross-venv,
   transient/scattered in CI where a rerun clears it).
