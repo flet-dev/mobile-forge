@@ -1,0 +1,8 @@
+package:
+  name: cbor2
+  version: "6.1.4"
+
+build:
+  number: 1
+  script_env:
+    _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
