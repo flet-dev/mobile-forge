@@ -1,0 +1,16 @@
+[project]
+name = "pillow-image-filters"
+version = "1.0.0"
+description = "Draws an image with Pillow and filters it on device."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet",
+    "pillow",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

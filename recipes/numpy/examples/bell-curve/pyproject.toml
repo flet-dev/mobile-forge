@@ -1,0 +1,16 @@
+[project]
+name = "numpy-bell-curve"
+version = "1.0.0"
+description = "Averages uniform random draws with numpy until a bell curve appears."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet",
+    "numpy",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

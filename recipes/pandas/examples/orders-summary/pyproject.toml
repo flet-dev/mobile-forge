@@ -1,0 +1,19 @@
+[project]
+name = "pandas-orders-summary"
+version = "1.0.0"
+description = "Groups a CSV of orders with pandas and shows the totals."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet",
+    "pandas",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
+
+[tool.flet.cleanup]
+package_files = ["pandas/tests"]

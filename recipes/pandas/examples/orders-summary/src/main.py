@@ -1,0 +1,140 @@
+"""Read a CSV of orders from app storage, group it with pandas and show the totals."""
+
+import os
+import random
+from datetime import date, timedelta
+
+import flet as ft
+import pandas as pd
+
+# FLET_APP_STORAGE_DATA is durable, app-private storage. Flet also makes it the working
+# directory on device, so a bare "orders.csv" would land there too — this spells it out.
+CSV_PATH = os.path.join(os.getenv("FLET_APP_STORAGE_DATA", "."), "orders.csv")
+
+ROWS = 600
+REGIONS = ["North", "South", "East", "West"]
+PRODUCTS = ["Anvil", "Rocket", "Magnet", "Rope", "Paint"]
+KEYS = {"region": "Region", "product": "Product", "month": "Month"}
+
+
+def write_sample_csv():
+    rng = random.Random(20260816)  # seeded, so every install shows the same totals
+    start = date(2026, 1, 1)
+    pd.DataFrame(
+        [
+            {
+                "date": start + timedelta(days=rng.randrange(180)),
+                "region": rng.choice(REGIONS),
+                "product": rng.choice(PRODUCTS),
+                "units": rng.randrange(1, 25),
+                "unit_price": round(rng.uniform(4.0, 90.0), 2),
+            }
+            for _ in range(ROWS)
+        ]
+    ).to_csv(CSV_PATH, index=False)
+
+
+def load_orders():
+    if not os.path.exists(CSV_PATH):
+        write_sample_csv()
+    orders = pd.read_csv(CSV_PATH, parse_dates=["date"])
+    orders["revenue"] = orders["units"] * orders["unit_price"]
+    # strftime rather than a tz conversion: named IANA zones need the tzdata package,
+    # which this app does not depend on.
+    orders["month"] = orders["date"].dt.strftime("%Y-%m")
+    return orders
+
+
+def summarise(orders, key):
+    summary = orders.groupby(key).agg(
+        orders=("units", "size"),
+        units=("units", "sum"),
+        revenue=("revenue", "sum"),
+    )
+    return summary.sort_values("revenue", ascending=False).reset_index()
+
+
+def main(page: ft.Page):
+    orders = None
+
+    def refresh():
+        results.controls = []
+        choice.disabled = True
+        spinner.visible = True
+        page.update()
+        page.run_thread(compute)
+
+    def compute():
+        nonlocal orders
+        if orders is None:
+            orders = load_orders()
+
+        key = choice.selected[0]
+        summary = summarise(orders, key)
+
+        header.value = (
+            f"pandas {pd.__version__} — {len(orders)} rows, "
+            f"text columns stored as {orders[key].dtype.storage}"
+        )
+        results.controls = [
+            ft.DataTable(
+                column_spacing=16,
+                columns=[
+                    ft.DataColumn(ft.Text(KEYS[key])),
+                    ft.DataColumn(ft.Text("Orders"), numeric=True),
+                    ft.DataColumn(ft.Text("Units"), numeric=True),
+                    ft.DataColumn(ft.Text("Revenue"), numeric=True),
+                ],
+                rows=[
+                    ft.DataRow(
+                        cells=[
+                            ft.DataCell(ft.Text(row[key])),
+                            ft.DataCell(ft.Text(f"{row['orders']}")),
+                            ft.DataCell(ft.Text(f"{row['units']}")),
+                            ft.DataCell(ft.Text(f"{row['revenue']:,.0f}")),
+                        ]
+                    )
+                    for row in summary.to_dict("records")
+                ],
+            )
+        ]
+        choice.disabled = False
+        spinner.visible = False
+        page.update()  # auto-update does not reach background threads
+
+    page.appbar = ft.AppBar(title=ft.Text("pandas orders"), center_title=True)
+    page.add(
+        ft.SafeArea(
+            expand=True,
+            content=ft.Column(
+                expand=True,
+                controls=[
+                    header := ft.Text(size=12),
+                    ft.Row(
+                        controls=[
+                            choice := ft.SegmentedButton(
+                                segments=[
+                                    ft.Segment(value=column, label=ft.Text(label))
+                                    for column, label in KEYS.items()
+                                ],
+                                selected=["region"],
+                                show_selected_icon=False,
+                                on_change=refresh,
+                            ),
+                            spinner := ft.ProgressRing(
+                                width=20, height=20, visible=False
+                            ),
+                        ]
+                    ),
+                    results := ft.Column(expand=True, scroll=ft.ScrollMode.AUTO),
+                    ft.Text(CSV_PATH, size=10, selectable=True),
+                ],
+            ),
+        )
+    )
+
+    refresh()
+
+
+if __name__ == "__main__":
+    ft.run(main)

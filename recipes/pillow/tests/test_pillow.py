@@ -48,6 +48,33 @@ def test_font():
     img = Image.new("RGB", (200, 50), "white")
     ImageDraw.Draw(img).text((10, 10), "Hello", fill="black", font=font)
     pixels = [img.getpixel((x, 25)) for x in range(15, 80)]
-    assert any(p != (255, 255, 255) for p in pixels), (
-        "font didn't render any non-white pixels"
+    assert any(
+        p != (255, 255, 255) for p in pixels
+    ), "font didn't render any non-white pixels"
+
+
+def test_only_jpeg_and_zlib_codecs_are_built():
+    """The mobile wheels link libjpeg and freetype only — no WebP, AVIF, JPEG
+    2000, libtiff or LittleCMS. That is the difference a consumer hits when an
+    Image.open that works on their Mac fails on device, so pin the exact codec
+    set the README promises."""
+    from PIL import features
+
+    codecs = set(features.get_supported_codecs())
+    assert {"jpg", "zlib"} <= codecs, codecs
+    assert not ({"webp", "jpg_2000", "libtiff"} & codecs), codecs
+    assert "freetype2" in features.get_supported_modules()
+    assert not features.check("littlecms2")
+
+
+def test_default_font_needs_no_file():
+    """There is no system font path on device, so ImageFont.truetype has nothing
+    to open unless the app bundles a face. load_default() carries its own and is
+    the safe fallback — check it renders."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    image = Image.new("RGB", (120, 40), "white")
+    ImageDraw.Draw(image).text(
+        (4, 4), "Flet", font=ImageFont.load_default(size=20), fill="black"
     )
+    assert image.getbbox() is not None

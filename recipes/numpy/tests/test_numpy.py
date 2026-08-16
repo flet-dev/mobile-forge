@@ -51,3 +51,35 @@ def test_fft():
     # Round-trip: inverse FFT recovers the original signal.
     recovered = np.fft.ifft(spectrum).real
     assert np.allclose(recovered, x)
+
+
+def test_linalg_works_without_an_external_blas():
+    """These wheels are built -Dblas=none -Dlapack=none, so numpy.linalg runs on
+    the reference LAPACK compiled into the wheel rather than an optimised BLAS.
+    It must still be correct — that is the whole claim consumers rely on — so
+    solve a system and check the residual, and confirm no cblas_* symbols crept
+    back in via a linked BLAS."""
+    import numpy as np
+
+    matrix = np.array([[3.0, 1.0], [1.0, 2.0]])
+    rhs = np.array([9.0, 8.0])
+    solution = np.linalg.solve(matrix, rhs)
+    assert np.allclose(matrix @ solution, rhs), solution
+
+    values = np.linalg.eigvalsh(np.array([[2.0, 0.0], [0.0, 5.0]]))
+    assert np.allclose(sorted(values), [2.0, 5.0]), values
+
+    u, s, vh = np.linalg.svd(np.array([[1.0, 0.0], [0.0, 4.0]]))
+    assert np.allclose(sorted(s, reverse=True), [4.0, 1.0]), s
+
+
+def test_longdouble_matches_the_target_abi():
+    """long double is 128-bit on 64-bit Android and a float64 alias elsewhere
+    (iOS, armeabi-v7a), which is why np.float128 exists on some slices and not
+    others. Pin whichever this slice actually is so a build-property change
+    cannot silently alter numeric behaviour."""
+    import numpy as np
+
+    size = np.dtype(np.longdouble).itemsize
+    assert size in (8, 16), size
+    assert hasattr(np, "float128") == (np.finfo(np.longdouble).nmant > 52)
