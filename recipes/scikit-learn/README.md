@@ -170,24 +170,36 @@ this build ships; leave `n_jobs` at its default.
 
 ## Build notes (maintainers)
 
-Two patches, both about the build environment rather than scikit-learn's behaviour:
+Both patches explain themselves at the top of the file, and `meta.yaml` justifies the host
+pins, the two Android-only runtime libraries and the `extract_packages` entry inline. Two
+things neither of them records.
 
-1. **`relax-scipy-build-cap.patch`** bumps the `scipy>=1.10.0,<1.18.0` build requirement in
-   `pyproject.toml` to `<1.19.0`. That cap was set before scipy 1.18 existed, and it governs
-   the *build* environment's desktop scipy — the one whose `cython_blas.pxd` scikit-learn
-   compiles against. Leaving it in place would let the build and the target resolve
-   different scipy versions, which is the one thing the capsule-based BLAS binding cannot
-   survive.
-2. **`disable-openmp-non-android.patch`** forces `openmp_dep` not-found on non-Android
-   targets. Apple clang's `-fopenmp` probe compiles, so meson reports OpenMP found on iOS,
-   but there is no libomp to link and the OpenMP extensions fail at link time; the patch
-   takes the single-threaded fallback scikit-learn already supports. Android keeps OpenMP —
-   the NDK ships `libomp.so` and the `flet-libomp` recipe bundles it at runtime. The forced
-   `dependency()` must not pass a `language:` keyword; meson rejects that on an unknown
-   dependency name.
+**Single-threaded iOS is a decision, not a limitation hit by accident.** Apple ships no
+libomp, and rather than building one — or a serial stub — as a `flet-lib*` recipe, this
+recipe takes the fallback scikit-learn already supports on plain macOS. That is where the
+platform asymmetry in [Threading](#threading) comes from, and it is what would have to
+change if someone wants it gone.
 
-`requirements.host` pins numpy and scipy so the cross-compile builds against the versions
-published on pypi.flet.dev, and adds `flet-libcpp-shared` (scikit-learn vendors
-libsvm/liblinear/newrand C++) plus `flet-libomp`, both Android-only. There is no external BLAS anywhere in the recipe:
-the `scipy.linalg.cython_blas` binding means no BLAS link and no Fortran toolchain, which
-is why this recipe is far cheaper to maintain than its dependency graph suggests.
+**The forced not-found `dependency()` must not carry a `language:` keyword.** meson
+rejects that on a dependency name it does not know, so the obvious-looking
+`dependency('openmp', language: 'c', required: false)` fails outright rather than
+returning not-found.
+
+What to re-verify on a bump:
+
+- **`relax-scipy-build-cap.patch` hard-codes version numbers**, so re-read the cap in the
+  new `pyproject.toml` and re-derive the patch. It is right only while the build
+  environment's scipy and the `requirements.host` scipy are the same release, which is the
+  entire point of it — a `cython_blas.pxd` compiled against one release and linked against
+  another is what the capsule binding cannot survive. Move the numpy and scipy pins to
+  whatever pypi.flet.dev carries at the same time.
+- **The counts quoted to consumers** — 69 extension modules, 17 linking
+  `libc++_shared.so`, 18 linking `libomp.so`, and the 11.4 MiB / 5.5 MiB / 1.2 MiB split of
+  the unpacked wheel — all come from a scan of the Android wheel. Run it again; nothing in
+  CI checks them.
+- **The `numpy<2.8,>=2.0.0` bound** under *Things to know* is scipy's constraint, not
+  scikit-learn's. Re-read it from the scipy that actually resolves.
+- The OpenMP asymmetry, the BLAS borrowed from scipy, and the `estimator.css` read that
+  makes `extract_packages` mandatory are each pinned by a test in `tests/`, so those three
+  claims go red rather than going stale. Deciding the `extract_packages` requirement has
+  lapsed needs an on-device check, though, not a reading of upstream's source.

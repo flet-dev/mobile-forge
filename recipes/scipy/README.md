@@ -123,29 +123,43 @@ core count rather than from the process's CPU affinity mask, since bionic has no
 
 ## Build notes (maintainers)
 
-Three build flags and three patches, all Android-driven except the first:
+Each patch carries its rationale at the top of the file, and each build flag is justified
+in `meta.yaml` next to the flag, so this section is what neither of those records.
 
-- `-D_without-fortran=true` drops the only Fortran left in scipy, which is `scipy.odr`
-  wrapping ODRPACK. Everything else Fortran-derived (QUADPACK, FITPACK, ARPACK, the LAPACK
-  in OpenBLAS) is already f2c-translated C upstream, or built `NOFORTRAN=1` in the
-  `flet-libopenblas` recipe.
-- `-Dblas=openblas -Dlapack=openblas` resolve through `flet-libopenblas`'s `openblas.pc`
-  on both platforms. iOS deliberately does not use Accelerate: one implementation means one
-  set of numerical results and no dependence on the OS release.
-- `-Duse-pythran=false` on Android only. pythran 0.18.1's
-  `pythonic/types/ndarray.hpp` has an ill-formed ref-qualifier overload the NDK's clang
-  rejects; Apple clang accepts it, so iOS keeps pythran. See
-  [Android notes](#android-notes) for the six calls this reaches.
-- `android-bionic-clog-cpow.patch` supplies `clog`/`cpow`, which bionic only declares from
-  API 26, in terms of `log`/`cabs`/`carg`/`cexp`. Because the wheels target API 24 the
-  substitutes are compiled in for every Android device regardless of its OS version. They
-  are not measurably worse than a real libm: away from the unit circle they agree with a
-  50-digit reference to ~1e-13 relative on the real part, and in the one region where they
-  do lose digits (`|z|` within ~1e-9 of 1, where `log|z|` cancels) numpy's own complex log
-  loses nearly as many.
-- `android-ducc-no-affinity.patch` stops vendored ducc from calling the glibc-only
-  `pthread_{get,set}affinity_np`. Costs CPU pinning, which is a performance optimisation.
-- `android-x86_64-boost-longdouble.patch` routes vendored boost.math to its IEEE binary128
-  branch on Android x86_64, whose `long double` is 128-bit rather than the 80-bit the x86
-  branch hard-asserts. Without it the build does not compile; with it there is no behaviour
-  change, since it selects the branch that matches the target.
+**Accelerate on iOS was rejected, not overlooked.** Linking Apple's framework would drop
+the `flet-libopenblas` host dependency and a good deal of build time, and it is what most
+iOS ports of a numerical stack do. The reason not to is the promise in
+[Things to know](#things-to-know): one BLAS on both platforms means results that do not
+drift between Android and iOS, or across iOS releases. Dropping `scipy.odr` is the same
+kind of trade — cheaper than sourcing a cross Fortran compiler or translating ODRPACK for
+one module upstream has already deprecated.
+
+The `clog`/`cpow` substitutes the Android patch compiles in were measured before being
+accepted, since every Android device gets them regardless of its OS version: away from the
+unit circle they agree with a 50-digit reference to about 1e-13 relative on the real part,
+and in the one region where they do lose digits (`|z|` within ~1e-9 of 1, where `log|z|`
+cancels) numpy's own complex log loses nearly as many. That is why the alternative —
+raising the target API level to 26 for the sake of two libm symbols — was not taken.
+
+What to re-verify on a bump, in rough order of how quietly it can go wrong:
+
+- **The pythran fallback table.** Re-derive it by listing which modules ship as `.py` in
+  the Android wheel and as `.so` in the iOS one. The test exercises two of the six entry
+  points, so a fourth module quietly joining the fallback set is invisible otherwise. If
+  the NDK's clang ever compiles pythran's headers, the Android flag and the whole
+  [Android notes](#android-notes) section go away together.
+- **"`scipy.odr` is the only thing missing."** The test pins odr's absence and that the
+  other submodules import, not the module-for-module count against the desktop wheel — run
+  that diff again. Upstream removes `scipy.odr` in 1.19.0, at which point
+  `_without-fortran` stops being the reason anything is absent and the bullet needs
+  rewriting rather than updating.
+- **The single-threaded BLAS claim tracks `flet-libopenblas`, not scipy.** It holds only
+  while that recipe builds `USE_THREAD=0 NUM_THREADS=1`, so after a libopenblas bump
+  confirm the shipped `_fblas`/`_flapack` still contain no `pthread_create`. The
+  `MAX_THREADS` values quoted in [Threading](#threading) come from the same place and move
+  with it.
+- **Needing no `extract_packages` entry** rests on `_sobol_direction_numbers.npz`
+  remaining the only runtime data file, and still being read through `importlib.resources`.
+  Look for new `__file__`-relative data reads in the tree before repeating that claim.
+- **The sizes** are measured per architecture. Re-measure them rather than scaling the old
+  numbers.

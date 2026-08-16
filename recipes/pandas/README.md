@@ -194,23 +194,48 @@ and `to_string` do not, and are unaffected by any of this.
 
 ## Build notes (maintainers)
 
-pandas builds through meson-python, and the recipe is three settings and one patch:
+pandas' own meson-python build is used unchanged — no PEP 517 shim, nothing vendored,
+nothing compiled out — so `meta.yaml` is the standard cross-file handoff plus the two
+settings its comments justify, and the one patch explains itself in its preamble. Worth
+knowing before a bump: pandas moves its build-requirement floors (numpy, meson-python)
+between releases, so read upstream's `pyproject.toml` against the `requirements` block
+rather than assuming the existing pins still bracket it.
 
-- `mobile.patch` adds `[tool.meson-python] meson = "meson-wrapper.py"` plus that
-  three-line wrapper, which re-enters meson through `sys.executable`. Without it
-  meson-python runs the `meson` console script from `PATH`, whose shebang points at the
-  *build* Python; meson then reads the build Python's sysconfig and leaks its `Python.h`
-  include path into the Cython sanity check, which on the 32-bit Android targets fails as
-  `pyport.h: LONG_BIT definition appears wrong for platform`. The wrapper is the only
-  consumer-visible trace of the patch: it is why the `pandas/pyproject.toml` inside the
-  wheel differs from upstream's.
-- `PYTHONSAFEPATH=1` in `script_env`. meson introspects numpy by running the cross-Python
-  from pandas' source directory, where the top-level `pandas/io/` shadows the stdlib `io`
-  on `sys.path[0]` and numpy's C extension fails to initialise
-  (`cannot import name 'TextIOWrapper' from 'io'`). `PYTHONSAFEPATH` drops that implicit
-  entry while leaving `PYTHONPATH` alone, so crossenv's bridge still works.
-- `backend-args` passes `-Csetup-args=--cross-file {MESON_CROSS_FILE}`, the standard
-  meson-python cross-build handoff.
-- `flet-libcpp-shared` is an Android-only host requirement because
-  `pandas/_libs/window/aggregations` is the one C++ translation unit in the package; iOS
-  picks up `/usr/lib/libc++.1.dylib` from the OS instead. Everything else in `_libs` is C.
+The rest of this README states things that were measured on a particular build, and a bump
+can invalidate any of them without anything turning red. Re-check:
+
+- **That the patch still lands where it is meant to.** Its hunk anchors on the tail of
+  upstream's `pyproject.toml`, which moves with every release; applied with fuzz into the
+  wrong place it would stop taking effect without failing to apply. The symptom is
+  distinctive — the two 32-bit Android ABIs fail on `LONG_BIT definition appears wrong
+  for platform` while arm64-v8a and iOS go green — and this is what the promise of one
+  pandas version across all three Android ABIs rests on. Worth checking too whether
+  meson-python has since gained a supported way to choose the interpreter, which would
+  retire the patch and, with it, the claim that a single file differs from the desktop
+  wheel.
+- **The file-by-file comparison against the desktop wheel.** The counts quoted at the end
+  of Things to know — total files, extension modules, byte-identical Python files, and
+  `pandas/pyproject.toml` as the only difference — come from diffing the built wheels
+  against the PyPI desktop wheel of the same version, and all of them shift on a bump.
+  That diff is also what backs the claim that nothing is compiled out and that Android
+  and iOS are identical.
+- **The sizes.** Wheel and unpacked figures per architecture, and the 13.0 MB
+  `pandas/tests` that the `[tool.flet.cleanup]` snippet removes, are measurements from
+  the wheels rather than estimates; re-measure, do not scale.
+- **What is required versus optional.** That `pyarrow` is optional — including the
+  fallback to `StringDtype(storage='python')` for the default `str` dtype — is read off
+  the built wheel's `Requires-Dist`, where the only hard requirements are `numpy` and
+  `python-dateutil` and `pyarrow` sits behind extras. A pandas release that promotes it,
+  or that changes the string backend, rewrites that whole bullet and the Install
+  section's "no `target_arch` restriction" with it.
+- **The single-threaded claim and the two runtime footguns.** No extension references
+  `pthread_create` or OpenMP on either platform; `pandas/io/formats/templates/` is the
+  only thing pandas reads from its own installation, which is what makes
+  `extract_packages` optional for everyone not using `DataFrame.style`; and named time
+  zones resolve through stdlib `zoneinfo`, hence the `tzdata` dependency. New extensions,
+  a new template or asset loaded via `__file__`, or a change of time-zone backend each
+  break one of those.
+- **The reader/writer matrix.** Which formats work out of the box, which need a package
+  that has a mobile wheel, and which are unavailable at all is a per-version fact;
+  pandas' release notes for the new version are the cheapest way to spot a moved engine,
+  and the tests in `tests/` cover only part of it.

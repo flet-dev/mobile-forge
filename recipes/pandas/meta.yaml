@@ -12,6 +12,10 @@ requirements:
   host:
     - numpy ^2.0.0
 # {% if sdk == 'android' %}
+    # pandas/_libs/window/aggregations is the one C++ translation unit in the
+    # package (everything else in _libs is C), and Android has no system C++
+    # runtime, so the NDK's libc++_shared has to be shipped. iOS links the OS's
+    # /usr/lib/libc++.1.dylib and needs nothing.
     - flet-libcpp-shared 27.2.12479018
 # {% endif %}
 
@@ -28,6 +32,8 @@ build:
     # so crossenv's bridge still works).
     PYTHONSAFEPATH: "1"
   backend-args:
+    # the meson-python cross-build handoff: forge's generated cross file is
+    # what tells meson the target triple, compilers and sysroot.
     - -Csetup-args=--cross-file
     - -Csetup-args={MESON_CROSS_FILE}
 

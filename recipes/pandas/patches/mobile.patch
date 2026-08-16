@@ -1,3 +1,46 @@
+Run meson under `sys.executable` so pandas' meson-python build reads the
+target Python's sysconfig instead of the build host's.
+
+meson-python does not import meson; it starts it as a separate process. Left
+alone it resolves the bare name `meson` on PATH, and the console script it
+finds there carries a shebang naming the build interpreter. meson therefore
+runs under the build Python and answers every question about "the Python we
+are building for" from that interpreter's own sysconfig, so the include
+directory it hands the compiler for the Cython sanity check is the build
+host's rather than the cross environment's. On 64-bit targets the two headers
+happen to agree and nothing is noticed; on the 32-bit Android ABIs
+(armeabi-v7a and x86) the host's `pyport.h` was written for an 8-byte pointer
+and the first compile stops at
+
+    pyport.h: LONG_BIT definition appears wrong for platform
+
+so those two slices die while arm64-v8a and iOS build cleanly. That split is
+the tell: it is an interpreter mix-up, not anything pandas does differently
+on 32-bit.
+
+The fix is one change spread over two files, and neither half is any use
+without the other:
+
+  1. `pyproject.toml` gains `[tool.meson-python] meson = "meson-wrapper.py"`.
+     meson-python special-cases a value ending in `.py`: rather than
+     executing it, it runs `[sys.executable, <value>]`. Under forge's
+     cross-build that `sys.executable` is the cross-python wrapper, which
+     exports `_PYTHON_SYSCONFIGDATA_NAME`, so meson and everything it starts
+     see the target's sysconfig. The value is resolved against the build's
+     working directory and must exist there, which is why it stays a bare
+     relative filename.
+
+  2. `meson-wrapper.py` is that script, added at the root of the unpacked
+     sdist next to `pyproject.toml`. It hands straight over to
+     `mesonbuild.mesonmain.main()` and adds no behaviour of its own; its
+     entire purpose is to be a Python file rather than a console script, so
+     that the choice of interpreter belongs to meson-python instead of to a
+     shebang baked in when meson was installed.
+
+The change has one visible trace on device: pandas ships a copy of its own
+`pyproject.toml` inside the wheel, so the installed file carries the added
+table and differs from upstream's by exactly those lines.
+
 --- a/pyproject.toml
 +++ b/pyproject.toml
 @@ -833,3 +833,15 @@

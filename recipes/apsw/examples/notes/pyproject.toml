@@ -5,8 +5,8 @@ description = "Persistent notes stored in SQLite by apsw."
 requires-python = ">=3.10"
 
 dependencies = [
-    "flet",
-    "apsw",
+    "flet==0.86.5",
+    "apsw==3.53.2.0",
 ]
 
 [dependency-groups]

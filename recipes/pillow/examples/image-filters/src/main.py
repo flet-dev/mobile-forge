@@ -90,6 +90,7 @@ def main(page: ft.Page):
                         width=SIZE,
                         height=SIZE,
                         border_radius=8,
+                        gapless_playback=True,
                     ),
                     ft.Row(
                         controls=[

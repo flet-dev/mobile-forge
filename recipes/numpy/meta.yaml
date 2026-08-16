@@ -21,9 +21,16 @@ patches:
 build:
   number: 1
   script_env:
+    # Inherited from the 1.x recipe and a no-op for 2.x: numpy's meson build never
+    # reads this variable (the knob is -Ddisable-svml), and SVML is gated on
+    # linux + x86_64 + AVX-512, which no mobile target can satisfy.
     NPY_DISABLE_SVML: 1
 
   backend-args:
+    # No external BLAS/LAPACK: numpy falls back to the f2c reference LAPACK it
+    # bundles, so this recipe needs no flet-libopenblas at build time and carries
+    # none in Requires-Dist. linalg stays correct; matmul and the decompositions
+    # are slower than a tuned BLAS. Consumer-visible cost is in the README.
     - -Csetup-args=-Dblas=none
     - -Csetup-args=-Dlapack=none
     - -Csetup-args=--cross-file
@@ -31,6 +38,12 @@ build:
 
   meson:
     properties:
+      # Mandatory for a cross build: numpy detects this format by compiling AND
+      # RUNNING a probe, which cannot happen here, and configure otherwise dies
+      # with "Unknown long double format". Values follow the target ABIs
+      # (__LDBL_MANT_DIG__ 113 vs 53). The branch is written on `#` comment lines
+      # because Jinja runs before the YAML parser, so only the taken branch ever
+      # becomes a key.
 # {% if sdk == 'android' and arch in ['arm64-v8a', 'x86_64'] %}
       longdouble_format: IEEE_QUAD_LE
 # {% else %}

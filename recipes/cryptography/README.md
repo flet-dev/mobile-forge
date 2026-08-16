@@ -182,33 +182,45 @@ is the authority on which exemption, if any, applies to you.
 
 ## Build notes (maintainers)
 
-`meta.yaml` selects the version with a Jinja switch on `py_version.minor`: 48.0.0 from 3.14
-up, 43.0.1 below. The constraint is pyo3, recorded in each wheel's
-`dist-info/sboms/cryptography-rust.cyclonedx.json` — 43.0.1 pins pyo3 0.22.2, which knows
-nothing about 3.14; 48.0.0 is on pyo3 0.28.3. Both are built by maturin from the upstream
-sdist with no patches.
+There are no patches, and `meta.yaml` justifies the Jinja version switch beside it. The
+rest of the recipe is a single decision with a long shadow: **OpenSSL comes from the
+Python support tree** rather than from an OpenSSL recipe of our own — which is all that
+`requirements.host: openssl` and `OPENSSL_DIR` are doing. Both OpenSSL bullets in
+[Things to know](#things-to-know) are consequences of that choice rather than of
+cryptography itself. The version varies per Python and per platform and lags what
+upstream's own wheels carry; and the legacy provider is a separate DSO
+(`lib/ossl-modules/legacy.so`) that a statically linked wheel has no path to, since the
+archive holds only the base, default and null providers and the baked-in `MODULESDIR`
+points at a build-machine path. Upstream's own wheels compile the legacy provider into
+their static OpenSSL, which is the whole of the difference. Building our own would fix both
+consequences and is a far larger recipe; that trade is the thing to revisit, not the
+environment variables.
 
-`requirements.host: openssl ^3.0.12` plus `script_env: OPENSSL_DIR = {platlib}/opt` is what
-points `openssl-sys` at the cross-compiled OpenSSL from the Python support tree, and
-`_PYTHON_SYSCONFIGDATA_NAME` is the usual cross-build pin. Two consequences of taking
-OpenSSL from that tree rather than building our own:
+One improvement is available and deliberately not taken. From 45.0.0 upstream offers a
+build-time `CRYPTOGRAPHY_BUILD_OPENSSL_NO_LEGACY`, which the newer branch could set
+instead of leaning on Flet's runtime `CRYPTOGRAPHY_OPENSSL_NO_LEGACY=1`. The older branch
+cannot — there a failed legacy load is fatal rather than a warning, so the runtime variable
+stays load-bearing, and setting the build flag on one branch only would make the two
+diverge for no consumer-visible gain.
 
-1. **The OpenSSL version tracks the support tree, not this recipe**, which is why it varies
-   per Python version and per platform across published wheels, and why it lags 3.0.x while
-   upstream cryptography has moved to 4.0.0.
-2. **The legacy provider is a separate DSO there** (`lib/ossl-modules/legacy.so`), not
-   compiled into `libcrypto.a` — the static archive contains only the base, default and null
-   providers. A wheel cannot carry that DSO, and the `MODULESDIR` baked into the library
-   points at a build-machine path, so `OSSL_PROVIDER_load(NULL, "legacy")` can never succeed
-   on device. Upstream's own wheels build OpenSSL with the legacy provider static, which is
-   the difference. Flet's app bootstrap papering over this with
-   `CRYPTOGRAPHY_OPENSSL_NO_LEGACY=1` is load-bearing for 43.0.1, where cryptography treats
-   the failure as fatal; from 45.0.0 upstream downgraded it to a warning, and added a
-   build-time `CRYPTOGRAPHY_BUILD_OPENSSL_NO_LEGACY` that would let the 48.0.0 build declare
-   this properly instead of relying on the runtime variable.
+What to re-verify on a bump:
 
-The stray top-level `tests/`, `docs/`, `rust/` and `_cffi_src/` directories in the 43.0.1
-wheels come from its `[tool.maturin] include` list, whose entries are bare strings; 48.0.0
-tags each one `format = "sdist"`. Built with maturin 1.13.3 (recorded in every wheel's
-`WHEEL` file) the bare form lands in the wheel as well as the sdist — upstream's own 43.0.1
-wheel, built in 2024 against an older maturin, does not contain them.
+- **Everything downstream of the version table** — the CVE list, what the newer release
+  removed, what it added — is written against two specific releases, and the CVE list
+  grows without anything in this repo changing. Re-read upstream's changelog and security
+  advisories, not just the diff between the two. Where the Jinja boundary belongs is a
+  question about pyo3, whose version each wheel records in
+  `dist-info/sboms/cryptography-rust.cyclonedx.json`.
+- **The unavailable-algorithm list.** `tests/test_cryptography.py` pins OpenSSL at 3.0.x
+  precisely so that it goes red the day the support tree moves. When it does, Argon2
+  becomes available at 3.2 and ML-KEM/ML-DSA at 3.5, and the *what you appear to gain but
+  do not* bullet has to shrink to match.
+- **The stray top-level directories** in the older wheels come from bare strings in that
+  release's `[tool.maturin] include` list, which maturin 1.13.3 puts in the wheel as well
+  as the sdist; the newer release tags each entry `format = "sdist"`. Nothing to fix in
+  this recipe, but the claim is per-release and per-maturin — check a built wheel rather
+  than assuming either way.
+- The legacy-provider bullet assumes Flet's app bootstrap still exports
+  `CRYPTOGRAPHY_OPENSSL_NO_LEGACY=1`. A test pins the ciphers that raise; nothing pins the
+  reason they raise.
+- **The sizes**, `_rust.abi3.so` included, are per-slice measurements. Re-measure them.

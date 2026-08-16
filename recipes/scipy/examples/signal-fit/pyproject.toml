@@ -5,9 +5,9 @@ description = "Filters a noisy waveform with scipy and fits its parameters back 
 requires-python = ">=3.10"
 
 dependencies = [
-    "flet",
-    "scipy",
-    "numpy",
+    "flet==0.86.5",
+    "scipy==1.18.0",
+    "numpy==2.4.6",
 ]
 
 [dependency-groups]

@@ -10,10 +10,17 @@ package:
 
 requirements:
   host:
+    # OpenSSL is borrowed from the Python support tree rather than built here, and
+    # is statically linked into the wheel. That is why the OpenSSL version tracks
+    # the support tree (3.0.x, not upstream's 4.x) and why the legacy provider —
+    # a separate ossl-modules/legacy.so — is unreachable. See the README.
     - openssl ^3.0.12
 
 build:
   number: 10
   script_env:
+    # Points cryptography's Rust build at the openssl host wheel's opt/ tree.
     OPENSSL_DIR: '{platlib}/opt'
+    # Force the TARGET sysconfigdata: without it setuptools reads the build
+    # Python's and bakes host paths into the extension.
     _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'

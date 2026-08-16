@@ -1,3 +1,70 @@
+Make pillow's setup.py build against the cross target instead of the build
+host. This file is for pillow 12.x and later and is the one current builds
+use; setup-10.x.patch covers the older line, and meta.yaml picks between them
+by version. The split exists because 12.x dropped `self.add_imaging_libs = ""`
+from `initialize_options`, leaving the older file's first hunk without
+matching context. 12.x also carries upstream's own iOS support
+(`get_ios_sdk_path` plus a `sys.platform == "ios"` branch), so the Apple SDK
+backport that makes up most of the older file has nothing to do here, while
+points 2 to 4 below have no counterpart there.
+
+pillow does not ask the compiler what it can reach. Its `pil_build_ext`
+collects candidate include and library directories itself, probes them for
+zlib.h, libjpeg, libfreetype and the rest, and compiles in whatever it
+believes it found. Every one of those probes runs on the build machine, so
+left alone a cross-build measures the macOS or Linux runner and bakes the
+answer into an iOS or Android wheel.
+
+  1. `disable_platform_guessing` is forced True instead of being read from
+     setup.cfg. It is the master switch for the "add platform directories"
+     chain and the "standard locations" block after it: /sw, X11 and the
+     macOS SDK on darwin, ldconfig output on linux, and /usr/local/{lib,
+     include}, /usr/{lib,include} and /lib everywhere. With it on, nothing
+     pillow might stumble over on the runner (libtiff, OpenJPEG, libwebp,
+     lcms2, libimagequant) can switch itself on, and the recipe's host deps
+     become exactly the wheel's feature set.
+
+     The same switch also drops the branch that would add the target SDK's
+     usr/include and usr/lib. iOS is unaffected, because Python-Apple-
+     support's sysconfig already puts the SDK include path on
+     `compiler.include_dirs`; the Android cross-venv surfaces nothing
+     comparable, its NDK paths living in CFLAGS and LDFLAGS, which distutils
+     never reflects into the directory lists. Replacing them is what the
+     CPATH and LIBRARY_PATH entries in meta.yaml are for, and the comment
+     there has the detail.
+
+     The hunk also sets `disable_brotli`, for which see its inline comment.
+     Worth knowing before relying on it: "brotli" is not one of the names in
+     `ext_feature.features`, so nothing in 12.x reads the attribute and the
+     assignment is a guard against a future in which it becomes a real
+     feature. What keeps brotli off the link line today is point 4.
+
+  2. `sys.prefix/lib` and `sys.prefix/include` are added unconditionally by
+     upstream, ahead of every guessing check, so point 1 does not stop them.
+     Under crossenv that prefix is the build-side venv, whose headers belong
+     to the build interpreter; gating the two calls on platform guessing
+     leaves the target with its own.
+
+  3. Host paths that leak in through the compiler object are filtered out.
+     They arrive not from pillow's own lists but from the build Python's
+     sysconfig, which is why point 1 cannot remove them, and the filter has
+     to sit immediately after pillow prepends its directories to
+     `self.compiler.{include,library}_dirs` and before the feature probing
+     that reads those same lists. The match is against exact paths rather
+     than `d.startswith("/usr/")` for the reason spelled out in the comment
+     inside the hunk: pillow realpath()s every directory it collects, GitHub
+     runners keep $ANDROID_HOME under /usr/local/lib/android/sdk, and a
+     prefix test would therefore strip the NDK sysroot that CPATH exists to
+     supply, taking zlib detection with it.
+
+  4. The iOS transitive-link list for `_imagingft` drops to z and bz2.
+     Upstream, new in 12.0, also links brotlicommon, brotlidec and png, which
+     suits a freetype built the way Apple's is; flet-libfreetype is built
+     without brotli and libpng, no such archives are staged, and the link
+     fails with `ld: library 'brotlicommon' not found`. z and bz2 stay
+     because freetype references them without linking them into its static
+     archive.
+
 diff --git a/setup.py b/setup.py
 --- a/setup.py
 +++ b/setup.py

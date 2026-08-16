@@ -5,8 +5,8 @@ description = "An iris classifier fitted on device and cached in app storage."
 requires-python = ">=3.10"
 
 dependencies = [
-    "flet",
-    "scikit-learn",
+    "flet==0.86.5",
+    "scikit-learn==1.9.0",
 ]
 
 [dependency-groups]

@@ -5,8 +5,8 @@ description = "Draws an image with Pillow and filters it on device."
 requires-python = ">=3.10"
 
 dependencies = [
-    "flet",
-    "pillow",
+    "flet==0.86.5",
+    "pillow==12.2.0",
 ]
 
 [dependency-groups]

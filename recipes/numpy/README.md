@@ -154,28 +154,50 @@ anything it gives you beyond `float64` as a bonus rather than something to depen
 
 ## Build notes (maintainers)
 
-The recipe carries no patches for the current version: `mobile-1.26.4.patch` is gated to
-numpy < 2.0, where it forced numpy's vendored meson to link extensions with `-dynamiclib`
-instead of `-bundle`. Forge's `fix_wheel` now converts `MH_BUNDLE` to `MH_DYLIB` itself,
-so 2.x needs nothing. Three build settings remain:
+The recipe is a plain meson-python source build — no `build.sh`, no PEP 517 shim, no
+native library of its own. The one structural decision worth recording is what it is
+*not*: numpy is deliberately not a `flet-libopenblas` consumer, the way
+[`scipy`](../scipy) on this index is. Leaving it on the reference LAPACK it bundles keeps
+the recipe free of a native-library chain and of any runtime dependency beyond the Android
+C++ runtime, and pays for that in the matrix-product performance described above.
+Reversing it is a change of recipe shape rather than of a flag — a `host` requirement, an
+entry in `Requires-Dist`, and most of [Things to know](#things-to-know) rewritten.
 
-- `-Dblas=none -Dlapack=none` leave numpy on its bundled f2c reference LAPACK, so nothing
-  here depends on `flet-libopenblas` — neither at build time nor in `Requires-Dist`. The
-  consumer-visible consequences are in [Things to know](#things-to-know); verify them
-  against the wheel by checking that `_multiarray_umath` has no `cblas_*` undefined symbol
-  and that `lapack_lite` carries the LAPACK routine names in its own text (it does, on both
-  platforms).
-- `meson.properties.longdouble_format` is not optional. numpy detects the format by
-  compiling *and running* a probe program (`numpy/_core/meson.build`), which meson cannot
-  do on a cross build; without the property the configure step fails with `Unknown long
-  double format`. The values follow the NDK's and Apple's own ABIs — `clang -dM -E` reports
-  `__LDBL_MANT_DIG__` 113 for `aarch64-linux-android` and `x86_64-linux-android`, 53 for
-  `armv7a-linux-androideabi`, `i686-linux-android` and `arm64-apple-ios` — and the shipped
-  wheels' `_numpyconfig.h` matches. Note that the Jinja conditional is written on `#`
-  comment lines: Jinja runs before the YAML parser, so the branch not taken never reaches
-  YAML, and only one `longdouble_format` key survives.
-- `NPY_DISABLE_SVML=1` is inherited from the numpy 1.x recipe and does nothing for 2.x.
-  numpy's meson build does not read that environment variable (the knob is now
-  `-Ddisable-svml`), and it gates SVML on `host_machine.system() == 'linux'` and
-  `cpu_family == 'x86_64'` with AVX-512, which no Android or iOS target can ever satisfy.
-  Nothing is lost by it and nothing would be lost by dropping it.
+Everything above this section is a claim about one particular build of numpy, and a bump
+can falsify any of it without the build failing. Re-verify, against the wheels the bump
+actually produces:
+
+- **That there is still no BLAS.** meson errors on an unknown project option, so a rename
+  of `blas`/`lapack` announces itself; a BLAS that quietly comes back does not. Confirm
+  `numpy.show_config()` on device still reports `blas: none` and `lapack: none`, then
+  check the stronger thing consumers rely on: `_multiarray_umath` carries no undefined
+  `cblas_*` symbol, and `linalg/lapack_lite` is still the real f2c LAPACK — on the order
+  of a megabyte, with the routine names in its own text — rather than the few tens of KB
+  of forwarding shim a system-BLAS build produces. The on-device tests assert that
+  `numpy.linalg` is *correct*; the symbol and size check is manual.
+- **`longdouble_format`.** numpy normally settles this by compiling *and running* a probe,
+  which a cross build cannot do, so the property is the only thing between the build and
+  `Unknown long double format`. A missing value fails loudly; a *wrong* value does not —
+  it yields a wheel whose `longdouble` disagrees with the platform ABI. Re-derive it from
+  the toolchain on any NDK or iOS SDK move as well as on a numpy bump (`clang -dM -E`
+  reports `__LDBL_MANT_DIG__` 113 for `aarch64-linux-android` and `x86_64-linux-android`,
+  53 for `armv7a-linux-androideabi`, `i686-linux-android` and `arm64-apple-ios`) and
+  confirm `_numpyconfig.h` in each built wheel agrees. The whole
+  [Android notes](#android-notes) table, and every `numpy.float128` statement in it,
+  follows from those two values.
+- **The threading promise**, which [Threading](#threading) makes unconditionally. Re-scan
+  every extension in every wheel for `pthread_create` and for OpenMP symbols (`omp_*`,
+  `GOMP_*`); a numpy release that adds a threaded path, or starts bundling a threaded
+  kernel of its own, would break that section without breaking the build.
+- **The counts and sizes**, all of which are per-version: nineteen extensions, of which
+  `_multiarray_umath` and `_pocketfft_umath` are the two linking the NDK C++ runtime; the
+  911 files that match the same-version desktop wheel module for module; the wheel and
+  unpacked sizes, and the ~30% of the unpacked total that is numpy's own `tests`. Recount
+  from the built wheels and from a desktop wheel of the *same* version.
+- **The absence of an `extract_packages` entry**, which holds only while numpy reads no
+  data file from disk. The Android on-device run is itself that check: as long as it
+  passes with no entry, the claim stands.
+
+The desktop timing table and the scipy comparison measure reference LAPACK against an
+optimised BLAS rather than a particular numpy release, so reread them on a bump instead of
+re-measuring — unless numpy replaces the bundled `lapack_lite` itself.

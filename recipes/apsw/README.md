@@ -138,24 +138,26 @@ explicit [`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update
 
 ## Build notes (maintainers)
 
-`mobile.patch` neutralises three host-tainted behaviours in apsw's sdist build, all of
-which would otherwise bake the *build* machine into a *target* wheel:
+`patches/mobile.patch` explains what it neutralises and why, and `meta.yaml` has nothing
+in it that needs justifying, so what is left here is the bump checklist. A green build
+verifies almost none of what this README promises — and because apsw fetches a
+version-matched SQLite amalgamation, a bump moves SQLite underneath every claim below as
+well.
 
-1. **`./configure` inside `sqlite3/`** is dropped. What it generates is
-   `sqlite3/sqlite_cfg.h` (consumed via `_HAVE_SQLITE_CONFIG_H=1`) — libc `HAVE_*` probes
-   measured on the build host rather than the target. The `SQLITE_ENABLE_*` features we
-   depend on come from apsw's own `-D` flags (`enable_all_extensions`), which is why
-   dropping configure costs no functionality — confirmed by the compile options in the
-   shipped wheels.
-2. **`fc.all = False`** limits the download to the SQLite amalgamation instead of also
-   pulling sqlite-src, vec1, sqlar and zlib. Observable effect: the shipped wheels'
-   `apsw/sqlite_extra_binaries/` contains nothing but upstream's README, i.e. no host
-   binaries leak into a mobile wheel. (Mechanism: with the full source absent, apsw's
-   `tools/vend.py` extension build never runs — it compiles via `customize_compiler()` and
-   would target the build host.)
-3. **`APSW_FORK_CHECKER`** is removed; it is compiled in whenever the *build* Python has
-   `os.fork`, and relies on `pthread_atfork`.
-
-The amalgamation is compiled straight into the extension
-(`APSW_USE_SQLITE_AMALGAMATION`), so there is no external `libsqlite3` to link and no
-`flet-lib*` dependency.
+- The compiled-in extension set, `MAX_ATTACHED` and `MAX_FUNCTION_ARG` are asserted by
+  `tests/test_apsw.py::test_extensions_compiled_in`, so losing any of them turns CI red on
+  its own. Add to that set whenever the README starts promising something new.
+- Nothing checks that the patch still *does* what it says, only that it applies. Unpack a
+  built wheel and confirm `apsw/sqlite_extra_binaries/` holds nothing but upstream's
+  README, and that `apsw.fork_checker` is gone. Both failures are silent: a wheel with
+  host binaries baked into it installs and imports perfectly well.
+- The comparison against the stdlib `sqlite3` module rots without anyone touching this
+  recipe. That Android's bundled SQLite is older than apsw's, that its extension set is
+  smaller, and that both mobile stdlib builds cap attachments at 10 and function arguments
+  at 127, all follow from Flet's Python build — so re-read them off a device after a Flet
+  bump as much as after an apsw one. The `notes` example prints all three versions.
+- The Flet 0.86.0 floor is a claim about apsw's shape rather than its version: it exists
+  because `apsw/__init__` is itself the native extension. Should upstream ever move the
+  extension out of the package `__init__`, that paragraph stops applying and should go.
+- The size figures, including the share of the wheel that is apsw's own `tests` package,
+  are measured. Re-measure them rather than adjusting them by eye.

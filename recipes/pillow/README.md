@@ -171,33 +171,46 @@ before handing one over.
 
 ## Build notes (maintainers)
 
-The single patch exists to stop Pillow's `setup.py` measuring the *build host* and baking the
-answer into a *target* wheel. Its four hunks:
+Pillow builds with plain setuptools, but its `setup.py` hand-probes directories for the
+libraries it wants instead of trusting the compiler's own search paths, so the recipe is a
+patched `setup.py` plus a couple of environment variables rather than a configure step.
+`meta.yaml` selects one of two patches by version, and each explains itself in a preamble
+above its diff.
 
-1. **`disable_platform_guessing = True`**, unconditionally, instead of reading it from
-   `setup.cfg`. That also stops `sys.prefix/{lib,include}` being added to the search path.
-   The consequence is the important one: the recipe's host deps are the entire feature set,
-   because nothing else can be auto-detected. Anything Pillow would otherwise have found on
-   the runner — libtiff, OpenJPEG, libwebp, lcms2, libimagequant — is off by construction.
-2. **`disable_brotli = True`.** Pillow 12 adds brotli to the link line whenever its headers
-   are reachable, and on iOS the cross site-packages happens to expose them; the link then
-   fails with `ld: library 'brotlicommon' not found` because no matching archive is staged.
-3. **An exact-path filter for host leaks** (`/usr/include`, `/usr/lib`, the Debian multi-arch
-   pair, …) rather than `d.startswith("/usr/")`. Pillow `realpath()`s every directory it
-   collects, and on GitHub runners `$ANDROID_HOME` is `/usr/local/lib/android/sdk`, so a
-   prefix test strips the NDK sysroot that `CPATH` was set to surface in the first place.
-4. **The iOS transitive-link list drops to `["z", "bz2"]`** from upstream's
-   `["z", "bz2", "brotlicommon", "brotlidec", "png"]`. `flet-libfreetype` is built without
-   brotli and libpng, and the shipped `_imagingft.so` confirms it links nothing but libz,
-   libbz2, libSystem and Python.
+What follows from that shape, and is worth carrying around: auto-detection is switched off
+entirely, so the feature set of these wheels is exactly the list of host deps. Adding a
+codec means a new `flet-lib*` recipe, not a build flag, which is why WebP, AVIF, JPEG
+2000, TIFF and LittleCMS are absent together rather than individually. PNG is the one
+feature that needs no host dep: Pillow implements it in Python over its zlib `zip` codec,
+so the platform's own zlib — the NDK sysroot's on Android, `/usr/lib/libz.1.dylib` on
+iOS — carries it, and no `libpng` ends up in any shipped `.so`.
 
-With platform guessing off, the Android cross-venv surfaces no include or library paths at
-all (iOS gets them from Python-Apple-support's sysconfig), so `meta.yaml` feeds them back
-through `CPATH` and `LIBRARY_PATH`, which Pillow honours natively — covering both the NDK
-sysroot (zlib and system headers) and the cross-venv's `opt/` tree (the two host wheels).
-`LDFLAGS: -lz` on Android and `-lz -lbz2` on iOS are there because FreeType references those
-symbols without linking them into its static archive.
+### Re-verify on a version bump
 
-PNG needs no host dep of its own: Pillow implements PNG in Python over its zlib `zip` codec,
-so the platform's own zlib — the NDK sysroot's on Android, `/usr/lib/libz.1.dylib` on iOS —
-is all it takes, and no `libpng` appears in any shipped `.so`.
+The sections above make claims about the built wheel that a bump can silently invalidate.
+`tests/` already pins the codec set, the presence of `freetype2`, the absence of LittleCMS
+and that `load_default()` renders; these are the claims no test covers.
+
+- The second column of the codec table, and the claim that the two wheels otherwise ship
+  the same `PIL/*.py` modules. Both are comparisons against the desktop PyPI wheel *of the
+  same version*, so they have to be re-run against the new one rather than inferred from
+  the device. Pillow's own `PIL SETUP SUMMARY`, printed at the end of the build, is the
+  quickest read of what actually got compiled in.
+- The list of formats `Image.save` accepts and which of them honour `save_all=True`. Those
+  are plugin inventories, and Pillow adds and retires plugins between releases.
+- What failure looks like per format — `UnidentifiedImageError` on WebP and AVIF versus
+  the deferred `OSError: decoder ... not available` on JPEG 2000 and compressed TIFF. It
+  depends on whether a plugin declines the file up front or only at `load()`.
+- The glyph coverage attributed to `ImageFont.load_default()`. It comes from a face
+  embedded in `ImageFont.py`, so it changes if upstream swaps that face.
+- The claim that `_imagingft` links nothing beyond libz, libbz2, libSystem and Python. The
+  iOS hunk that trims the transitive-link list assumes exactly that, and the assumption
+  breaks if `flet-libfreetype` is ever rebuilt with brotli or libpng.
+- The size figures, wheel and unpacked, on both platforms.
+- That no `extract_packages` entry is needed, which holds only while nothing in `PIL`
+  opens a data file next to itself at runtime.
+
+Also worth a glance: which patch applied, and whether `patch` reported offsets or fuzz
+rather than a clean application. A hunk that lands in the wrong place does not fail the
+build; the host-leak filter in particular fails by letting a feature turn itself on, which
+surfaces later as a wheel that no longer matches the table above.

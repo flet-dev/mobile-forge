@@ -1,3 +1,53 @@
+Make pillow's setup.py build against the cross target instead of the build
+host. This is the older of the recipe's two patches: meta.yaml selects it for
+anything below pillow 12, while setup-12.x.patch covers 12.x and later and is
+what current builds use.
+
+In practice the file matches pillow 10.x alone; all three hunks fail against
+11.x, whose `initialize_options` grew a return annotation and whose
+`get_macos_sdk_path` already passes `--sdk macosx` to xcrun. The 11.x-shaped
+variant of this patch is what became setup-12.x.patch at the 12 bump, so
+recover it from git history if an 11.x build is ever needed.
+
+pillow does not ask the compiler what it can reach. Its `pil_build_ext`
+collects candidate include and library directories itself, probes them for
+zlib.h, libjpeg, libfreetype and the rest, and compiles in whatever it
+believes it found, every probe running on the build machine.
+
+  1. `disable_platform_guessing` is forced True instead of being read from
+     setup.cfg. It is the master switch for the "add platform directories"
+     chain and the "standard locations" block after it (/usr/local, /usr,
+     /lib and the per-platform additions), and with it on nothing pillow
+     stumbles over on the runner can switch itself on. The context here still
+     carries `self.add_imaging_libs = ""`, the line 12.x removed and the
+     whole reason the recipe keeps two patch files.
+
+  2. `get_macos_sdk_path` becomes `get_apple_sdk_path` and works out which
+     SDK to ask xcrun for from `sys.platform` together with the simulator
+     suffix on `sys.implementation._multiarch`: iphoneos or iphonesimulator,
+     appletvos or appletvsimulator, watchos or watchsimulator, and no
+     argument at all for macOS. Unpatched, the method runs `xcrun
+     --show-sdk-path` bare, which answers with the host macOS SDK whatever
+     the target is.
+
+  3. The darwin branch is routed through the renamed method, and a new
+     `elif sys.platform in {"ios", "tvos", "watchos"}` branch contributes
+     that SDK's usr/lib and usr/include.
+
+     Both of those live in the elif chain headed by
+     `if self.disable_platform_guessing: pass`, so point 1 makes them
+     unreachable. It was not always so: the SDK work predates the forced
+     flag, which arrived with Android cross-compiling and replaced an earlier
+     revision's per-platform exclusion of the standard locations. Read points
+     2 and 3 as the record of how an Apple SDK has to be selected, not as
+     something this build executes.
+
+Reviving this line for real use would mean porting back the two hunks the
+file never grew: gating upstream's unconditional `sys.prefix/{lib,include}`
+additions on platform guessing, and filtering host paths out of
+`self.compiler.{include,library}_dirs` before feature probing. Both are in
+setup-12.x.patch, explained there.
+
 diff --git a/setup.py b/setup.py
 index 0abfaad..7b077d4 100644
 --- a/setup.py

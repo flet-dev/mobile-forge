@@ -1,3 +1,26 @@
+Link numpy's extensions as iOS dylibs instead of Mach-O bundles.
+
+This patch is conditional and currently inert. meta.yaml applies it only when
+`version < (2, 0)`, and the recipe builds a 2.x numpy, so it is never applied
+and never reaches the source tree. It is kept for the case where the recipe is
+pointed back at a 1.26.x version, where it is still required.
+
+numpy 1.x vendors its own copy of meson under `vendored-meson/`, so the recipe
+cannot get this fixed by upgrading the build backend — the vendored tree is
+what runs. On Apple targets that meson links every Python extension module as
+a Mach-O bundle (`-bundle`, filetype MH_BUNDLE), which is what CPython's own
+loader expects on macOS. iOS does not accept it: the app's dynamic loader
+refuses anything that is not MH_OBJECT or MH_DYLIB, so without this change
+every numpy extension fails at import with "Unsupported mach-o filetype".
+Linking with `-dynamiclib` instead produces MH_DYLIB and the extensions load.
+
+For 2.x the patch is unnecessary because forge's own fix_wheel step rewrites
+the filetype from MH_BUNDLE to MH_DYLIB after the build, for every recipe, so
+the link flag no longer has to be right in the first place. If the patch is
+ever revived, check that its single hunk still lands: it targets
+`get_std_shared_module_args` on meson's Apple dynamic-linker class, and the
+vendored meson tree moved between 1.x releases.
+
 diff --git a/vendored-meson/meson/mesonbuild/linkers/linkers.py b/vendored-meson/meson/mesonbuild/linkers/linkers.py
 index 7b3202c..2bf5e19 100644
 --- a/vendored-meson/meson/mesonbuild/linkers/linkers.py
