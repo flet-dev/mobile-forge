@@ -1,12 +1,13 @@
 [project]
-name = "apsw-notes"
+name = "scipy-signal-fit"
 version = "1.0.0"
-description = "Persistent notes stored in SQLite by apsw."
+description = "Filters a noisy waveform with scipy and fits its parameters back out."
 requires-python = ">=3.10"
 
 dependencies = [
     "flet",
-    "apsw",
+    "scipy",
+    "numpy",
 ]
 
 [dependency-groups]

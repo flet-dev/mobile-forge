@@ -115,3 +115,72 @@ def test_stats():
 
     assert abs(stats.norm.cdf(0.0) - 0.5) < 1e-12
     assert abs(stats.norm.pdf(0.0) - 1.0 / np.sqrt(2.0 * np.pi)) < 1e-12
+
+
+def test_odr_is_the_only_missing_module():
+    """The wheels are built without a Fortran compiler, which drops scipy.odr
+    and nothing else. Pin both halves of that claim: odr is gone, and every
+    other public submodule the README implies is present still imports."""
+    import importlib
+
+    import pytest
+
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("scipy.odr")
+
+    for name in (
+        "cluster",
+        "constants",
+        "datasets",
+        "fft",
+        "fftpack",
+        "integrate",
+        "interpolate",
+        "io",
+        "linalg",
+        "ndimage",
+        "optimize",
+        "signal",
+        "sparse",
+        "spatial",
+        "special",
+        "stats",
+    ):
+        importlib.import_module(f"scipy.{name}")
+
+
+def test_blas_is_openblas_on_both_platforms():
+    """BLAS/LAPACK come from flet-libopenblas on iOS as well as Android — iOS
+    deliberately does NOT fall back to Accelerate, so numerical results do not
+    drift between platforms or across iOS releases."""
+    import scipy
+
+    blas = scipy.show_config(mode="dicts")["Build Dependencies"]["blas"]
+    assert "openblas" in blas["name"].lower(), blas
+
+
+def test_pythran_fallback_modules_are_correct():
+    """pythran is disabled on Android, so three modules ship as .py instead of
+    .so. The fallbacks are never exercised by the rest of this suite, so a
+    broken one would ship green. Keep the arrays tiny — RBFInterpolator is the
+    slowest of the fallback paths."""
+    import numpy as np
+    from scipy import interpolate, linalg
+
+    points = np.array([[0.0], [1.0], [2.0], [3.0]])
+    values = np.array([0.0, 1.0, 4.0, 9.0])
+    interpolated = interpolate.RBFInterpolator(points, values)(np.array([[1.5]]))
+    assert 1.0 < float(interpolated[0]) < 4.0, interpolated
+
+    matrix = np.array([[4.0, 0.0], [0.0, 9.0]])
+    root = linalg.funm(matrix, np.sqrt)
+    assert np.allclose(root @ root, matrix), root
+
+
+def test_sobol_data_file_loads_from_the_zip():
+    """scipy's one runtime data file is read through importlib.resources, which
+    is why no extract_packages entry is needed. Force that read."""
+    from scipy.stats import qmc
+
+    sample = qmc.Sobol(d=2, scramble=False).random(4)
+    assert sample.shape == (4, 2), sample

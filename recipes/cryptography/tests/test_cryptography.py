@@ -49,3 +49,56 @@ def test_x509():
     cert = x509.load_pem_x509_certificate(cert_pem, default_backend())
     domain = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
     assert domain == "www.android.com"
+
+
+def test_openssl_is_the_static_3_0_from_the_support_tree():
+    """These wheels statically link the OpenSSL 3.0.x that ships in the Python
+    support tree, not the 4.x upstream's own wheels carry. Several algorithms
+    the README lists as unavailable are unavailable *because* of that, so pin it
+    — this test is meant to go red the day the support tree bumps, prompting the
+    README's algorithm list to be rechecked."""
+    from cryptography.hazmat.backends.openssl.backend import backend
+
+    assert backend.openssl_version_text().startswith(
+        "OpenSSL 3.0."
+    ), backend.openssl_version_text()
+
+
+def test_legacy_provider_ciphers_are_unavailable():
+    """The OpenSSL legacy provider is not in the wheel (it lives in a separate
+    ossl-modules/legacy.so that a static build has no path to), so the ciphers it
+    holds raise instead of working. AES and 3DES are in the default provider and
+    keep working — see the round-trip tests above."""
+    import pytest
+    from cryptography.exceptions import UnsupportedAlgorithm
+    from cryptography.hazmat.primitives.ciphers import Cipher, modes
+
+    try:
+        from cryptography.hazmat.decrepit.ciphers.algorithms import ARC4
+    except ImportError:
+        from cryptography.hazmat.primitives.ciphers.algorithms import ARC4
+
+    with pytest.raises(UnsupportedAlgorithm):
+        Cipher(ARC4(b"\x00" * 16), mode=None).encryptor().update(b"probe")
+
+    # AES is in the default provider, so the same call shape must succeed.
+    from cryptography.hazmat.primitives.ciphers.algorithms import AES
+
+    encryptor = Cipher(AES(b"\x00" * 16), modes.CBC(b"\x00" * 16)).encryptor()
+    assert len(encryptor.update(b"\x00" * 16)) == 16
+
+
+def test_fernet_and_scrypt_round_trip():
+    """The two primitives the example app relies on: a scrypt-derived key and a
+    Fernet seal/open cycle. Both are default-provider, so both must work on every
+    slice regardless of the legacy gap above."""
+    import base64
+
+    from cryptography.fernet import Fernet
+    from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
+
+    key = Scrypt(salt=b"\x01" * 16, length=32, n=2**14, r=8, p=1).derive(
+        b"passphrase"
+    )
+    token = Fernet(base64.urlsafe_b64encode(key)).encrypt(b"on-device secret")
+    assert Fernet(base64.urlsafe_b64encode(key)).decrypt(token) == b"on-device secret"

@@ -1,12 +1,12 @@
 [project]
-name = "apsw-notes"
+name = "scikit-learn-petals"
 version = "1.0.0"
-description = "Persistent notes stored in SQLite by apsw."
+description = "An iris classifier fitted on device and cached in app storage."
 requires-python = ">=3.10"
 
 dependencies = [
     "flet",
-    "apsw",
+    "scikit-learn",
 ]
 
 [dependency-groups]
@@ -14,3 +14,6 @@ dev = ["flet-cli", "flet-desktop", "flet-web"]
 
 [tool.flet.app]
 path = "src"
+
+[tool.flet.android]
+extract_packages = ["sklearn"]

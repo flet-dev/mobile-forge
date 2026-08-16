@@ -1,12 +1,12 @@
 [project]
-name = "apsw-notes"
+name = "secret-note"
 version = "1.0.0"
-description = "Persistent notes stored in SQLite by apsw."
+description = "A note sealed under a passphrase with scrypt and Fernet."
 requires-python = ">=3.10"
 
 dependencies = [
     "flet",
-    "apsw",
+    "cryptography",
 ]
 
 [dependency-groups]
