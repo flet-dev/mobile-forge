@@ -1,3 +1,39 @@
+Teach libpsl's bundled `config.sub` about Apple's iOS-simulator host triplet.
+
+`build.sh` configures libpsl with `--host=$HOST_TRIPLET --build=$BUILD_TRIPLET`,
+and forge builds three iOS slices: `arm64-apple-ios` (device),
+`arm64-apple-ios-simulator` and `x86_64-apple-ios-simulator`. autoconf
+canonicalises both of those triplets through `build-aux/config.sub` (libpsl
+0.21.5 ships the 2022-01-03 vintage) before anything is compiled. For the
+simulator name that script produces machine `<cpu>-apple` and OS
+`ios-simulator`, then splits the OS on its dash into kernel `ios` and OS
+`simulator`. The bare word `simulator` survives the recognised-OS list only by
+accident -- it matches the unrelated `sim*` entry meant for bare-metal
+simulator targets -- and then hits the block that validates kernel/OS *pairs*,
+which has no case for `ios` + `simulator` and falls through to its catch-all:
+
+    Invalid configuration `arm64-apple-ios-simulator': Kernel `ios' not known
+    to work with OS `simulator'.
+
+configure aborts there. The device triplet `arm64-apple-ios` and all four
+Android triplets canonicalise cleanly, so the symptom is "iOS simulator slices
+fail instantly, everything else builds" -- a triplet-parsing problem, not a
+compiler or libpsl problem.
+
+The patch adds an empty `ios-simulator)` case to that pairing block, next to
+the existing `*-eabi*` entry, declaring the combination valid and leaving it
+unnormalised. `arm64-apple-ios-simulator` then canonicalises to
+`aarch64-apple-ios-simulator`; no other triplet's handling changes.
+
+Without it the two simulator slices of flet-libpsl fail at configure, and since
+flet-libpsl is a host requirement of flet-libcurl, the break propagates down
+the whole chain (flet-libcurl, flet-libproj, flet-libgdal, pyproj) on iOS.
+
+The commit that introduced this file (ec8d184, a bulk branch consolidation)
+records no rationale; the account above is reconstructed from the diff and
+confirmed by running libpsl's own config.sub against forge's triplets, patched
+and unpatched.
+
 diff --git a/build-aux/config.sub b/build-aux/config.sub
 index dba16e8..215b8e2 100755
 --- a/build-aux/config.sub

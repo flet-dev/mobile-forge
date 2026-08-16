@@ -1,3 +1,34 @@
+Skip GDAL's target-Python probe when the Python bindings are switched off.
+
+flet-libgdal builds the libgdal C/C++ library only: build.sh passes
+-DBUILD_PYTHON_BINDINGS=OFF on both the Android and the iOS leg, and the Python
+bindings live in their own recipe (recipes/gdal). GDAL 3.13 nevertheless runs
+its `find_package(Python ... COMPONENTS Interpreter Development NumPy)` block
+unconditionally near the top of CMakeLists.txt, long before anything consults
+BUILD_PYTHON_BINDINGS.
+
+Searching for the Interpreter/Development components while cross-compiling is
+precisely what CMake 4.x's policy CMP0190 refuses to do unless an emulator has
+been declared -- "Interpreter and/or Compiler components cannot be searched
+when CMAKE_CROSSCOMPILING_EMULATOR variable is not specified" -- so configure
+aborts on every slice, over a Python we never wanted found.
+
+The patch wraps the block in
+
+    if (BUILD_PYTHON_BINDINGS OR NOT DEFINED BUILD_PYTHON_BINDINGS)
+
+Our build.sh passes OFF, so the probe is skipped; anyone configuring GDAL
+without mentioning the option at all still gets upstream's behaviour. Without
+this hunk flet-libgdal 3.13.x does not configure at all.
+
+Added with the flet-libgdal 3.10.0 -> 3.13.1 bump (PR #68, which describes it
+as guarding "GDAL 3.13's new unconditional find_package(Python) block behind
+BUILD_PYTHON_BINDINGS so it doesn't trip CMake 4.x's CMP0190 cross-compile
+policy"). The other 3.13 regression that PR dealt with -- FindOpenMP picking up
+the build host's libgomp and stamping a DT_NEEDED on libomp.so that Android's
+Python runtime cannot satisfy -- is handled by -DGDAL_USE_OPENMP=OFF in
+build.sh, not here.
+
 diff --git a/CMakeLists.txt b/CMakeLists.txt
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt

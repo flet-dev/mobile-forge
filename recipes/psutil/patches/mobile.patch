@@ -1,3 +1,34 @@
+Treat `sys.platform == "android"` as Linux so psutil builds and imports there.
+
+psutil chooses its platform backend from a block of constants at the top of
+psutil/_common.py, and `LINUX` is the gate for the `_psutil_linux` /
+`_psutil_posix` extensions. It tests `sys.platform.startswith("linux")`.
+CPython on Android reports "android" (a distinct value since 3.13), so that
+gate is False -- and so is every other platform flag in the block -- and
+psutil concludes it is running somewhere it does not support.
+
+Because _common.py is shared by the build and the runtime, that lands twice:
+
+  * setup.py does `from _common import LINUX` and ends its platform chain
+    with `sys.exit("platform {} is not supported")`, so the wheel never
+    builds;
+  * psutil/__init__.py runs the same chain at import and raises
+    `NotImplementedError: platform android is not supported`, so even a wheel
+    smuggled onto a device would fail on `import psutil`.
+
+Android is a Linux kernel with /proc, which is exactly what `_psutil_linux`
+reads, so the right answer is to let "android" satisfy the Linux gate:
+`startswith(("linux", "android"))`. One line, and it covers both halves --
+the correct extension is selected at build time and the same constant answers
+correctly at import.
+
+The rest of psutil needs no adjustment; this is a naming gap, not a porting
+job. Note also that the recipe is Android-only (`package.platforms:
+[android]`): on iOS the equivalent gate would select the macOS backend
+`_psutil_osx`, which links IOKit and calls libproc / host_processor_info /
+macOS-only sysctls that iOS either does not expose or restricts inside the
+app sandbox, so no analogous one-liner would help there.
+
 --- a/psutil/_common.py	2025-11-26 18:30:32
 +++ b/psutil/_common.py	2026-06-15 17:28:13
 @@ -71,7 +71,7 @@

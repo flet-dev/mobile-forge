@@ -1,3 +1,52 @@
+Build psycopg2 against a cross-compiled libpq, statically folded into the
+extension.
+
+Upstream links `_psycopg` against a shared libpq discovered through
+`pg_config` on the build machine. For mobile we do the opposite: libpq comes
+from the flet-libpq recipe, pulled in via `requirements.host_build` so it is
+present while building but absent from the wheel's Requires-Dist, and it is
+linked *statically* into `_psycopg.so` -- so an app that uses psycopg2 does
+not also ship a flet-libpq wheel it never loads. Three changes make setup.py
+cooperate with that arrangement.
+
+  1. setup.cfg: `static_libpq = 0` -> `1`. This is the switch that makes
+     `finalize_options` add `<libdir>/libpq.a` as a link object instead of
+     appending `-lpq`.
+
+  2. setup.py, pg_config discovery. `PostgresConfig.__init__` takes the path
+     from the `--pg-config` build_ext option (or setup.cfg), and otherwise
+     autodetects -- which on non-Windows means `find_on_path('pg_config')`,
+     i.e. the *build host's* PATH, where a Homebrew PostgreSQL would happily
+     answer for macOS. The hunk inserts one more source between those two
+     steps: the `PG_CONFIG` environment variable, which meta.yaml points at
+     flet-libpq's relocatable shim `{platlib}/opt/bin/pg_config`. Without it
+     the build either dies with "pg_config executable not found" or, worse,
+     silently configures itself against a host PostgreSQL install.
+
+  3. setup.py, the static link line. `libpq.a` alone does not link. It
+     references symbols from PostgreSQL's libpgcommon/libpgport support
+     archives, and the static stack as a whole references OpenSSL for TLS. On
+     the platforms upstream supports, the OpenSSL half arrives via
+     `finalize_darwin`, which appends -lssl/-lcrypto -- but those hooks are
+     dispatched as `finalize_<sys.platform>`, and in the cross environment
+     sys.platform is "ios" or "android", which matches no `finalize_*` method
+     at all. So the hunk adds, unconditionally:
+
+       - `libpgcommon.a` and `libpgport.a` from pg_config's libdir. Those are
+         the names flet-libpq's build.sh installs the PIC `*_shlib.a` variants
+         under: PostgreSQL namespaces the non-shlib archives' internals with a
+         `_private` suffix, which is not what libpq.a's references name.
+       - `ssl` and `crypto`, resolved from the openssl wheel (declared in
+         `requirements.host`) through the cross environment's LDFLAGS.
+
+     `self.libraries` has to be materialised first. setup.cfg's empty
+     `libraries =` is normalised to None at the top of `finalize_options`,
+     and with static_libpq the `-lpq` branch -- the only other place that
+     touches the list -- never runs, so it is still None here.
+
+Without this patch the build stops at pg_config discovery; force past that and
+the link fails on undefined libpgcommon/libpgport and OpenSSL symbols.
+
 --- a/setup.py	2026-06-17 21:43:57
 +++ b/setup.py	2026-06-17 21:48:30
 @@ -79,6 +79,8 @@

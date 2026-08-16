@@ -1,3 +1,44 @@
+Teach pyzbar's ctypes loader to find the libzbar that flet-libzbar ships,
+because `ctypes.util.find_library()` cannot find anything on iOS or Android.
+
+pyzbar is a pure-Python wrapper: `zbar_library.load()` locates a shared
+libzbar and hands it to `cdll.LoadLibrary()`. On Windows it loads DLLs it
+bundles; on every other platform it asks `ctypes.util.find_library('zbar')`,
+which shells out to `ldconfig` / the compiler / `objdump` — none of which
+exist on a phone. It therefore returns `None`, and upstream's next line
+raises `ImportError: Unable to find zbar shared library` at import time. This
+is the canonical "Pattern H" failure in this tree; see the
+`ImportError: Unable to find <name> shared library` entry in
+`.claude/skills/forge-error-catalogue/references/failure-catalogue.md`.
+
+libzbar itself does reach the device: `recipes/flet-libzbar` builds it as a
+*shared* library, this recipe lists `flet-libzbar` in `requirements.host`, and
+forge's `fix_wheel` turns that into a `Requires-Dist` so the app build pulls
+the wheel in. The wheel unpacks `libzbar.so` into `<site-packages>/opt/lib`;
+on Android serious-python's gradle step also copies it into `jniLibs/<abi>/`,
+from where it is loadable by bare soname, and on iOS it becomes an embedded
+framework reached through the `.fwork` pointer file that iOS CPython's
+`ctypes.CDLL` knows how to dereference.
+
+The patch keeps `find_library()` as the first attempt — a desktop build is
+therefore unaffected — and, only when that comes back empty, tries in order:
+
+  1. `<site-packages>/opt/lib/libzbar.fwork` — iOS,
+  2. `<site-packages>/opt/lib/libzbar.so` — the path the wheel unpacks to,
+  3. bare `libzbar.so` / `libzbar.dylib` — Android's `jniLibs`, and desktops
+     where the loader can find it by soname.
+
+`<site-packages>` is derived from `__file__` (two directories up from
+`pyzbar/zbar_library.py`) rather than from any environment variable. If every
+candidate fails, the original `ImportError` is still raised, so the failure
+message is unchanged.
+
+Without this, `import pyzbar.pyzbar` fails on both platforms even though
+`libzbar.so` is sitting in the app. The loader patch in
+`recipes/python-magic/patches/mobile.patch` is the same fix for libmagic.
+Rationale recorded in PR #82, "recipe: pyzbar 0.1.9 (+ flet-libzbar,
+flet-libiconv)".
+
 diff --git a/pyzbar/zbar_library.py b/pyzbar/zbar_library.py
 --- a/pyzbar/zbar_library.py
 +++ b/pyzbar/zbar_library.py

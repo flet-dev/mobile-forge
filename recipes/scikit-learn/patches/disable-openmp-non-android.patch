@@ -4,7 +4,6 @@
 # bundles it at runtime); non-Android targets build single-threaded — the same
 # fallback scikit-learn already supports on plain macOS.
 --- a/sklearn/meson.build
---- a/sklearn/meson.build
 +++ b/sklearn/meson.build
 @@ -102,6 +102,14 @@
  np_dep = declare_dependency(include_directories: inc_np, compile_args: numpy_no_deprecated_api)

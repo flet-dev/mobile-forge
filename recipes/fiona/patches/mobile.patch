@@ -1,3 +1,55 @@
+Let forge's `script_env` hand fiona's setup.py the GDAL include dir, library
+dir and library list, because `gdal-config` cannot be trusted in a cross
+build.
+
+fiona learns where GDAL is in exactly one way: it shells out to `gdal-config
+--cflags/--libs/--datadir/--version` and scrapes `-I`, `-L` and `-l` out of
+the answer. `include_dirs`, `library_dirs` and `libraries` have no other
+source. Upstream does read `GDAL_VERSION` from the environment, but that
+only overrides the version string — never a path, never a library name.
+
+In forge's cross environment there is no `gdal-config` for the target:
+`recipes/flet-libgdal/build.sh` finishes with `rm -rf $PREFIX/{bin,share}`,
+so the flet-libgdal wheel ships headers and libraries under
+`{platlib}/opt/{include,lib}` and no config script at all. The probe then
+goes one of two ways, both wrong:
+
+  * nothing named `gdal-config` is on PATH — the exception is caught and
+    merely logged ("Failed to get options via gdal-config"), so the build
+    carries on with three empty lists and dies later on a missing `gdal.h`,
+    or links an extension that never got `-lgdal`;
+  * a `gdal-config` belonging to the BUILD machine (Homebrew, MacPorts, a
+    distro package) is on PATH and answers happily — with macOS include and
+    library paths, for a macOS libgdal, quietly poisoning an iOS/Android
+    wheel.
+
+Hunk 2 adds three environment hooks immediately after that probe. They
+extend rather than replace, so anything gdal-config did legitimately
+contribute is kept:
+
+    GDAL_INCLUDE_PATH  ->  include_dirs   (colon-separated, PATH style)
+    GDAL_LIB_PATH      ->  library_dirs   (colon-separated)
+    GDAL_LIBS          ->  libraries      (comma-separated — these are library names, not paths)
+
+`meta.yaml` sets the first two to `{platlib}/opt/include` and
+`{platlib}/opt/lib`. `GDAL_LIBS` is just `gdal` on Android, where libgdal is
+a shared object that drags its own dependencies along; on iOS it is the
+whole static chain (`gdal,proj,tiff,curl,psl,sqlite3,jpeg,ssl,crypto,z`) so
+that fiona's own link pulls in the objects `libgdal.a` left undefined —
+without them dyld aborts at `import fiona`. The long comment in `meta.yaml`
+covers that half of the story.
+
+Hunk 1 deletes one of the two blank lines after the imports. It has no
+effect on anything; it is an artifact of how the patch was generated.
+
+Without this patch the fiona wheel either fails to compile or is linked
+against whatever GDAL the build machine happens to have.
+
+The commit that introduced the patch (ec8d184, a bulk consolidation of many
+branches) records no per-patch rationale. The account above is read off the
+diff, fiona 1.10.1's own setup.py, and this recipe's `script_env` block,
+which sets exactly these three variables and nothing else.
+
 diff --git a/setup.py b/setup.py
 index e1f48a6..6c04d39 100644
 --- a/setup.py

@@ -1,3 +1,48 @@
+Keep the build host's libffi out of the cross-compiled `_cffi_backend`, and
+stop a Linux-only /proc probe from needing a libc function old Android
+releases don't declare.
+
+cffi links libffi (`libraries = ['ffi']`). On mobile that libffi is the one
+cross-built by the Python support packages and installed into the cross
+environment (`libffi` is the recipe's host requirement); forge puts its
+headers on CFLAGS as `-I<install_root>/include` and its lib dir on LDFLAGS,
+so setup.py's job is simply to stay out of the way. Unpatched it does the
+opposite:
+
+  1. `include_dirs` is pre-seeded with `/usr/include/ffi` and
+     `/usr/include/libffi`. Those are the *build* machine's directories; on a
+     cross build they can only feed the wrong `ffi.h` to the compiler. The
+     list is emptied — the target's headers arrive via CFLAGS.
+
+  2. `use_pkg_config()` is commented out. It asks pkg-config for libffi's
+     --cflags/--libs and splices the answers straight into `include_dirs`,
+     `library_dirs`, `libraries` and `extra_link_args`, so a hit on the host's
+     libffi.pc undoes hunk 1 and points the linker at a macOS dylib. Worse,
+     it first calls `use_homebrew_for_libffi()` when `/usr/local/bin/brew`
+     exists, which *appends Homebrew's libffi pkgconfig directory to
+     PKG_CONFIG_PATH* — forge deliberately narrows pkg-config's view with
+     PKG_CONFIG_PATH/PKG_CONFIG_LIBDIR, and this runs after that, so the only
+     reliable answer is not to run the probe. The two compile probes on the
+     following lines, `ask_supports_thread()` and
+     `ask_supports_sync_synchronize()`, are deliberately left in: they invoke
+     the *cross* compiler, so their answers describe the target.
+
+  3. `malloc_closure.h` — `emutramp_enabled_check()` parses
+     `/proc/self/status` for a `PaX:` line to decide whether libffi closures
+     may be mapped PROT_EXEC. It sits inside `#ifdef __linux__`, and Android
+     defines `__linux__`, so it compiles on the Android slices (never on
+     iOS). Its `getline()` loop is the problem: bionic only declares
+     `getline` from API 18, so on older Android floors the file failed to
+     compile. Guarded out, the function falls through to `ret = 0` — the
+     same answer the loop would reach on Android anyway, since PaX is a
+     grsecurity kernel patch Android does not ship. The comment the hunk inserts names its
+     origin: this is Chaquopy's cffi patch. At forge's current API 24 floor
+     `__ANDROID_API__ >= 18` is always true and the guard changes nothing; it
+     is kept as it came. (On a desktop Linux build the guard would silently
+     disable the probe, since `__ANDROID_API__` is then undefined and the
+     preprocessor reads it as 0 — irrelevant here, as this recipe is only
+     ever built for iOS and Android.)
+
 diff --git a/setup.py b/setup.py
 index f9cabaa..c592203 100644
 --- a/setup.py

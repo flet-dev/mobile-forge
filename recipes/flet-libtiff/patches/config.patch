@@ -1,3 +1,42 @@
+Teach libtiff's bundled `config.sub` about Apple's iOS-simulator host triplet.
+
+`build.sh` configures libtiff with `--host=$HOST_TRIPLET`, and forge builds
+three iOS slices: `arm64-apple-ios` (device), `arm64-apple-ios-simulator` and
+`x86_64-apple-ios-simulator`. autoconf canonicalises the `--host` value through
+`config/config.sub` before anything is compiled. For the simulator name that
+script produces machine `<cpu>-apple` and OS `ios-simulator`, then splits the
+OS on its dash into kernel `ios` and OS `simulator`. The bare word `simulator`
+gets past the recognised-OS list only by accident -- it matches the unrelated
+`sim*` entry meant for bare-metal simulator targets -- and then reaches the
+block that validates the kernel/OS combination, which has no case for `ios` +
+`simulator` and falls through to its catch-all:
+
+    Invalid configuration 'arm64-apple-ios-simulator': Kernel 'ios' not known
+    to work with OS 'simulator'.
+
+configure stops there, so nothing is compiled and the log carries no compiler
+error to chase. `arm64-apple-ios` and all the Android triplets canonicalise
+cleanly; only the two simulator slices die.
+
+libtiff 4.7.0 ships a newer config.sub (2024-05-27) than most of the other
+flet-lib* recipes, which is why this patch looks slightly different from its
+siblings: that vintage carries a third "object file format" component, so the
+validating switch is `case $kernel-$os-$obj in` rather than `case $kernel-$os
+in`. The added case is therefore `ios-simulator*-)` -- kernel `ios`, OS
+`simulator`, empty `$obj` -- placed just ahead of the `*-*-*)` catch-all that
+would otherwise reject it. It accepts the pairing and normalises nothing, so
+`arm64-apple-ios-simulator` canonicalises to `aarch64-apple-ios-simulator` and
+every other triplet behaves exactly as before.
+
+Without it, two of the three iOS slices of flet-libtiff fail at configure, and
+flet-libproj -- which requires flet-libtiff -- and everything downstream of it
+(flet-libgdal, pyproj) lose their iOS wheels.
+
+The commit that introduced this file (ec8d184, a bulk branch consolidation)
+records no rationale; the account above is reconstructed from the diff and
+confirmed by running libtiff's own config.sub against forge's triplets, patched
+and unpatched.
+
 diff --git a/config/config.sub b/config/config.sub
 index 4aaae46..1692095 100755
 --- a/config/config.sub

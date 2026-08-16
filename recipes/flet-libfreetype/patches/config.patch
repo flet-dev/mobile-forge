@@ -1,3 +1,61 @@
+Teach FreeType's bundled `config.sub` about Apple's iOS-simulator host triplet.
+
+`build.sh` configures FreeType with `--host=$HOST_TRIPLET --build=$BUILD_TRIPLET`
+(the top-level configure delegates to `builds/unix/configure`, which is why the
+patched file lives under `builds/unix/`). forge builds three iOS slices:
+`arm64-apple-ios` (device), `arm64-apple-ios-simulator` and
+`x86_64-apple-ios-simulator`. autoconf canonicalises the `--host` value through
+`config.sub` before anything is compiled; for the simulator name that script
+produces machine `<cpu>-apple` and OS `ios-simulator`, then splits the OS on
+its dash into kernel `ios` and OS `simulator`. The bare word `simulator` gets
+past the recognised-OS list only by accident -- it matches the unrelated `sim*`
+entry meant for bare-metal simulator targets -- and then reaches the block that
+validates the kernel/OS combination, which has no case for `ios` + `simulator`
+and falls through to its catch-all:
+
+    Invalid configuration 'arm64-apple-ios-simulator': Kernel 'ios' not known
+    to work with OS 'simulator'.
+
+configure exits there, so the two simulator slices fail with no compiler output
+at all, while `arm64-apple-ios` and every Android triplet build normally.
+
+FreeType 2.13.3 ships a recent config.sub (2024-05-27) in which the validating
+switch carries a third "object file format" component, `case $kernel-$os-$obj
+in`. The patch has three hunks, of which only the last one is load-bearing:
+
+  1. `| ios*-simulator \` added to the `maybe_os` list of the three-component
+     `*-*-*)` branch. This only affects the vendor-less spelling
+     `<cpu>-ios-simulator`, which would otherwise be read as machine
+     `<cpu>-ios` plus OS `simulator` (i.e. `ios` mistaken for the VENDOR
+     field). forge always passes the four-component `<cpu>-apple-ios-simulator`,
+     which takes the `*-*-*-*)` branch instead, so this hunk is not exercised
+     by forge's own triplets -- it is defensive, and it does make
+     `arm64-ios-simulator` parse correctly (`aarch64-unknown-ios-simulator`).
+
+  2. `ios | ios-simulator)` added to the OS-normalisation switch. This one is a
+     no-op: it is inserted immediately before that switch's `*)` catch-all,
+     whose whole body is the comment "No normalization, but not necessarily
+     accepted, that comes below" -- and by that point in the script the OS
+     component of our triplet is the bare word `simulator` anyway, since the
+     kernel/OS split has already happened. Deleting this hunk changes no
+     output. Read it as documentation of intent rather than as behaviour.
+
+  3. `ios-simulator-)` added to `case $kernel-$os-$obj in` -- kernel `ios`, OS
+     `simulator`, empty `$obj` -- ahead of the `*-*-*)` catch-all that produces
+     the error above. This is the hunk that actually fixes the build; with it
+     alone, all three iOS slices canonicalise correctly. (flet-libtiff's
+     equivalent patch spells the same case `ios-simulator*-` and inserts it a
+     few lines further down; the two are interchangeable for forge's triplets.)
+
+Without hunk 3, two of the three iOS slices of flet-libfreetype fail at
+configure, and pillow -- which requires flet-libfreetype -- has no iOS wheels.
+Android is unaffected.
+
+The commit that introduced this file (ec8d184, a bulk branch consolidation)
+records no rationale; the account above is reconstructed from the diff and
+confirmed by running FreeType's own config.sub against forge's triplets with
+each hunk applied and removed in turn.
+
 diff --git a/builds/unix/config.sub b/builds/unix/config.sub
 index 4aaae46..526f2d4 100755
 --- a/builds/unix/config.sub

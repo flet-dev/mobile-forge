@@ -1,3 +1,79 @@
+Make cython-blis cross-compile for iOS and Android: give BLIS's own object
+builder the cross compiler and a portable kernel set, and stamp the iOS
+deployment target onto the objects it compiles behind distutils' back.
+
+cython-blis vendors the whole BLIS library under `blis/_src` and does NOT use
+distutils to compile it. `ExtensionBuilder.compile_objects()` reads a
+pre-generated recipe file, `blis/_src/make/<platform>-<arch>.jsonl`, and for
+each entry in it runs the compiler by hand:
+
+    <compiler> -c <source> -o <target> <flags> <macros> <includes>
+
+Nothing from the environment's CFLAGS/CPPFLAGS reaches that command line, and
+both `<platform>` and `<arch>` are worked out from the *build* machine. That
+is the root of every change below.
+
+Which `<platform>-<arch>` pair is in play matters for reading the patch.
+`sys.platform` inside forge's crossenv is `ios` on the iOS slices and `linux`
+on the Android ones, and setup.py maps anything that is neither win32 nor
+darwin to `linux`; with hunk 2 pinning the arch to `generic`, every slice we
+build — iOS and Android alike — uses `make/linux-generic.jsonl` and
+`include/linux-generic/`. That is why only the `linux-generic` copy of
+`blis.h` is touched here.
+
+  1. Android pthread barriers (`bli_pthread.c` and
+     `include/linux-generic/blis.h`). BLIS's `bli_pthread_barrier_*` wrapper
+     has two implementations: on Apple and Windows it builds barriers itself
+     from a mutex and a condition variable, everywhere else it forwards to
+     the platform's POSIX `pthread_barrier_*`. The choice is made twice —
+     the header picks the *type* (BLIS's own struct vs `pthread_barrier_t`),
+     the .c file picks the *implementation* — so both `#if`s must be flipped
+     together, or you end up with a struct nothing implements or functions
+     operating on the wrong type. Adding `__ANDROID__` puts Android on the
+     self-implemented path. Bionic only declares `pthread_barrier_*` from API
+     24 (`__INTRODUCED_IN(24)` in the NDK's `pthread.h`), and forge's Android
+     floor was API 21 when this hunk was written; it is API 24 today
+     (`CrossVEnv.BASE_VERSION` in src/forge/cross.py, raised in d17ce03), so
+     the hunk is belt-and-braces now rather than strictly required. The
+     revision of this patch that predates the June 2026 refresh carried the
+     comment "__ANDROID__ added since these types aren't available until API
+     level 24", which is the original reason.
+
+  2. `BLIS_ARCH=generic` and `BLIS_COMPILER=$CC`, set from setup.py itself so
+     they apply however the build is invoked. `get_arch_name()` otherwise
+     picks the kernel family from the build machine: on the `linux` path it
+     reads `platform.machine()` (which crossenv reports as the *target*
+     machine) and, for x86_64, probes the compiler for `-march=znver1` /
+     `znver2` / `skylake-avx512`. Left alone that selects Cortex-A57
+     assembly kernels for arm64-v8a and the AVX-512/Zen `x86_64` kernel set
+     for the x86_64 slices — micro-kernels tuned for a CPU no phone or
+     emulator is guaranteed to be. `generic` selects BLIS's portable C
+     reference kernels, the only defensible choice when the target CPU is
+     unknown at build time, and it is also what routes the build through the
+     `linux-generic` files patched above. `BLIS_COMPILER` overrides the
+     `"compiler": "gcc"` baked into every jsonl entry with forge's cross
+     clang; note the line reads `os.environ["CC"]` unguarded, so the build
+     now hard-requires CC in the environment (forge always sets it).
+
+  3. `-mios-version-min` for the iOS slices. `build_object()` composes its
+     command line from the jsonl entry alone, so the deployment target that
+     reaches every other compile in the wheel — `-mios-version-min=13.0`, in
+     the target sysconfig's CFLAGS and appended again to CPPFLAGS by forge's
+     `compile_env()` — never reaches these objects. The `$CC` wrapper does
+     not supply it either: it expands to `xcrun --sdk
+     iphoneos${IOS_SDK_VERSION} clang -target
+     arm64-apple-ios${IPHONEOS_DEPLOYMENT_TARGET}`, and neither of those
+     variables is set anywhere in this repo, so the triple carries no version
+     and clang falls back to its own default. The hunk re-derives the value
+     from `sysconfig.get_platform()`, which under crossenv reads the target
+     sysconfigdata and returns `ios-13.0-arm64-iphoneos` — four
+     dash-separated fields, first `ios`, second the deployment target. Android
+     returns a two-field `linux-<machine>`, so the guard skips it there.
+     No error text is recorded for this hunk; it was added in the run-up to
+     ec8d184, whose squashed log includes "All packages can be built for iOS,
+     except 'blis'", and what it compensates for is legible from forge's own
+     CPPFLAGS handling.
+
 diff --git a/blis/_src/frame/thread/bli_pthread.c b/blis/_src/frame/thread/bli_pthread.c
 --- a/blis/_src/frame/thread/bli_pthread.c
 +++ b/blis/_src/frame/thread/bli_pthread.c

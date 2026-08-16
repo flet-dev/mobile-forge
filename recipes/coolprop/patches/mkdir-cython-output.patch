@@ -1,3 +1,28 @@
+Create the Cython output directory before CMake runs Cython into it.
+
+CoolProp's Python wrapper is built by scikit-build-core driving the
+CMakeLists under `wrappers/Python`. Two `add_custom_command`s cythonize the
+wrapper sources with an explicit output path inside the build tree:
+
+    ${Python_EXECUTABLE} -m cython ... \
+        -o "${CMAKE_CURRENT_BINARY_DIR}/CoolProp/CoolProp.cpp" ...
+
+Cython does not create the parent directory of `-o`; it opens the file
+directly, so if `CoolProp/` is not already there the build stops with
+`[Errno 2] No such file or directory: .../CoolProp/CoolProp.cpp` (checked
+against Cython 3.2.9). Whether the directory exists comes down to the
+generator: Ninja creates each edge's output directories before running the
+command, plain Makefiles do not — and this recipe asks only for `cmake` in
+requirements.build, unlike the other scikit-build-core recipes in this tree,
+which also pull `ninja`. A `file(MAKE_DIRECTORY ...)` at configure time makes
+the build independent of that. One call covers both custom commands, since
+`CoolProp.cpp` and `_constants.cpp` are written to the same directory.
+
+The patch came in with the recipe (PR #49, squashed into ec8d184) and that PR
+has an empty body, so the generator explanation above is read off the diff and
+upstream's CMakeLists rather than from a recorded diagnosis; the patch's own
+inline comment is the only rationale the tree preserves.
+
 --- a/wrappers/Python/CMakeLists.txt
 +++ b/wrappers/Python/CMakeLists.txt
 @@ -137,6 +137,9 @@ set(CYTHON_FLAGS

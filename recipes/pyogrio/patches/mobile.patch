@@ -1,3 +1,41 @@
+Let `GDAL_LIBS` override the list of libraries pyogrio's extensions link
+against, so the iOS slices can name GDAL's whole static dependency chain.
+
+Unlike fiona and rasterio, pyogrio already supports an environment-driven
+build: `get_gdal_config()` uses `GDAL_INCLUDE_PATH`, `GDAL_LIBRARY_PATH` and
+`GDAL_VERSION` when all three are set, and only falls back to shelling out
+to `gdal-config` when they are not. (Note the spelling — `GDAL_LIBRARY_PATH`
+here, `GDAL_LIB_PATH` in fiona/rasterio; each recipe's `script_env` matches
+its own package. Each is a single directory, not a list.) That covers the
+headers, the library search path and the version, which is why this recipe
+needs no path patching at all.
+
+What it does not cover is *which* libraries to link: `gdal_libs` is hard-
+wired to `["gdal"]`, with one Windows-only special case for the older
+`gdal_i` import library. On Android that is correct — libgdal is a shared
+object and the dynamic linker pulls its dependencies in behind it — so
+`meta.yaml` leaves `GDAL_LIBS` unset there and the upstream default stands.
+On iOS every native dep is built `-DBUILD_SHARED_LIBS=OFF`, and when
+`libgdal.a` was archived the linker kept only the objects GDAL itself
+referenced; symbols like `_geod_init` (libproj), `_TIFFClientOpen` (libtiff)
+and `_psl_builtin` (libpsl) were left undefined in it. `_io`/`_ogr` inherit
+those undefined references, `-undefined dynamic_lookup` defers them to
+dlopen, and iOS dyld — which resolves the flat namespace eagerly — aborts on
+the first miss at `import pyogrio`. Setting
+`GDAL_LIBS=gdal,proj,tiff,curl,psl,sqlite3,jpeg,ssl,crypto,z` makes
+pyogrio's own link command pull those objects straight out of the
+archives. The comma is the separator because these are library names, not
+paths; `meta.yaml` carries the full rationale and the pointer to the proper
+long-term fix in `flet-libgdal`'s iOS cmake invocation.
+
+Without this patch the Android wheel is unaffected but the iOS wheel builds
+green and then fails to load on device.
+
+Rationale is recorded: the patch was added in PR #65 ("Support testing
+recipes on Android emulator and iOS simulator and fixes issues found"),
+whose description names this dyld flat-namespace cascade as one of the
+failures the new on-device tests surfaced across gdal / pyogrio / rasterio.
+
 diff --git a/setup.py b/setup.py
 --- a/setup.py
 +++ b/setup.py

@@ -1,3 +1,34 @@
+Teach libxslt 1.1.32's ancient config.sub the Apple mobile triplets.
+
+meta.yaml routes this file to version 1.1.32 -- the pin that goes with lxml 5.x
+and libxml2 2.9.8 -- and everything newer to mobile-1.1.45.patch. This is the
+original November 2024 lxml-enablement patch (PR #11), renamed when PR #48
+introduced the version-suffixed layout.
+
+build.sh configures with `--host=$HOST_TRIPLET`, and 1.1.32's config.sub is old
+enough to know nothing about Apple's arm64/iOS naming, so it rejects the
+triplet before configure gets started. This vintage of config.sub splits its
+argument into a basic_machine plus an os beginning with `-`, so
+`arm64-apple-ios` arrives as machine `arm64-apple` / os `-ios`, and
+`x86_64-apple-ios-simulator` as machine `x86_64-apple-ios` / os `-simulator`.
+The patch has one hunk for each half of that split:
+
+  1. `arm64-apple | *-ios` joins the long list of accepted bare machine names,
+     which completes the field with `-unknown` and leaves the os untouched.
+  2. `-simulator` joins `-ios` in the accepted-os list.
+
+The canonical triple this produces is not used for anything beyond parsing and
+being different from the build machine's, which is what makes the build
+register as a cross build; device-vs-simulator targeting comes from
+CC/-isysroot, which forge sets. Without the patch no iOS slice configures.
+
+How the siblings differ. mobile-1.1.45.patch, for modern libxslt, needs only an
+`ios-simulator*` case in the `case $basic_os` block, because current config.sub
+already handles `*-apple-ios` on its own. The same-era libxml2 patch,
+recipes/flet-libxml2/patches/mobile-2.9.x.patch, reaches the same result with a
+single case that forces `os=-none` so the os list never has to be edited, and
+it carries an extra libxml2.syms hunk that has no counterpart here.
+
 diff --git a/config.sub b/config.sub
 index 7b334f9..a32642c 100755
 --- a/config.sub

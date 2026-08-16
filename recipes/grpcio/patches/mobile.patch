@@ -1,3 +1,66 @@
+Teach grpcio's setup.py that iOS and Android exist, and stop it handing the
+cross compiler the build host's /usr/include.
+
+grpcio compiles the whole gRPC C core plus its vendored third-party trees
+(c-ares, re2, upb, abseil, zlib, boringssl) into a single Cython extension,
+and setup.py selects the include directories for those trees from
+`sys.platform`. Under forge the cross Python reports the TARGET platform --
+"ios" or "android" -- which upstream's chain of `if "<os>" in sys.platform`
+tests knows nothing about, so every branch falls through. meta.yaml also asks
+the Android leg to build against a system OpenSSL and zlib
+(GRPC_PYTHON_BUILD_SYSTEM_OPENSSL / _ZLIB = 1) instead of the vendored
+boringssl/zlib, and upstream implements "system" as the literal path /usr --
+right on a Linux builder, but on our macOS build host that is the *build*
+machine's headers.
+
+Three hunks, all in setup.py:
+
+  1. c-ares config header. The vendored c-ares needs a generated
+     `ares_config.h`, and setup.py adds exactly one
+     `third_party/cares/config_<os>` directory to the include path based on
+     sys.platform. "ios" matches nothing, and although the sdist does ship
+     `third_party/cares/config_android`, upstream never wired up a branch
+     that selects it. Add both: iOS piggybacks on config_darwin (Apple libc,
+     same answers), Android gets config_android. Without this the c-ares
+     sources compile with no ares_config.h to find.
+
+  2. System-OpenSSL include path. With GRPC_PYTHON_BUILD_SYSTEM_OPENSSL set,
+     the boringssl sources are filtered out of the build and SSL_INCLUDE is
+     hardcoded to /usr/include/openssl. Read the prefix from OPENSSL_ROOT_DIR
+     instead -- meta.yaml points it at `{platlib}/opt`, where the openssl
+     wheel unpacks inside the cross environment -- and use `<prefix>/include`,
+     the parent of `openssl/`, which is what grpc's `#include <openssl/...>`
+     lines actually need. The default stays "/usr" when the variable is
+     unset, so nothing changes for a target that isn't asking for system
+     OpenSSL.
+
+  3. zlib include path. Same story: GRPC_PYTHON_BUILD_SYSTEM_ZLIB drops the
+     vendored zlib in favour of `-lz` and sets ZLIB_INCLUDE to the host's
+     /usr/include. Rather than special-case the value, this hunk lifts
+     SSL_INCLUDE and ZLIB_INCLUDE out of the EXTENSION_INCLUDE_DIRECTORIES
+     tuple literal and appends them afterwards, skipping ZLIB_INCLUDE
+     entirely on Android. Android's zlib headers come from the NDK sysroot
+     and `-lz` resolves there too, so nothing is lost -- whereas
+     `-I/usr/include` on a build host with the Command Line Tools installed
+     offers the cross compiler a directory full of macOS headers. Moving
+     SSL_INCLUDE to the end of the list is incidental; the directories are
+     disjoint, so search order does not matter here.
+
+Hunks 2 and 3 only bite on Android. iOS builds the vendored boringssl and
+zlib, so its SSL_INCLUDE/ZLIB_INCLUDE still point inside third_party/ and are
+untouched by either change; hunk 1 is the one that matters there.
+
+Provenance note: neither the commit that introduced this patch (the
+repo-consolidation squash, #64) nor the PR it came from (#12, "Grpcio for iOS
+and Android", empty body) records a rationale. The explanation above is read
+off the diff, grpcio 1.81.0's setup.py, and the matching keys in meta.yaml's
+script_env -- it is reconstruction, not a quote from the author. One further
+piece of history worth knowing: between #65 and the 1.67.1 -> 1.81.0 bump
+(#68) this patch also carried a fourth hunk relaxing the `fdopen` stub in
+third_party/zlib/zutil.h on Apple platforms. The bump removed it and the
+builds stayed green; why it was needed, and why it stopped being needed, is
+not recorded either.
+
 --- a/setup.py	2026-03-31 12:55:12
 +++ b/setup.py	2026-03-31 12:56:03
 @@ -58,12 +58,14 @@

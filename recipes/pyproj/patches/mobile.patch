@@ -1,3 +1,69 @@
+Two independent iOS fixes for pyproj's extension link: let the recipe name
+the libraries to link, and stop asking for a runtime library search path on
+a platform that has neither a shared libproj nor a linker that accepts the
+flag.
+
+pyproj is already environment-driven where paths are concerned —
+`get_proj_dir()`/`get_proj_libdirs()`/`get_proj_incdirs()` honour `PROJ_DIR`,
+`PROJ_LIBDIR` and `PROJ_INCDIR`, and `PROJ_VERSION` short-circuits the
+version probe that would otherwise execute `$PROJ_DIR/bin/proj` (a target
+binary the macOS build host cannot run, and one `flet-libproj`'s build.sh
+deletes anyway with `rm -rf $PREFIX/{bin,share}`). This recipe therefore
+only needs `PROJ_DIR: {platlib}/opt` and `PROJ_VERSION: 9.5.0` in
+`script_env`, and the two gaps below.
+
+  1. `get_libraries()` hard-wires `libraries = ["proj"]` (the only override
+     is a Windows `.lib` glob). On Android that is right: libproj is a
+     shared object and the loader pulls its dependencies in behind it, so
+     `meta.yaml` sets no `PROJ_LIBS` and the default stands. On iOS
+     `flet-libproj` is built `-DBUILD_SHARED_LIBS=OFF`, and when `libproj.a`
+     was archived the linker kept only the objects proj itself referenced —
+     its calls into libtiff (grid files), libcurl + libpsl (the network grid
+     fetcher), libsqlite3 (proj.db) and openssl (HTTPS under libcurl) were
+     left undefined. `_geod`/`_crs`/`_context` inherit those undefined
+     references, `-undefined dynamic_lookup` defers them to dlopen, and iOS
+     dyld resolves the flat namespace eagerly and aborts on the first miss —
+     observed landing on `_TIFFClientOpen`. The hunk lets
+     `PROJ_LIBS=proj,tiff,curl,psl,sqlite3,jpeg,ssl,crypto,z` (comma-
+     separated; library names, not paths) replace the list so pyproj's own
+     link pulls those objects straight out of the archives. `meta.yaml`
+     carries the fuller version and points at the real fix, which belongs in
+     `flet-libproj`'s iOS cmake call.
+
+  2. `ext_options["runtime_library_dirs"]` is set to `library_dirs` on
+     everything except Windows and cygwin. That asks distutils for a runtime
+     search path, and
+     `setuptools._distutils.unixccompiler.runtime_library_dir_option()`
+     picks its spelling from `sys.platform`. Inside forge's crossenv that is
+     the *target* platform, not the host: crossenv takes it from the first
+     field of the host platform identifier
+     (`crossenv/__init__.py`, `host_sys_platform`), and forge builds that
+     identifier as `ios-<version>-<arch>-<sdk>`
+     (`src/forge/cross.py::_platform_identifier`) — so `sys.platform` is
+     `"ios"`, the `darwin` branch is skipped, and the option falls through to
+     the GNU-linker fallbacks at the bottom of that function: `-Wl,-R<dir>`,
+     or `-Wl,--enable-new-dtags` plus `-Wl,-rpath,<dir>` if the sysconfig
+     claims GNU ld. Apple's ld64 takes neither spelling. Adding `ios` to the
+     exclusion makes `runtime_library_dirs` `None` on those slices.
+
+     The change is right on its own terms, too: on iOS libproj is a static
+     archive absorbed into each extension, so there is no shared library to
+     find at load time and a runtime search path is meaningless — at best it
+     would bake a build-machine directory into the shipped binary. Android
+     is deliberately left alone: `sys.platform` there is `"android"`, so it
+     takes the same fallback branch, but the NDK's lld does accept `-R` (its
+     GNU alias for `-rpath`), and the resulting build-host RUNPATH is simply
+     ignored by the Android loader, which resolves from the APK's `lib/`.
+
+Hunk 1's rationale is recorded: it arrived with PR #65 ("Support testing
+recipes on Android emulator and iOS simulator and fixes issues found"),
+which documents this dyld flat-namespace cascade across the GDAL/PROJ
+recipes. Hunk 2 predates it, arriving in the bulk consolidation commit
+ec8d184, which records no per-patch reason and no linker diagnostic; the
+mechanism described above is read off distutils' source and forge's own
+crossenv setup rather than from a captured build log, so the exact error
+text that motivated it is not known.
+
 diff --git a/setup.py b/setup.py
 --- a/setup.py
 +++ b/setup.py

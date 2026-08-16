@@ -1,3 +1,56 @@
+Teach libxml2 2.9.x's ancient config.sub the Apple mobile triplets, and drop
+two version-script entries that cannot exist on our targets.
+
+meta.yaml routes this file to any version starting "2.9." -- in practice 2.9.8,
+the pin lxml 5.x has to keep, since 5.x does not compile against 2.15 -- and
+everything newer to mobile-2.15.x.patch. This is the original November 2024
+lxml-enablement patch (PR #11), renamed when PR #48 introduced the
+version-suffixed layout.
+
+Hunk 1 -- config.sub. build.sh configures with `--host=$HOST_TRIPLET`, and
+2.9.8's config.sub predates Apple's arm64/iOS naming, so it rejects the triplet
+before configure starts. This vintage of config.sub splits its argument into a
+basic_machine plus an os beginning with `-`, so `arm64-apple-ios` arrives as
+machine `arm64-apple` / os `-ios`, and `x86_64-apple-ios-simulator` as machine
+`x86_64-apple-ios` / os `-simulator`. The new case matches both machine shapes
+(`arm64-apple` and `*-ios`), completes the field with `-unknown`, and forces
+`os=-none` -- which is already in the accepted-os list further down, so that
+second list never has to be touched. The canonical name produced is not
+meaningful beyond that: all configure needs is a triple that parses and that
+differs from the build machine's, which is what makes the build register as a
+cross build. Real targeting comes from CC/-isysroot, which forge sets.
+
+  (The same-era libxslt patch, mobile-1.1.32.patch, solves the identical
+  problem by the other route: it adds the two machine spellings to the long
+  list of accepted bare machine names and separately whitelists `-simulator`
+  alongside `-ios` in `case $os`. Same effect; the two files were evidently
+  written independently.)
+
+Hunk 2 -- libxml2.syms. That file is the ELF version script; 2.9.x hands it to
+the linker via --version-script whenever the linker advertises GNU
+compatibility, which the NDK's lld does and Apple's ld64 does not, so this hunk
+is inert on the iOS legs and matters on Android.
+
+`xmlDllMain` is defined only under HAVE_WIN32_THREADS. On Android it is
+therefore named by the version script but never defined, and a modern lld --
+which defaults to --no-undefined-version -- fails the link over it. Commenting
+it out removes it from the export list (`#` is a comment in a version script;
+upstream already uses it for the section headings in this same file).
+
+The ten `docb*` entries in the same hunk are NOT explained, and the commit that
+made the change records no reason. Checked against upstream: a default 2.9.8
+configure -- which is what build.sh runs -- leaves `--with-docbook` on, so
+DOCBparser.c is compiled and all ten symbols are defined under
+LIBXML_DOCB_ENABLED. On that reading they should not have needed commenting
+out, and the most likely explanation is that they were collateral while hunting
+the xmlDllMain failure. Treat this half as unexplained rather than trusting a
+rationale; it is at worst harmless, since it only withholds deprecated
+DocBook-SGML entry points from libxml2's exports and nothing in the flet tree
+calls them.
+
+PR #48 dropped hunk 2 entirely for 2.15.x: upstream removed libxml2.syms around
+2.10, so there is no version script left to edit.
+
 diff --git a/config.sub b/config.sub
 index 7b334f9..cdb35e9 100755
 --- a/config.sub

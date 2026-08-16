@@ -1,3 +1,48 @@
+Teach jq's two bundled `config.sub` copies about Apple's iOS-simulator host
+triplet.
+
+`build.sh` configures jq with `--host=$HOST_TRIPLET`, and forge builds three
+iOS slices: `arm64-apple-ios` (device), `arm64-apple-ios-simulator` and
+`x86_64-apple-ios-simulator`. autoconf canonicalises the `--host` value through
+the bundled `config.sub` before anything is compiled. For the simulator name
+that script yields machine `<cpu>-apple` and OS `ios-simulator`, then splits
+the OS on its dash into kernel `ios` and OS `simulator`. The bare word
+`simulator` gets past the recognised-OS list only by accident -- it matches the
+unrelated `sim*` entry meant for bare-metal simulator targets -- and then
+reaches the block that validates kernel/OS *pairs*, which knows nothing about
+`ios` + `simulator` and falls through to its catch-all:
+
+    Invalid configuration `arm64-apple-ios-simulator': Kernel `ios' not known
+    to work with OS `simulator'.
+
+configure exits there, before any compilation. `arm64-apple-ios` and every
+Android triplet canonicalise fine; only the two simulator slices die.
+
+Both hunks make the same one-line addition -- an empty `ios-simulator)` case in
+the kernel/OS pairing block, next to the existing `*-eabi*` entry -- but they
+have to be applied to two different files, because jq's build validates the
+same `--host` value twice:
+
+  1. `config/config.sub` (jq 1.7.1 ships the 2022-01-03 vintage) is what jq's
+     own top-level configure uses.
+
+  2. `modules/oniguruma/config.sub` (an older 2020-08-17 vintage, hence the
+     different line number for the same block) belongs to the vendored
+     oniguruma copy. `build.sh` passes `--with-oniguruma=builtin`, which makes
+     jq's configure.ac take the `AC_CONFIG_SUBDIRS([modules/oniguruma])` path,
+     so oniguruma's own configure re-runs with the same `--host` and
+     re-validates it with *its* config.sub. Patching only jq's copy just moves
+     the same error one directory down.
+
+Without both hunks, two of the three iOS slices of flet-libjq fail at
+configure, and the `jq` recipe -- which static-links libjq.a and libonig.a out
+of this recipe -- has no iOS wheels. Android is unaffected either way.
+
+The commit that introduced this file (ec8d184, a bulk branch consolidation)
+records no rationale; the account above is reconstructed from the diff,
+jq's configure.ac, and running both config.sub copies against forge's triplets,
+patched and unpatched.
+
 diff --git a/config/config.sub b/config/config.sub
 index dba16e8..215b8e2 100755
 --- a/config/config.sub

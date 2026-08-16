@@ -1,3 +1,40 @@
+Teach curl's bundled `config.sub` about Apple's iOS-simulator host triplet.
+
+`build.sh` configures curl with `--host=$HOST_TRIPLET`, and forge builds three
+iOS slices: `arm64-apple-ios` (device), `arm64-apple-ios-simulator` and
+`x86_64-apple-ios-simulator`. autoconf pushes every `--host` value through the
+`config.sub` shipped in the tarball (curl 8.11.0 carries the 2022-01-03
+vintage) before a single file is compiled. That script splits the four-field
+name into machine `<cpu>-apple` plus OS `ios-simulator`, then splits the OS on
+its dash into kernel `ios` and OS `simulator`. The bare word `simulator` gets
+past the list of recognised OS names only by accident -- it matches the
+unrelated `sim*` entry meant for bare-metal simulator targets -- and then
+reaches the block that validates kernel/OS *pairs*. That block has no case for
+`ios` + `simulator`, so it falls through to its catch-all and configure stops
+with
+
+    Invalid configuration `arm64-apple-ios-simulator': Kernel `ios' not known
+    to work with OS `simulator'.
+
+Nothing is compiled, so the failure looks nothing like a build error. The
+device triplet `arm64-apple-ios` canonicalises fine, and so does every Android
+triplet; only the two simulator slices die. That split is the tell.
+
+The patch adds an empty `ios-simulator)` case to that kernel/OS pairing block,
+alongside the existing `*-eabi*` entry -- i.e. "this pairing is valid, no
+normalisation needed". Nothing else changes: `arm64-apple-ios-simulator` now
+canonicalises to `aarch64-apple-ios-simulator`, and the device and Android
+triplets canonicalise exactly as they did before.
+
+Without this, two of the three iOS slices of flet-libcurl never get past
+configure, and everything downstream of it (flet-libproj, and through it
+flet-libgdal / pyproj) loses its iOS wheels. Android is unaffected.
+
+The commit that introduced this file (ec8d184, a bulk branch consolidation)
+records no rationale; the account above is reconstructed from the diff and
+confirmed by running curl's own config.sub against forge's triplets, patched
+and unpatched.
+
 diff --git a/config.sub b/config.sub
 index dba16e8..215b8e2 100755
 --- a/config.sub

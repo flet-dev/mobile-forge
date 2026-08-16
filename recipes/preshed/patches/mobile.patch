@@ -1,3 +1,40 @@
+Put the installed cymem and murmurhash packages on Cython's include_path so
+preshed's cross-package cimports resolve in the cross-build.
+
+preshed's three modules cimport across package boundaries — `from
+cymem.cymem cimport Pool` and `from murmurhash.mrmr cimport hash128_x86` —
+and those `.pxd` files ship inside the installed cymem and murmurhash
+packages. Upstream's setup.py hands Cython nothing but `get_path("include")`
+(the Python C headers) and leaves the sibling packages to be discovered some
+other way. Under forge that discovery fails: crossenv rewrites sysconfig so
+`get_path()`/`get_paths()` answer with TARGET paths rather than the build
+environment's site-packages, where the build-time cymem and murmurhash
+actually live, and cythonize cannot resolve the cimports when the wheel is
+built with `python -m build --no-isolation`. The build then stops inside
+cythonize, before any compiler runs.
+
+The hunk adds a `_pxd_root()` helper and feeds its results to
+`cythonize(..., include_path=...)`:
+
+  * it asks the import system first — `importlib.util.find_spec(pkg)`, then
+    the *parent* of each `submodule_search_locations` entry, which is the
+    directory Cython wants, because it resolves `cymem.cymem` as
+    `<dir>/cymem/cymem.pxd`;
+  * it verifies the specific `.pxd` is present (`cymem/cymem.pxd`,
+    `murmurhash/mrmr.pxd`) rather than trusting the package directory alone;
+  * it falls back to a plain scan of `sys.path`, and drops anything it cannot
+    locate, so the patch can only ever add include directories — it cannot
+    turn a working resolution into a hard failure.
+
+thinc carries the same fix in a slightly different shape (five packages, and
+a directory check instead of a per-package `.pxd` name).
+
+The rationale is recorded in this recipe's meta.yaml comment and in PR #72,
+which introduced the whole spacy chain ("preshed | cimports cymem +
+murmurhash → Cython `include_path` patch"). The exact Cython error text was
+not captured anywhere, so the failure is described here as those sources
+describe it.
+
 --- a/setup.py
 +++ b/setup.py
 @@ -77,6 +77,33 @@

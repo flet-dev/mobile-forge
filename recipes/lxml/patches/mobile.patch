@@ -1,3 +1,50 @@
+Keep the build host's macOS SDK include directory out of lxml's include path.
+
+lxml does not locate libxml2/libxslt itself: setupinfo.py asks the two
+`*-config` helper scripts for their flags and scrapes the answers. `flags()`
+runs `<xml2-config> --cflags` and `<xslt-config> --cflags`, and
+`include_dirs()` keeps every token that starts with `-I`. The recipe points
+both helpers at our cross-built copies via `WITH_XML2_CONFIG` /
+`WITH_XSLT_CONFIG` in meta.yaml's script_env, so in the good case the only
+answer is the flet-libxml2 / flet-libxslt prefix inside the cross
+environment.
+
+The problem is what happens when that does not hold. `get_library_versions()`
+accepts the WITH_*_CONFIG pair only if BOTH probe successfully; otherwise it
+tries pkg-config, and then falls back to the bare names `xml2-config` /
+`xslt-config` on PATH. macOS ships both in /usr/bin, and their `--cflags`
+answer is exactly one directory:
+
+    -I/Applications/Xcode.app/.../Developer/SDKs/MacOSX.sdk/usr/include
+
+(verified by running them on the build host). Older libxslt is a second route
+to the same string: 1.1.32's installed `xslt-config` re-invokes whichever
+`xml2-config` its configure recorded, so even a cross-built xslt-config can
+shell out to the host's copy at lxml build time -- and meta.yaml still routes
+lxml 5.x to libxslt 1.1.32. Either way the macOS SDK's `/usr/include` is
+handed to the cross compiler as an `-I`, and an iOS/Android extension gets
+offered the host's libxml2 headers (and every other macOS header) to compile
+against.
+
+The second hunk is the fix: drop any `-I` whose path ends in
+`/MacOSX.sdk/usr/include`. It is deliberately narrow -- that suffix is
+Apple's unversioned SDK symlink and nothing else -- so no legitimate include
+directory can be filtered by accident. It is also insurance rather than a
+constant necessity: when the WITH_*_CONFIG probe succeeds there is nothing
+for it to remove, which is why the recipe has survived version bumps with the
+patch carried forward unexamined.
+
+The first hunk only reshuffles setupinfo.py's imports: `import sys` moves
+down, the setuptools import moves below the distutils ones, blank lines are
+added. Nothing in the file depends on that order -- setup.py imports
+setuptools before it imports setupinfo, so setuptools' distutils shim is
+already installed by then -- and no commit or PR records a reason (PR #11,
+"Lxml", has an empty body, and the patch has not been edited since the
+history was squashed into #64). From the shape of it, an editor's "optimize
+imports" pass got captured by the `git diff` that produced this file. It is
+left in place because rewriting the patch would shift the hunk offsets for no
+functional gain.
+
 diff --git a/setupinfo.py b/setupinfo.py
 index 97e3399..634183a 100644
 --- a/setupinfo.py

@@ -1,3 +1,46 @@
+Put the installed cymem, preshed, murmurhash, blis and numpy packages on
+Cython's include_path so thinc's cross-package cimports resolve in the
+cross-build.
+
+thinc's six Cython modules cimport across package boundaries —
+`from cymem.cymem cimport Pool`, `from preshed.maps cimport PreshMap`,
+`from murmurhash.mrmr cimport hash64`, `cimport blis.cy` and `cimport numpy
+as np` — and every one of those `.pxd` files ships inside the corresponding
+installed package. Upstream's setup.py passes Cython only
+`numpy.get_include()` and `get_path("include")`, both of which are C header
+directories, and leaves the sibling packages to be discovered some other way.
+Under forge that discovery fails: crossenv rewrites sysconfig so
+`get_path()`/`get_paths()` answer with TARGET paths rather than the build
+environment's site-packages, where the build-time dependencies actually live,
+and cythonize cannot resolve the cimports when the wheel is built with
+`python -m build --no-isolation`. The build stops inside cythonize, before
+any compiler runs.
+
+The hunk adds a `_pkg_root()` helper and feeds its results to
+`cythonize(..., include_path=...)`:
+
+  * it asks the import system first — `importlib.util.find_spec(pkg)`, then
+    the *parent* of each `submodule_search_locations` entry, which is the
+    directory Cython wants, because it resolves `preshed.maps` as
+    `<dir>/preshed/maps.pxd`;
+  * unlike preshed's version of this patch it only checks that the package
+    *directory* is there, since the five packages expose different `.pxd`
+    names;
+  * it falls back to a plain scan of `sys.path`, de-duplicates, and drops
+    anything it cannot locate, so the patch can only ever add include
+    directories — it cannot turn a working resolution into a hard failure;
+  * it imports `os` locally as `_os` because thinc's setup.py uses `pathlib`
+    and never imports `os` at module level.
+
+The rationale is recorded in this recipe's meta.yaml comment and in PR #72,
+which introduced the whole spacy chain: "Both cythonize without putting the
+build env's site-packages on Cython's `include_path`, so their `cimport`s of
+cymem/preshed/murmurhash/thinc/numpy can't be resolved in the cross-build …
+The patches locate each installed package via the import system and add it to
+`include_path` — the same fix preshed already carries." The exact Cython
+error text was not captured anywhere, so the failure is described here as
+those sources describe it.
+
 --- a/setup.py
 +++ b/setup.py
 @@ -77,6 +77,37 @@

@@ -1,3 +1,36 @@
+Teach libxml2 2.15.x's config.sub the iOS *simulator* triplet.
+
+This is the modern-upstream half of a pair. meta.yaml routes any version that
+does not start with "2.9." to this file (currently 2.15.3) and everything else
+to mobile-2.9.x.patch. build.sh configures with `--host=$HOST_TRIPLET`, and
+configure feeds that value to config.sub before it does anything else.
+
+The config.sub shipped in 2.15.x already understands `*-apple-ios`, so the
+device slice (aarch64-apple-ios) canonicalises fine. The simulator slices
+arrive as `aarch64-apple-ios-simulator` / `x86_64-apple-ios-simulator`;
+config.sub splits that tail into a kernel/os pair, does not recognise
+`ios-simulator`, and configure dies with an `Invalid configuration ... not
+recognized` error before a single file is compiled.
+
+The patch adds one case to the `case $basic_os in` block: for
+`ios-simulator*`, leave the kernel empty and keep the os string as given, so
+the triplet validates. Nothing downstream depends on the canonical form -- the
+triple only has to parse and to differ from the build machine's, which is what
+makes configure treat this as a cross build. Actual device-vs-simulator
+targeting comes from the compiler's -isysroot, which forge sets.
+
+recipes/flet-libxslt/patches/mobile-1.1.45.patch is byte-identical, for the
+same reason.
+
+How this differs from its sibling mobile-2.9.x.patch: that one has to reach
+into a much older config.sub, which knows neither `*-apple-ios` nor the
+simulator suffix, and it additionally edits libxml2.syms. Neither is needed
+here -- 2.15.x's config.sub is current, and upstream removed the libxml2.syms
+version script around 2.10. The split into two version-suffixed patches was
+made in PR #48 ("Bump libxml2/libxslt/lxml"), which notes that the new 2.15.x
+patch "only carr[ies] an `ios-simulator*` case for modern `config.sub`; the old
+`docb*` / `xmlDllMain` symbol tweaks are unnecessary against current upstream".
+
 diff --git a/config.sub b/config.sub
 --- a/config.sub
 +++ b/config.sub

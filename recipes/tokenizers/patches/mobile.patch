@@ -1,3 +1,36 @@
+Route the BPE cache counter's AtomicU64 through portable-atomic so the Rust
+core builds for 32-bit ARM.
+
+tokenizers 0.23.1 added `static NEXT_CACHE_ID: AtomicU64` to the BPE model
+(tokenizers/src/models/bpe/model.rs) to hand every cache a unique id.
+`std::sync::atomic::AtomicU64` does not exist on `arm-linux-androideabi`
+(armeabi-v7a): 32-bit ARM has no native 64-bit atomic instructions, so std
+does not expose the type there at all. That slice therefore stops at
+
+    error[E0432]: unresolved import `std::sync::atomic::AtomicU64`
+
+while arm64-v8a, x86_64 and even 32-bit x86 (which has cmpxchg8b) compile
+cleanly -- one 32-bit arch failing and the other passing is the tell for this
+class of failure.
+
+The fix keeps the architecture instead of dropping it. portable-atomic offers
+the same API with a lock-based fallback where the hardware lacks the
+instruction, and its `AtomicU64` is const-constructible, so the `static` still
+compiles. Two hunks:
+
+  1. `tokenizers/Cargo.toml` gains `portable-atomic = "1"` as a direct
+     dependency of the core crate. It is almost certainly already in the
+     build graph -- well-behaved dependencies route their own 64-bit atomics
+     through it -- but a crate may only `use` what it declares itself.
+  2. `model.rs` imports `AtomicU64` from `portable_atomic` instead of std.
+     `Ordering` stays on std: it is a plain enum, and portable-atomic accepts
+     the std one.
+
+Nothing else changes; on 64-bit targets portable-atomic compiles down to the
+same native instructions, so this is not a performance trade. The alternative
+fix for this error -- `excluded_arches: [armeabi-v7a]` in meta.yaml -- was not
+needed here because the offending type appears exactly once.
+
 diff --git a/tokenizers/Cargo.toml b/tokenizers/Cargo.toml
 index b1d2fa2..ae9478e 100644
 --- a/tokenizers/Cargo.toml

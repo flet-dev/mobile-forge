@@ -1,3 +1,57 @@
+Stop PyNaCl from building its own bundled libsodium, so the cffi bindings
+link the cross-compiled one that flet-libsodium provides.
+
+PyNaCl vendors the entire libsodium source tree under `src/libsodium` and, by
+default, builds it as part of the wheel. `setup.py` wires that up with the
+two things this patch comments out:
+
+  * `distclass=Distribution` — a subclass whose `has_c_libraries()` returns
+    True unless `SODIUM_INSTALL=system`, which is what enables the C-library
+    build at all;
+  * `cmdclass={"build_clib": build_clib, "build_ext": build_ext}` — a
+    `build_clib` that chmods and runs the vendored `./configure`, then `make`,
+    `make check` and `make install`, and a `build_ext` that prepends the
+    resulting `include/`, `lib/` and `lib64/` to the extension's search paths.
+
+None of that survives a cross-compile:
+
+  * the vendored `configure` is invoked with no `--host`, so autoconf probes
+    the machine doing the build — its compile/link/run tests either answer
+    for macOS or cannot run at all under the iOS/Android toolchain;
+  * `make check` builds and *runs* libsodium's test suite, which is impossible
+    when the binaries target another architecture;
+  * and even a libsodium that somehow built would be the wrong one — the
+    recipe already pulls a properly cross-compiled libsodium via
+    `requirements.host: flet-libsodium`.
+
+With both lines commented out, stock setuptools commands are used:
+`has_c_libraries()` is False, no `build_clib` runs, and `build_ext` adds no
+bundled paths. `cffi_modules=["src/bindings/build.py:ffi"]` still runs, and
+its `ffi.set_source("_sodium", …, libraries=["sodium"])` compiles
+`#include <sodium.h>` and links `-lsodium` — resolved against the
+`opt/include` / `opt/lib` that the flet-libsodium wheel unpacks into the cross
+environment (forge adds that install root to the compile env as
+`-I<site-packages>/opt/include` and `-L<site-packages>/opt/lib`).
+On iOS that resolves to
+flet-libsodium's static `libsodium.a`, absorbed into `nacl/_sodium…so`; on
+Android it resolves to the shared `libsodium.so`, which the app build stages
+into `jniLibs/<abi>/`.
+
+Without the patch the build dies inside `build_clib`, long before the
+bindings are compiled.
+
+Worth knowing: upstream exposes the same end state through an environment
+variable — `SODIUM_INSTALL=system` makes `use_system()` return True, which
+short-circuits `build_clib.run()` and flips `has_c_libraries()` to False, so
+`build.script_env` could have carried this instead of a patch. The commits
+that introduced the patch (PR #29, "PyNaCl for iOS and Android") record no
+reasoning, so why the file was patched rather than the variable set is not
+known; the two are equivalent as far as this build is concerned.
+
+One cosmetic wart: the replacement comment names only `build_ext`, while the
+line it replaces also registered `build_clib`. It is a comment, so nothing
+depends on it.
+
 diff --git a/setup.py b/setup.py
 --- a/setup.py
 +++ b/setup.py

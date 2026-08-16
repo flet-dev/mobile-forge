@@ -1,3 +1,63 @@
+Make liboprf's two hand-written makefiles cross-compile, keep forge's link
+flags, and stop the shared library from carrying a build-tree path.
+
+Like its sibling flet-libopaque, liboprf has no configure step: build.sh runs
+`make` and `make install` in src/ with forge's cross toolchain in the
+environment. The patch touches src/makefile and src/noise_xk/makefile in the
+same four ways.
+
+  1. LDFLAGS is moved out of the way. src/makefile had
+     `LDFLAGS?=-lsodium -loprf-noiseXK -Lnoise_xk`, noise_xk/makefile had
+     `LDFLAGS=-lsodium`; both are wrong under forge, from opposite directions.
+     With `?=`, an LDFLAGS already present in the environment wins and the
+     project's own -l/-L are silently dropped (link fails on libsodium
+     symbols); with a plain `=`, the project's value wins and forge's cross
+     sysroot and -L paths are thrown away. A new
+     `LDFLAGS_PRIVATE=$(LDFLAGS) <project libs>` concatenates the two, and
+     every link rule is switched to it. The `asan:` target's `LDFLAGS+=` is
+     renamed to match; that target is not used by this recipe.
+
+  2. The `uname -s` / `uname -m` block is commented out. It describes the BUILD
+     machine, never the target: on a macOS host the Darwin arm picks
+     SOEXT=dylib and an -install_name pointing into the build tree, and on a
+     Linux host the else arm adds GNU/ELF-only link flags (-Wl,-z,defs / relro
+     / noexecstack / now) plus -fcf-protection / -fstack-clash-protection
+     selected from the host's `uname -m`. Unlike libopaque's makefile this one
+     already carries `SOEXT?=so` above the block, so nothing has to be added --
+     commenting the block out simply leaves SOEXT at `so` on every target,
+     which is what both Android and (for serious-python's framework
+     conversion) iOS want. SOFLAGS is left empty, so no -soname /
+     -install_name is baked in.
+
+  3. The two shared-library rules link `$(SOURCES)` instead of `$^`. `$^` is
+     the full prerequisite list, which includes
+     `noise_xk/liboprf-noiseXK.$(SOEXT)`, so the noise_xk shared object was
+     handed to the linker by path in addition to the `-Lnoise_xk
+     -loprf-noiseXK` already in LDFLAGS_PRIVATE. Keeping the prerequisite (so
+     make still builds noise_xk first) while narrowing the link line is
+     deliberate: the commit that arrived at this form is titled "Remove
+     noise_xk/liboprf-noiseXK dep from a library" (f8fe724, Jan 2025). Its
+     predecessor 7b81b36 "Fix flet-liboprf" had deleted the prerequisite
+     outright; f8fe724 put it back and changed the link line instead.
+
+  4. Both install rules drop the `cp $< $@.$(SOVER)` + `ln -sf` pair for a
+     plain `cp $< $@`. The symlink pointed at an absolute path inside the build
+     tree, and neither a versioned `.so.0` nor a symlink is useful once the
+     tree is zipped into a wheel -- on Android only real files named `lib*.so`
+     are surfaced through jniLibs. One real file under the plain name is what
+     downstream (libopaque, and the ctypes loaders above it) expects.
+
+build.sh keeps only the shared libraries on Android (`rm $PREFIX/lib/*.a`) and
+only the static archives on iOS (`rm $PREFIX/lib/*.so`), so the shared-library
+hunks are what matter on Android, while the makefile still has to produce a
+linkable `.so` on iOS on the way to `make install`.
+
+Provenance: added by "libsodium, libopaque, liboprf" (PR #28, Jan 2025) and
+revised twice by PR #31 ("pysodium, opaque"). Both PR bodies are empty, so the
+only rationale on record anywhere is the commit title quoted in point 3; points
+1, 2 and 4 are inferred from the diff and from what build.sh does with the
+result.
+
 diff --git a/src/makefile b/src/makefile
 index f7819af..b76083f 100644
 --- a/src/makefile

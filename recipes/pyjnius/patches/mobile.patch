@@ -1,3 +1,81 @@
+Re-target pyjnius's Android backend from python-for-android/SDL to Flet's own
+JNI bridge, libpyjni.
+
+Upstream pyjnius assumes it is being built by python-for-android for a
+kivy/SDL app: on Android it links `libSDL2.so` and asks SDL for the JNI
+environment. A Flet app has no SDL. `recipes/flet-libpyjni` builds
+flet-dev/libpyjni in its place — a small shared library (`libpyjni.so`)
+exporting exactly two entry points:
+
+    void   *PyJni_AndroidGetJNIEnv(void);
+    jclass  PyJni_FindClass(const char *className);
+
+`PyJni_AndroidGetJNIEnv` attaches the calling thread to the JavaVM it cached
+in `JNI_OnLoad` — SDL's job upstream. `PyJni_FindClass` resolves a class
+through the *application's* ClassLoader, which libpyjni also caches in
+`JNI_OnLoad` (`ActivityThread.currentApplication().getClassLoader()`). That
+second one matters because `JNIEnv->FindClass` takes its class loader from
+the current native call frame; on a thread attached from native code there
+is no frame, so the system loader is used, it only sees framework classes,
+and every lookup of an app or plugin class fails. The recipe declares
+`flet-libpyjni` in `requirements.host`, so `fix_wheel` adds a `Requires-Dist`
+and `libpyjni.so` reaches the APK's `jniLibs/<abi>/`.
+
+The hunks:
+
+  1. `jnius/env.py` — `AndroidJavaLocation.get_libraries()` returns
+     `['log', 'pyjni']` instead of `['SDL2', 'log']`. That list becomes
+     `Extension(libraries=…)`, i.e. `-llog -lpyjni`. Without it the link
+     fails outright: there is no `libSDL2.so` in the cross prefix, and the
+     `PyJni_*` symbols used by the hunks below are undefined.
+
+  2. `jnius/jnius_jvm_android.pxi` — declares the two libpyjni entry points
+     and makes `get_platform_jnienv()` call `PyJni_AndroidGetJNIEnv()` rather
+     than `SDL_AndroidGetJNIEnv()`. The declaration spells the return type of
+     `PyJni_FindClass` as `jclass *` where libpyjni's header says `jclass`;
+     `jnius/jni.pxi` typedefs `jclass` to `void *`, so both are the same
+     pointer once compiled and the mismatch is harmless — but do not read
+     that line as documentation of libpyjni's real signature.
+
+  3. `jnius_conversion.pxi`, `jnius_export_class.pxi`,
+     `jnius_export_func.pxi`, `jnius_utils.pxi` — route through
+     `PyJni_FindClass` every lookup whose class name comes from the caller:
+     `autoclass()`/`find_javaclass()` targets, signature strings, and
+     `__javaclass__` / `__javabaseclass__` / `__javainterfaces__`. The
+     hard-coded `java/lang/*` lookups are deliberately left on
+     `j_env[0].FindClass` — the system loader resolves framework classes
+     fine. (`org/jnius/NativeInvocationHandler`, used by the
+     `PythonJavaClass` proxy path, is also left untouched.)
+
+  4. `setup.py` — replace the platform sniff with a flat
+     `PLATFORM = 'android'`. Upstream only concludes "android" when
+     python-for-android's `NDKPLATFORM` *and* `LIBLINK` are both in the
+     environment; forge sets neither, so the build would take the host
+     branch: `PLATFORM` would be `darwin`, the generated `config.pxi` would
+     say `DEF JNIUS_PLATFORM = 'darwin'`, `jnius.pyx` would include
+     `jnius_jvm_dlopen.pxi` (which dlopens a `libjvm` at runtime — there is
+     none on Android), and `get_java_setup()` would hand the compiler the
+     build host's JDK include/lib dirs. Forcing `android` selects
+     `AndroidJavaLocation` (empty include/lib dirs; `jni.h` comes from the
+     NDK sysroot forge already puts on the include path) and
+     `jnius_jvm_android.pxi` — which is also what makes hunk 3 compile at
+     all, since `PyJni_FindClass` is declared only there. The other half of
+     the deleted block, `PYX_FILES = [fn[:-3] + 'c' …]`, is p4a's "use the
+     pre-cythonised sources" shortcut; the sdist ships only `jnius.pyx` and
+     the `.pxi` files, so keeping it would look for a `jnius/jnius.c` that
+     does not exist. The recipe cythonises instead
+     (`requirements.build: Cython <3.1`).
+
+The recipe is `platforms: [android]` — there is no iOS counterpart (pyobjus
+covers that side). A JDK is still required on the *build* host: `setup.py`
+compiles `NativeInvocationHandler.java` with the host `javac`, and this patch
+leaves that alone.
+
+Provenance: the reasoning above is reconstructed from the diff, from
+libpyjni's own source (`src/pyjni.c`, flet-dev/libpyjni v1.0.1) and from the
+recipe's `requirements.host`. The commits that introduced the patch ("Added
+flet-libpyjni, re-build pyjnius", PR #22) record no rationale of their own.
+
 diff --git a/jnius/env.py b/jnius/env.py
 index ea12d82..4111845 100644
 --- a/jnius/env.py

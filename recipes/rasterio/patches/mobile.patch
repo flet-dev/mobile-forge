@@ -1,3 +1,55 @@
+Let forge's `script_env` hand rasterio's setup.py the GDAL include dir,
+library dir and library list, because neither `gdal-config` nor `gdalinfo`
+can be used in a cross build.
+
+rasterio discovers GDAL by running two host programs in turn:
+`fill_gdal_build_options_using_gdal_config()` shells out to `gdal-config
+--cflags/--libs/--datadir/--version`, and if that raises, it falls back to
+`fill_gdal_build_options_using_executable("gdalinfo")`. Both fill the same
+three globals — `include_dirs`, `library_dirs`, `libraries` — by scraping
+`-I`, `-L` and `-l` from the output, and nothing else in setup.py ever
+writes to them. Upstream reads `GDAL_VERSION` from the environment, but
+that overrides only the version string.
+
+Neither program is available in forge's cross environment.
+`recipes/flet-libgdal/build.sh` ends with `rm -rf $PREFIX/{bin,share}`, so
+the flet-libgdal wheel carries headers and libraries under
+`{platlib}/opt/{include,lib}` and no tooling — and even if it did, `gdalinfo`
+would be an iOS/Android binary the macOS build host cannot execute. Both
+attempts fail, the second failure is only logged
+("Failed to get options via both gdal-config and gdalinfo"), and the build
+continues with three empty lists: the compile then dies on a missing
+`gdal.h`, or the extensions link with no `-lgdal`. The worse outcome is a
+build machine that does have a system/Homebrew `gdal-config` — the probe
+succeeds and feeds the cross compile the host's macOS paths and libraries.
+
+The patch adds three environment hooks right after the probe block. They
+extend rather than replace, so anything the probes did legitimately
+contribute survives:
+
+    GDAL_INCLUDE_PATH  ->  include_dirs   (colon-separated, PATH style)
+    GDAL_LIB_PATH      ->  library_dirs   (colon-separated)
+    GDAL_LIBS          ->  libraries      (comma-separated — these are
+                                           library names, not paths)
+
+`meta.yaml` sets the first two to `{platlib}/opt/include` and
+`{platlib}/opt/lib`. `GDAL_LIBS` is `gdal` alone on Android, where libgdal
+is a shared object carrying its own dependencies; on iOS every native dep is
+a static archive, so it lists the whole chain
+(`gdal,proj,tiff,curl,psl,sqlite3,jpeg,ssl,crypto,z`) to pull in the objects
+`libgdal.a` left undefined. PR #65 ("Support testing recipes on Android
+emulator and iOS simulator") records the symptom that forced the iOS list:
+`import rasterio` died in dyld on `_geod_init`, a libproj symbol that
+libgdal.a referenced but never carried.
+
+Without this patch the rasterio wheel either fails to build or links against
+the build machine's GDAL.
+
+The commit that introduced the patch (ec8d184, a bulk consolidation of many
+branches) records no per-patch rationale; the reading above comes from the
+diff, rasterio 1.5.0's setup.py, and this recipe's `script_env` block, which
+sets exactly these three variables.
+
 diff --git a/setup.py b/setup.py
 --- a/setup.py
 +++ b/setup.py

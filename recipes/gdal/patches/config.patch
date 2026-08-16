@@ -1,3 +1,64 @@
+Make GDAL's own Python bindings buildable without a runnable `gdal-config`,
+by letting the environment answer every question setup.py would have asked
+it, and by letting the recipe choose the libraries to link.
+
+The bindings' setup.py resolves the native library through
+`gdal_ext.get_gdal_config(option)`, which calls `fetch_config()` — a
+`subprocess.Popen(["gdal-config", "--<option>"])`. Three options are asked
+for: `version` (to check that libgdal is at least as new as the bindings),
+`prefix` (whose `lib/` and `include/` are appended to the link and compile
+paths when nothing else supplied them) and `cflags`. A fourth global,
+`libraries = ['gdal']`, is fixed in the module body.
+
+None of that survives a cross build. `recipes/flet-libgdal/build.sh` ends
+with `rm -rf $PREFIX/{bin,share}`, so the flet-libgdal wheel ships headers
+and libraries under `{platlib}/opt` and no `gdal-config`; `fetch_config`
+raises `gdal_config_error`, and `finalize_options` turns that into
+"Could not find gdal-config. Make sure you have installed the GDAL native
+library and development headers." (The `version` call is wrapped in its own
+`except gdal_config_error: pass`, so a missing config tool silently skips
+the bindings-vs-library version guard as well.) Should the build host happen
+to carry a Homebrew or system `gdal-config`, the call succeeds instead and
+hands the cross compile the host's macOS prefix — worse, because it builds
+green.
+
+Hunk 2 short-circuits `get_gdal_config`: an option is looked up as
+`GDAL_<OPTION>` in the environment first, and only falls through to the
+subprocess when that variable is absent. The naming is mechanical, so the
+recipe's `script_env` answers all three calls — `GDAL_VERSION: 3.13.1`,
+`GDAL_PREFIX: {platlib}/opt`, `GDAL_CFLAGS: ''`. The empty `GDAL_CFLAGS` is
+deliberate rather than an oversight: it is present (so no subprocess runs)
+but falsy (so `if cflags:` adds nothing), which is exactly "no extra compile
+flags, and don't go looking".
+
+Hunk 1 lets `GDAL_LIBS` replace the hard-wired `libraries = ['gdal']`
+(comma-separated — library names, not paths). On Android the default is
+right and `meta.yaml` leaves it alone. On iOS every native dep is a static
+archive and `libgdal.a` was archived with the symbols it references but does
+not define — `_geod_init` (libproj), `_TIFFClientOpen` (libtiff),
+`_psl_builtin` (libpsl) — left undefined; the SWIG `_gdal.so` inherits those
+references, `-undefined dynamic_lookup` defers them to dlopen, and iOS dyld
+resolves the flat namespace eagerly and aborts at first import. Listing the
+whole chain makes the extension link pull those objects out of the archives.
+`meta.yaml` carries the full explanation and the pointer to the proper fix
+in `flet-libgdal`'s iOS cmake invocation.
+
+Two things to know when this patch stops applying. The `libraries` hunk's
+context contains absolute paths from *upstream's* release machine
+(`/home/runner/work/gdal/...`) — that text is GDAL's own, baked into the
+sdist by their build, and it changes between releases, so the context has to
+be refreshed at every version bump (it already moved once, from
+`/home/even/gdal/3.10/...`). And this recipe is pinned to the exact
+`flet-libgdal` version, so a bump here is never a lone edit.
+
+Rationale: hunk 1 was added in PR #65 ("Support testing recipes on Android
+emulator and iOS simulator and fixes issues found"), which documents the
+dyld cascade; PR #68 rebased both hunks onto GDAL 3.13.1's setup.py. Hunk 2
+predates both, arriving in the bulk consolidation commit ec8d184 with no
+recorded reason — its account above is read off the diff, GDAL 3.13.1's
+setup.py, and the `GDAL_VERSION`/`GDAL_PREFIX`/`GDAL_CFLAGS` trio in this
+recipe's `script_env`, which exists only to feed it.
+
 diff --git a/setup.py b/setup.py
 --- a/setup.py
 +++ b/setup.py

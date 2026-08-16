@@ -1,3 +1,54 @@
+Make libopaque's hand-written src/makefile survive a cross-compile, and have it
+install one plainly-named shared library.
+
+libopaque has no configure step; build.sh just runs `make` and `make install`
+inside src/ with forge's cross CC/AR/CFLAGS/LDFLAGS in the environment. The
+upstream makefile is written for a native Linux or macOS build, and four things
+have to give.
+
+  1. `LDFLAGS=-g $(LIBS)` is a plain `=`, so it discards whatever LDFLAGS forge
+     exported -- the cross sysroot and the -L paths pointing at the host deps
+     (flet-libsodium, flet-liboprf) never reach the link line. Changed to `+=`,
+     which for a variable inherited from the environment appends to that value
+     rather than replacing it.
+
+  2. The `uname -s` / `uname -m` block describes the BUILD machine, never the
+     target, so every branch of it is wrong here. On a macOS build host it
+     takes the Darwin arm: SOEXT=dylib plus an -install_name pointing into the
+     build tree -- wrong for Android, and wrong on iOS too, where
+     serious-python only converts files named `*.so` into frameworks. On a
+     Linux build host it takes the else arm: GNU/ELF-only link flags
+     (-Wl,-z,defs / relro / noexecstack / now) and -fcf-protection /
+     -fstack-clash-protection chosen from the host's `uname -m`, none of which
+     suit the NDK or Apple toolchains on the arm slices. The whole block is
+     commented out rather than rewritten, which is why hunk 1 also has to add
+     `SOEXT=so`: with the block gone nothing else ever assigns SOEXT and the
+     makefile would emit `libopaque.` with an empty extension. A side effect is
+     that SOFLAGS stays empty, so no -soname / -install_name is baked in.
+
+  3. `all:` no longer builds `tests utils/opaque $(MANPAGES)`. The test
+     binaries and the `opaque` CLI are target executables that nothing here can
+     run, and MANPAGES is gated on the build host happening to have pandoc
+     installed. Only the two libraries are wanted in the wheel.
+
+  4. The install rule wrote `libopaque.so.0` and then symlinked
+     `libopaque.so -> $(DESTDIR)$(PREFIX)/lib/libopaque.so.0`, an absolute path
+     into the build tree. Neither half survives packaging: a wheel is a zip,
+     and on Android only files named `lib*.so` are surfaced through jniLibs, so
+     a `.so.0` is invisible and the symlink's target does not exist on the
+     device. `cp $< $@` installs one real file under the plain name -- which is
+     exactly the name the consumer looks for, since
+     recipes/opaque/patches/mobile.patch falls back to
+     `ctypes.cdll.LoadLibrary('libopaque.so')` when find_library() comes up
+     empty. build.sh relies on the same name (it moves `$PREFIX/lib/
+     libopaque.so` to the site-packages root on iOS).
+
+Provenance: added by "libsodium, libopaque, liboprf" (PR #28, Jan 2025) with no
+written rationale, and untouched since -- it still applied verbatim across the
+0.99.8 -> 1.0.1 bump in PR #68. Point 1 is unambiguous from the makefile
+itself; points 2-4 are read off the diff together with what build.sh and the
+opaque consumer recipe do with the result.
+
 diff --git a/src/makefile b/src/makefile
 index 42e70bb..d2759e5 100644
 --- a/src/makefile
