@@ -133,7 +133,11 @@ Inside the recipe directory, add the following files.
 * Optionally, an ``examples`` directory of runnable Flet apps — again, see
   `Documenting a recipe`_.
 * Optionally, one or more patch files in a folder named ``patches``. These patches will be
-  applied when the source code is unpacked for a given platform.
+  applied when the source code is unpacked for a given platform. **Every patch explains
+  itself**: put a plain-text description at the top of the file, above the first ``---``
+  line, saying what the patch changes and why it is needed. ``patch(1)`` ignores everything
+  before the first ``---``, so this is safe, and it means the explanation travels with the
+  patch instead of living in a README that will drift from it.
 * For non-Python packages, a ``build.sh`` script. This is the script that will be executed
   in the build environment build the package. This script should invoke any ``configure``,
   ``make``, or any other compilation steps needed to build the package. This script will be
@@ -249,7 +253,9 @@ is reviewed in the same pull request and bumped in the same commit as the recipe
        requirement resolves to the latest release, and a version in a snippet people paste is
        a pin they will still be carrying two releases later. Where the package really does
        need a minimum Flet version, say so **in prose** next to the snippet, with the symptom
-       of getting it wrong — not as a pin in the snippet.
+       of getting it wrong — not as a pin in the snippet. (The example's own
+       ``pyproject.toml`` is the opposite case and *is* pinned — see below. One is material to
+       imitate, the other is a combination to reproduce.)
     #. ``## Storage`` — only if the package reads or writes files. Where they belong, in terms
        of Flet's app-storage environment variables.
     #. ``## Examples`` — a **link to** ``examples/`` and a one-line bullet per example, and
@@ -262,8 +268,15 @@ is reviewed in the same pull request and bumped in the same commit as the recipe
     #. ``## Things to know`` — bulleted gotchas and recommendations; the last consumer-facing
        section. State what breaks and the symptom it produces, not just the rule.
     #. ``## Build notes (maintainers)`` — the only maintainer-facing section, and the reason
-       it is explicitly labelled: everything above it addresses the app author. Keep it to why
-       the patches and build flags exist.
+       it is explicitly labelled: everything above it addresses the app author. It does
+       **not** explain the patches or the build flags. A patch explains itself in its own
+       preamble, and a ``meta.yaml`` setting is explained in a comment next to it; repeating
+       either here just creates a third copy to keep in sync. What belongs here is only what
+       has no home in those two files: why the recipe has the shape it does, where that is not
+       obvious; what was tried and rejected, which no file records; and above all **what to
+       re-verify when bumping**, since the sections above make consumer-facing claims that a
+       bump can silently invalidate. Written that way the section is a maintenance checklist,
+       not a re-explanation — and if nothing qualifies, omit it.
 
     Link every API reference the first time it appears — Flet controls, methods and
     environment variables to the Flet docs, the package's own API to its upstream docs — so
@@ -289,6 +302,15 @@ is reviewed in the same pull request and bumped in the same commit as the recipe
     file are one example. Each app must show a result computed by the package on screen, and
     must build as-is, because the per-example ``pyproject.toml`` is itself part of what is
     being taught.
+
+    **Pin the example's dependencies with** ``==`` — both Flet and the recipe's own package.
+    The example is the artifact that gets built and run on a device, so its pins are the
+    record of a combination that was verified; left floating, it silently drifts onto
+    versions nobody tested and the past combination is unrecoverable. Bumping a recipe
+    therefore means bumping its example's pin and rebuilding it, which makes the example a
+    live regression test of the bump. The one exception is a recipe whose version varies by
+    Python (cryptography ships 43.0.1 for cp312/cp313 and 48.0.0 for cp314): a single ``==``
+    would fail to resolve on the other legs, so leave that package unpinned and pin only Flet.
 
     Examples belong here and **never** under ``tests/``: everything in ``tests/`` is copied
     into the on-device test app and collected by pytest. Do not put a ``meta.yaml`` in an
