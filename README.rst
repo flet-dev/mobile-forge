@@ -53,7 +53,7 @@ extracted trees before sourcing ``setup.sh``. When set, these paths are authorit
 versions can be configured side-by-side.
 
 Building a package
-~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~
 
 The ``recipes`` folder contains recipes for packages. ``lru-dict`` is a good first
 package to try::
@@ -124,9 +124,14 @@ its path when calling ``forge``.
 
 Inside the recipe directory, add the following files.
 
-* A `meta.yaml` file. This supports a subset of Conda syntax, defined in `meta-schema.yaml`.
-* A `test.py` file (or `test` package), to run on a target installation. This should contain a
-  pytest suite which imports the package and does some basic checks.
+* A ``meta.yaml`` file. This supports a subset of Conda syntax, defined in ``meta-schema.yaml``.
+* A ``tests`` directory, to run on a target installation. This should contain a pytest suite
+  which imports the package and does some basic checks. Every file in it is bundled into the
+  on-device test app, so keep it to tests and their fixtures.
+* A ``README.md``, documenting the package **for the people who will use it in a Flet app** —
+  see `Documenting a recipe`_ below.
+* Optionally, an ``examples`` directory of runnable Flet apps — again, see
+  `Documenting a recipe`_.
 * Optionally, one or more patch files in a folder named ``patches``. These patches will be
   applied when the source code is unpacked for a given platform.
 * For non-Python packages, a ``build.sh`` script. This is the script that will be executed
@@ -208,19 +213,91 @@ has been unpacked.
 Configure-based projects
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-If the project includes a `configure` script, you will likely need to provide a patch
-for `config.sub`. `config.sub` is the tools used by `configure` to identify the
+If the project includes a ``configure`` script, you will likely need to provide a patch
+for ``config.sub``. ``config.sub`` is the tools used by ``configure`` to identify the
 architecture and machine type; however, it doesn't currently recognize the host triples
 used by Apple. If you get the error::
 
     checking host system type... Invalid configuration `arm64-apple-ios': machine `arm64-apple' not recognized
     configure: error: /bin/sh config/config.sub arm64-apple-ios failed
 
-you will need to patch `config.sub`. There are several examples of patched `config.sub`
+you will need to patch ``config.sub``. There are several examples of patched ``config.sub``
 scripts in the packages contained in this repository, and in the Python-Apple-support
 project; it is quite possible one of those patches can be used for the library you are
-trying to compile. The `config.sub` script has a datestamp at the top of the file; that
+trying to compile. The ``config.sub`` script has a datestamp at the top of the file; that
 can be used to identify which patch you will need.
+
+Documenting a recipe
+--------------------
+
+A recipe produces a wheel, but what a Flet app author actually needs is the knowledge that
+came out of building it: which ``pyproject.toml`` entries to add, where a database or cache
+belongs on device, which platform behaves differently, what the wheel deliberately leaves
+out. That knowledge lives **in the recipe directory**, next to the code it describes, so it
+is reviewed in the same pull request and bumped in the same commit as the recipe itself.
+
+``recipes/<name>/README.md``
+    Written for the person adding the package to their app — not for the person building the
+    wheel. GitHub renders it when someone opens the recipe directory, so it is also the page
+    we link to from elsewhere. Sections, in this order, omitting any that do not apply
+    (omit — never reorder, and never pad):
+
+    #. An H1 with the pip name, then a short paragraph on what the package is and why you
+       would use it on mobile.
+    #. ``## Install`` — the ``pyproject.toml`` dependencies snippet, plus any ``[tool.flet.*]``
+       tables the package needs. List dependencies bare (``"flet"``, ``"<package>"``): a bare
+       requirement resolves to the latest release, and a version in a snippet people paste is
+       a pin they will still be carrying two releases later. Where the package really does
+       need a minimum Flet version, say so **in prose** next to the snippet, with the symptom
+       of getting it wrong — not as a pin in the snippet.
+    #. ``## Storage`` — only if the package reads or writes files. Where they belong, in terms
+       of Flet's app-storage environment variables.
+    #. ``## Examples`` — a **link to** ``examples/`` and a one-line bullet per example, and
+       nothing more. No code, not even an excerpt; no run commands; no description of what
+       the app demonstrates. All of that lives in the example's own ``README.md``, which is
+       the single source of truth for it — anything repeated here is a second copy to keep
+       in sync, and it will not be kept in sync.
+    #. ``## Threading`` — only if there is something to say about background work.
+    #. ``## Android notes`` / ``## iOS notes`` — only where the two platforms genuinely differ.
+    #. ``## Things to know`` — bulleted gotchas and recommendations; the last consumer-facing
+       section. State what breaks and the symptom it produces, not just the rule.
+    #. ``## Build notes (maintainers)`` — the only maintainer-facing section, and the reason
+       it is explicitly labelled: everything above it addresses the app author. Keep it to why
+       the patches and build flags exist.
+
+    Link every API reference the first time it appears — Flet controls, methods and
+    environment variables to the Flet docs, the package's own API to its upstream docs — so
+    a reader can click through instead of searching. Check the anchor resolves; note that
+    flet.dev canonicalises to a trailing slash before the fragment
+    (``…/environment-variables/#flet_app_storage_data``).
+
+    Do not restate the recipe version — ``meta.yaml`` is the source of truth and prose goes
+    stale on the first bump. Claims about the wheel should be checked against the wheel, and
+    claims about on-device behaviour should be backed by a test in ``tests/``.
+
+``recipes/<name>/examples/<example>/``
+    A complete, runnable Flet app per example: ``src/main.py`` with
+    ``[tool.flet.app] path = "src"``, its own ``pyproject.toml``, a short ``README.md``
+    saying what it demonstrates and how to run it, and a ``.gitignore`` for whatever running
+    it produces (virtualenv, caches, databases, ``uv.lock``). Use ``src/`` even for a single
+    file: ``path = "."`` packages the *whole* directory into the app, so the README,
+    the ``pyproject.toml`` and any stray ``__pycache__``/``.ruff_cache`` ship inside it —
+    and ``src/assets/`` is where bundled models or images belong when an example needs them.
+    One example is the
+    default; add another only for a genuinely distinct mode a user would choose between (sync
+    versus async, and the like) — two examples that differ only in their SQL or their model
+    file are one example. Each app must show a result computed by the package on screen, and
+    must build as-is, because the per-example ``pyproject.toml`` is itself part of what is
+    being taught.
+
+    Examples belong here and **never** under ``tests/``: everything in ``tests/`` is copied
+    into the on-device test app and collected by pytest. Do not put a ``meta.yaml`` in an
+    example directory either — that is what marks a directory as a buildable recipe.
+
+Neither path affects the build, and both are excluded from the CI changed-recipe filter, so
+a documentation change never rebuilds that recipe. (The workflow itself still runs: with no
+recipe detected as changed it falls back to the cheap smoke-test build that any non-recipe
+change gets.)
 
 Community
 ---------
