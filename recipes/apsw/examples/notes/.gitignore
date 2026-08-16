@@ -1,0 +1,9 @@
+.venv/
+.flet/
+build/
+__pycache__/
+.pytest_cache/
+uv.lock
+*.db
+*.db-wal
+*.db-shm
