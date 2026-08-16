@@ -52,7 +52,9 @@ def main(page: ft.Page):
         caption.value = f"Averaging {draws.value:.0f} uniform draws per sample"
 
     def resample():
-        button.disabled = True
+        # Driven by on_change_end, which fires once when the slider is released.
+        # on_change fires for every pixel of the drag and would start a fresh
+        # 100,000-sample run each time.
         spinner.visible = True
         page.update()
         page.run_thread(compute)
@@ -70,7 +72,6 @@ def main(page: ft.Page):
             row("array", f"{SAMPLES:,} × {k}"),
             row("sampled and binned in", f"{elapsed * 1e3:.1f} ms"),
         ]
-        button.disabled = False
         spinner.visible = False
         page.update()  # auto-update does not reach background threads
 
@@ -90,7 +91,14 @@ def main(page: ft.Page):
                         height=BAR_HEIGHT,
                         vertical_alignment=ft.CrossAxisAlignment.END,
                     ),
-                    caption := ft.Text(),
+                    ft.Row(
+                        controls=[
+                            caption := ft.Text(expand=True),
+                            spinner := ft.ProgressRing(
+                                width=16, height=16, visible=False
+                            ),
+                        ]
+                    ),
                     draws := ft.Slider(
                         min=1,
                         max=12,
@@ -99,16 +107,7 @@ def main(page: ft.Page):
                         round=0,
                         label="{value}",
                         on_change=show_draws,
-                    ),
-                    ft.Row(
-                        controls=[
-                            button := ft.Button(
-                                "Draw", icon=ft.Icons.CASINO, on_click=resample
-                            ),
-                            spinner := ft.ProgressRing(
-                                width=20, height=20, visible=False
-                            ),
-                        ]
+                        on_change_end=resample,
                     ),
                     results := ft.Column(spacing=4),
                 ]
