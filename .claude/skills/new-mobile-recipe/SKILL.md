@@ -17,7 +17,8 @@ The workflow is opinionated and biased toward the fastest iteration loop. Most o
 4. **Build** — fastest iOS sim slice → all iOS → arm64-v8a → all Android
 5. **Diagnose** — work through any failures (see the `forge-error-catalogue` skill)
 6. **End-to-end test** — stage the recipe into the committed `tests/recipe-tester` app, verify on device/emulator (details in the `local-recipe-testing` skill)
-7. **Ship** — branch from `main`, structured commit, push, run CI (details in the `forge-ci` skill)
+7. **Document** — write `recipes/<name>/README.md` + an `examples/` app for the people who will consume the wheel
+8. **Ship** — branch from `main`, structured commit, push, run CI (details in the `forge-ci` skill)
 
 If any phase fails, fix forward in that phase before moving on. Don't skip ahead.
 
@@ -107,7 +108,7 @@ The shim's load-bearing rules (each one bought with a failed build):
 2. **The consumer declares it in `requirements.host_build`** — installed into the cross env for the build (link time only), **NOT promoted to `Requires-Dist`**. That's the whole difference from `requirements.host`.
 3. **The consumer's build re-ships the `.so` inside the consumer wheel** (sherpa's cmake `install(FILES … lib)` → `sherpa_onnx/lib/`), and a patch adds an **RTLD_GLOBAL ctypes preload** at the top of `__init__.py` — forge/NDK-built modules carry no RUNPATH on Android, so the dynamic linker can't resolve the DT_NEEDED entry by itself. The preload tries `libonnxruntime.so` then `libonnxruntime.fwork` (covers a future iOS build).
 
-**CI consequence:** this is a chain recipe — plain push strands it; see "CI: push vs dispatch" in Phase 7.
+**CI consequence:** this is a chain recipe — plain push strands it; see "CI: push vs dispatch" in Phase 8.
 
 **Real example:** `machine/sherpa-onnx:recipes/flet-libonnxruntime/` + `machine/sherpa-onnx:recipes/sherpa-onnx/` (patches `android-no-jni.patch` + `android-preload-ort.patch`).
 
@@ -291,7 +292,8 @@ forge iOS <name>
 # 3. Move to Android. arm64-v8a first — same archetype.
 forge android:arm64-v8a <name>
 
-# 4. If green, all 4 Android slices.
+# 4. If green, all Android slices (3 by default — arm64-v8a, armeabi-v7a, x86_64;
+#    the set comes from ANDROID_ABIS, see src/forge/cross.py).
 forge android <name>
 ```
 
@@ -393,7 +395,75 @@ Unzip the wheel(s) from `dist/` and inspect every native binary:
 
 ---
 
-## Phase 7: Ship the branch
+## Phase 7: Document the recipe
+
+A green wheel is half the deliverable. The other half is the knowledge you just accumulated —
+which `pyproject.toml` entries the package needs, where its files belong on device, what the
+wheel deliberately omits — written where the consumer will find it. Two files, both inside the
+recipe directory so they are reviewed in the same PR and bumped in the same commit:
+
+**`recipes/<name>/README.md`** — for the app author, not the wheel builder. GitHub renders it
+when someone opens the recipe directory. Section order (omit what doesn't apply; never reorder,
+never pad): H1 + a short pitch → `## Install` → `## Storage` → `## Examples` → `## Threading` →
+`## Android notes` / `## iOS notes` → `## Things to know` (always last) →
+`## Build notes (maintainers)` (the only maintainer section, explicitly labelled because
+everything above it addresses the consumer). The full spec lives in README.rst §
+"Documenting a recipe" — that one is checked in and contributor-facing; keep them in sync.
+
+**`recipes/<name>/examples/<example>/`** — a runnable Flet app: `src/main.py` with
+`[tool.flet.app] path = "src"`, its own `pyproject.toml`, a short `README.md`, a
+`.gitignore`. Always `src/`, even for one file — with `path = "."` the whole directory is
+packaged into the app (measured: an APK shipped `README.md`, `pyproject.toml`,
+`.gitignore`, `__pycache__/` and `.ruff_cache/` alongside `main.pyc`). One example by
+default. The recipe README's `## Examples` section is **only** a link to `examples/` plus a
+one-line bullet per example — no code, no excerpt, no run commands, no description of what
+the app shows. That all lives in the example's own `README.md`, the single source of truth
+for it; anything repeated in the recipe README is a second copy that will drift.
+
+Keep the content clear of system chrome: with **neither** an `ft.AppBar` nor an
+`ft.SafeArea`, the first line renders under the status bar / notch on both platforms.
+Either one fixes the top, but they are not interchangeable — `AppBar` insets the top and
+gives you a title bar, `SafeArea` insets every edge including the bottom home indicator.
+Use `SafeArea` when there is no app bar, and both when you want a title and bottom-edge
+safety.
+
+**Before writing the example, read `forge-error-catalogue`'s
+`references/flet-app-catalogue.md`** — the app-layer traps live there (threading and
+`page.run_thread`, layout, `path = "."` packaging, the 0.86 API traps that raise at the
+point of use, iOS-only runtime differences). It is the file to append to when an example
+teaches you a new one.
+
+Reference implementation: **`recipes/apsw/`** — copy its shape.
+
+Rules that cost something if broken:
+
+- **Never put examples under `tests/`.** `stage_recipe.sh` copies all of `tests/` into the
+  on-device app and pytest collects it. Examples go in `examples/`, and never contain a
+  `meta.yaml` (that is what marks a directory as a buildable recipe).
+- **Claims about OUR BUILD need a test; claims about the upstream library don't.** If the README
+  says something about what is compiled in, what loads on device, or where files land, add the
+  test to `tests/` and run it on-device in Phase 6 — otherwise you are publishing an unverified
+  instruction to every consumer. Recipe suites should not grow into a second test suite for the
+  package.
+- **Verify claims about the wheel against the wheel**, not against the upstream PyPI build:
+  `curl` the published artifact from pypi.flet.dev and inspect it (`unzip -l`, `strings <so>`
+  for `SQLITE_ENABLE_*`-style compile options, `du -sh`). Upstream wheels can carry prebuilt
+  host binaries and data ours deliberately drop.
+- **Do not restate the recipe version** in prose — `meta.yaml` is the source of truth, and a
+  version in a README is wrong one bump later.
+- `recipes/*/README.md` and `recipes/*/examples/**` are in the changed-files `files_ignore`
+  (`.github/workflows/build-wheels.yml`), so a docs-only change never rebuilds *that recipe*;
+  the run still happens and falls back to `SMOKE_TEST_PACKAGES` (see `forge-ci`). Nothing else
+  in forge reads either path.
+
+Lint applies: repo pre-commit runs black (88 cols), flake8 (max-line-length 119), isort,
+`docformatter --black`, `pyupgrade --py38-plus` and codespell over `examples/**/*.py` with no
+exclusion — note black and flake8 disagree on width, and docformatter rewrites docstrings. Run
+them before committing or they churn the files on someone else's `pre-commit run`.
+
+---
+
+## Phase 8: Ship the branch
 
 ```bash
 # Branch from main, the active dev branch

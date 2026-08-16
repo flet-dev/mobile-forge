@@ -96,6 +96,33 @@ for i in $(seq 1 30); do grep EXIT "$DATA/Library/Caches/console.log" 2>/dev/nul
 
 `android:arm64-v8a` | `android:x86_64` | `android:armeabi-v7a` | `iphonesimulator:arm64` | `iphonesimulator:x86_64` | `iphoneos:arm64` — the first token is the **SDK**, not the OS. `forge iOS:arm64` dies with a raw `KeyError: 'iOS'` (only the bare-platform forms `forge android` / `forge iOS` take the OS name, and those build every arch).
 
+## Testing an ALREADY-PUBLISHED wheel (claim verification)
+
+When the recipe is already shipped and you are verifying *claims* rather than iterating on a
+build — new tests added for a recipe README, a bug report against a released wheel — skip
+`setup.sh` and `forge` entirely. `stage_recipe.sh <name> <version>` pins the version in the
+generated pyproject, so plain `flet build` resolves it straight from pypi.flet.dev:
+
+```bash
+./tests/recipe-tester/stage_recipe.sh apsw 3.53.2.0
+cd tests/recipe-tester
+rm -rf build/site-packages build/.hash build/apk build/ios-simulator   # gotcha #3 still applies
+uvx --from flet-cli flet build ios-simulator --yes     # or: flet build apk --arch arm64-v8a --yes
+```
+
+No `PIP_FIND_LINKS`, no local wheel, no Python-version matching to worry about (gotcha #2 is
+about *your* build output; here there isn't one). Leaving `--python-version` off is the point:
+you get flet's default cp314 bundle, i.e. exactly what an end user's `flet build`
+produces today — so a recipe published only for cp312 shows up as a resolve failure right here.
+Round trip on an iOS sim is ~4 minutes.
+
+Confirm you tested what you think you did — the app bundle carries the wheel and the tests:
+
+```bash
+find recipe-tester.app -iname "*<pkg>*" | head          # iOS: staged site-packages + Frameworks/
+grep -c "^def test_" recipe-tester.app/*/app/recipe_tests/test_<pkg>.py   # must equal your count
+```
+
 ## Gotchas (each cost a cycle)
 
 1. **Use forge's `dist/` wheel, NOT `build/.../target/wheels/`.** The latter is maturin's raw output — **unstripped**. For polars that meant a **1.27 GB** `.so` (vs 130 MB stripped); it blows up install space and may not load. forge strips + repacks into `dist/`. Always test the `dist/` wheel.

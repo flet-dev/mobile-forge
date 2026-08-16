@@ -21,8 +21,19 @@ description: >-
   bare soname, jniLibs lib<pkg>.so name collision -> static-link, a package whose
   loader re-imports its own native under a fixed top-level name -> opencv cv2
   "missing configuration file: ['config.py']" / "Submodule name should always start
-  with a parent module name"), hidden runtime deps, or a stale on-device cache. Sibling
-  of `new-mobile-recipe` (authoring), `native-recipe-bumps` (version bumps),
+  with a parent module name"), hidden runtime deps, or a stale on-device cache.
+  ALSO covers the APP layer — failures in the Flet app that consumes a wheel, once the
+  wheel imports fine: a `page.run_thread` worker that silently does nothing (swallowed
+  exceptions + an overlapping pool needing a lock), UI not refreshing from a background
+  thread, content rendering under the status bar/notch (SafeArea/AppBar), junk shipped
+  inside the app bundle via `[tool.flet.app] path = "."`, Flet 0.86 API traps that raise
+  at the point of use (`ft.app` shadowed by the `flet.app` module, `Button(text=)`,
+  `TextField(error_text=)`, `Card(color=)`, `page.open`/`page.snack_bar`,
+  `page.storage_paths`, `ft.colors`, the `ft.icons` module trap,
+  `page.platform == "android"` always False), no `pwd` on iOS Python
+  (`getpass.getuser()`), `platform.system() == "iOS"` silently taking the Linux branch,
+  and python-for-android/kivy packages dying with an uncatchable SIGABRT (plyer).
+  Sibling of `new-mobile-recipe` (authoring), `native-recipe-bumps` (version bumps),
   `local-recipe-testing` (on-device testing), and `forge-ci` (CI triage);
   this one is the dedicated error -> fix reference.
 ---
@@ -36,10 +47,21 @@ instead of re-deriving it.
 
 ## How to use
 
+0. **Pick the catalogue by layer.** Is the *wheel* wrong, or is the *app code* wrong?
+   - `dlopen`, missing symbol, `.soref`, `sitepackages.zip`, a vanished data file, an
+     import that never completes, anything at build time → **the wheel**:
+     [`references/failure-catalogue.md`](references/failure-catalogue.md).
+   - the package imports fine and *then* the app misbehaves — a handler does nothing, the
+     UI renders wrong, an API raises `TypeError` on a keyword you were sure existed, an
+     iOS-only silent empty result → **the app**:
+     [`references/flet-app-catalogue.md`](references/flet-app-catalogue.md).
+   When they look alike, entries say how to tell them apart (a loader failure fails on the
+   FIRST call and leaves something in logcat; an app-layer race succeeds most of the time
+   and leaves nothing anywhere).
 1. Grab the **first hard error** from the build log (not a warning). For a forge
    build, the failing log moves to `errors/<pkg>-*.log`; read the last ~100 lines.
-2. Search [`references/failure-catalogue.md`](references/failure-catalogue.md) for
-   the error string (or its symptom). Entries are grouped by phase.
+2. Search the chosen catalogue for the error string (or its symptom). Entries are grouped
+   by phase.
 3. Apply the fix. Rebuild the single failing slice first
    (`forge --clean <slice> <pkg>`) before fanning out.
 
@@ -121,11 +143,34 @@ instead of re-deriving it.
 - **Diagnostic snippets** — inspect a wheel, see what `flet build` packaged, dump
   the env forge used, render meta.yaml per SDK context.
 
+## What's in the app catalogue (`references/flet-app-catalogue.md`)
+
+Failures in the **Flet app that consumes a wheel**, once the wheel itself imports fine —
+the layer every recipe's `examples/` app lives in:
+
+- **Threading and updates** — `page.run_thread` silently swallowing worker exceptions
+  (no `SESSION_CRASHED`, no log), its pool genuinely overlapping so a shared native handle
+  needs a lock, and auto-update not reaching background threads.
+- **Layout on device** — content rendering under the status bar/notch without
+  `ft.SafeArea`/`ft.AppBar`; a blank emulator screen that is just a slow first draw.
+- **Packaging the app** — `[tool.flet.app] path = "."` shipping the whole project
+  directory inside the app; why not to pin `flet` in a snippet people copy.
+- **API traps in 0.86** — a table of things that construct cleanly and fail at use:
+  `ft.app` shadowed by the `flet.app` module, `Button(text=)`, `TextField(error_text=)`,
+  `Card(color=)`, `DataRow(on_select_changed=)`, `page.open`/`page.snack_bar`,
+  `page.storage_paths` (deleted in 0.90), `ft.colors`, the `ft.icons` module trap, and
+  `page.platform == "android"` always being False.
+- **Platform differences at runtime** — no `pwd` on iOS Python (`getpass.getuser()`
+  crash), `platform.system() == "iOS"` silently taking the Linux branch, and
+  python-for-android/kivy packages dying with an uncatchable `SIGABRT` (plyer) plus the
+  pyjnius/pyobjus way to call native APIs instead.
+
 ## Adding entries
 
-Append to `references/failure-catalogue.md` in the matching section, in the house
-style: a `###` heading naming the exact error string, then **Cause:** and
-**Fix:** (cite the recipe it came from). Keep one `---` between entries.
+Append to the catalogue matching the **layer** (wheel vs app — see "How to use" step 0),
+in the matching section, in the house style: a `###` heading naming the exact error string
+or symptom, then **Cause:** and **Fix:** (cite the recipe or app it came from). Keep one
+`---` between entries.
 
 ## Related
 

@@ -1,0 +1,214 @@
+# Flet app-layer catalogue (consumer app code, not the wheel)
+
+Symptom → cause → fix for things that go wrong in **the Flet app that uses a wheel**,
+as opposed to the wheel itself. Sibling of
+[`failure-catalogue.md`](failure-catalogue.md), which covers builds and the
+packaging/loader layer.
+
+**Which file do I want?** If the failure is `dlopen`, a missing symbol, a `.soref`,
+`sitepackages.zip`, a data file that vanished, or an import that never completes — it is
+the wheel: use `failure-catalogue.md`. If the package imports fine and *then* the app
+misbehaves — a handler does nothing, the UI renders wrong, an API raises `TypeError` on a
+keyword you were sure existed — it is here.
+
+Everything below is verified against **Flet 0.86.5** unless stated. Where a fact is
+version-coupled, the version is named so a stale entry is self-evidently stale.
+
+---
+
+## Threading and updates
+
+### A `page.run_thread` worker silently does nothing (no crash, no log, no result)
+
+**Symptom:** the user taps a button whose handler calls `page.run_thread(work, …)` and
+nothing happens — no error dialog, no `SESSION_CRASHED`, nothing on the `flet` logger,
+nothing in `console.log`. Intermittent: it works most of the time.
+
+**Cause:** `Page.run_thread` does `loop.run_in_executor(...)` and never retrieves the
+resulting future, so **any exception raised inside the worker is swallowed entirely** (it
+surfaces only as an asyncio "Future exception was never retrieved" at GC time, which
+nothing on device reads). Verified on 0.86.5: a worker raising `RuntimeError` produced 0
+SESSION_CRASHED messages and 0 log records.
+
+The intermittency usually comes from the second half of this trap: `run_thread` submits to
+a shared `concurrent.futures.ThreadPoolExecutor`, so **workers genuinely run
+concurrently** — two taps in quick succession overlap. Any native handle that is not safe
+for concurrent use raises from inside the worker, and the raise is invisible per the above.
+
+**Concrete instance:** one `apsw.Connection` shared across `run_thread` handlers. apsw
+permits a connection on *any* thread but not two at once — it raises
+`ThreadingViolationError: Cursor couldn't run because the Connection is busy in another
+thread`. Measured on desktop with the exact insert-then-read pair an app performs: 12
+threads × 200 iterations dropped 100–200 rows on 3 of 5 runs, with 1–4 raised exceptions
+per run, every one invisible.
+
+**Fix:** serialise the shared handle with a `threading.Lock` — take it around the *whole*
+use; for a DB cursor, materialise the `SELECT` inside the lock, since an unconsumed cursor
+is what leaves the connection busy — or give each thread its own handle. Independently,
+wrap worker bodies in `try/except` and surface failures, because the framework will not.
+
+**Tell it apart from** a wheel/loader problem: a loader failure fails on the FIRST call and
+usually leaves something in logcat/console; this one succeeds most of the time and leaves
+nothing anywhere.
+
+### UI doesn't refresh from a background thread
+
+**Cause:** 0.86 auto-updates after every event handler and after `main()` returns
+(`Session.after_event` → `__auto_update`), but that only fires at handler/`main`
+boundaries. Work running inside a `page.run_thread` worker is outside them.
+
+**Fix:** end a `run_thread` handler with an explicit `page.update()`. Everywhere else,
+mutating `page.controls` or a control's `controls` list inside a handler renders without
+one — an explicit `page.update()` is still correct and harmless, just not required.
+
+---
+
+## Layout on device
+
+### The first line of content renders under the status bar / notch
+
+**Symptom:** on a phone (both platforms) the top of the app is clipped by the status bar
+or the Dynamic Island; on the desktop window it looked fine.
+
+**Cause:** `page.add(...)` places content in the raw window; nothing insets it for system
+chrome.
+
+**Fix:** either an `ft.AppBar` on the page or an `ft.SafeArea(expand=True, content=...)`
+around the content resolves the top — you do not need both. They are not interchangeable
+though: `AppBar` insets the top and gives you a title bar, while `SafeArea` insets every
+edge, including the bottom home indicator. So reach for `SafeArea` when there is no app
+bar, and use both when you want a title *and* bottom-edge safety.
+
+Verified on an Android emulator and an iPhone simulator: with **neither**, the header text
+sits under the status bar on both platforms; with both, it is clear on both.
+
+### A blank white screen right after launching on an emulator
+
+**Not necessarily a failure.** Flet's first draw on a software-GPU emulator can take well
+over a minute — an observed `ActivityTaskManager: Displayed … +1m24s537ms`. A screenshot
+taken before that shows an empty screen with no error anywhere.
+
+**Fix:** wait for `Displayed`/`Fully drawn` in `logcat`, or poll the screenshot until it
+changes, before concluding anything. Check `console.log` and the app's storage dir for
+evidence the Python side already ran.
+
+---
+
+## Packaging the app (`pyproject.toml`)
+
+### Junk files ship inside the app bundle
+
+**Symptom:** the app payload (`assets/app.zip` on Android) contains `README.md`,
+`pyproject.toml`, `.gitignore`, `__pycache__/`, `.ruff_cache/` — anything sitting in the
+project directory.
+
+**Cause:** `[tool.flet.app] path = "."` packages the whole directory.
+
+**Fix:** keep app code in `src/` and set `path = "src"` (what `flet create` generates).
+Measured: an example app with `path = "."` shipped 7 files, of which 1 was the app.
+
+### Pinning `flet` in a snippet people copy
+
+Not a failure, a rot source: a bare `flet` resolves to the latest release, so a version in
+a pasted snippet is a pin the reader still carries two releases later. State a genuine
+minimum in prose instead. (Verified no-op today: `flet` and `flet>=0.86.0` both resolve to
+0.86.5.)
+
+---
+
+## API traps in 0.86
+
+These construct or import cleanly at a glance and fail at the point of use. All verified
+by introspection against an installed 0.86.5.
+
+| You write | What happens | Use instead |
+|---|---|---|
+| `ft.app(main)` | Deprecated since 0.80 — **and** `ft.app` is shadowed by the `flet.app` *module* once `ft.run` has been touched, so it can raise `TypeError: 'module' object is not callable` | `ft.run(main)` |
+| `ft.ElevatedButton(...)` | Deprecated since 0.80, deleted in 1.0 | `ft.Button` (or `ft.FilledButton` / `ft.TextButton`) |
+| `ft.Button(text="Save")` | `TypeError` — there is no `text` param | `ft.Button("Save")` or `content=` |
+| `ft.TextField(error_text=...)` | `TypeError: … Did you mean 'error_style'?` | `error=` |
+| `ft.Card(color=...)` | `TypeError: … Did you mean 'bgcolor'?` | `bgcolor=` |
+| `ft.DataRow(on_select_changed=...)` | `TypeError` | `on_select_change` (no "d") |
+| `page.open(dlg)` / `page.snack_bar` | Do not exist in 0.86 | `page.show_dialog(ft.SnackBar(content="…"))`, `page.pop_dialog()` |
+| `page.storage_paths` | Deprecated, **deleted in 0.90.0** | `ft.StoragePaths()` (async) or the env vars |
+| `ft.colors.RED` | `ft.colors` does not exist at all | `ft.Colors.RED` |
+| `ft.icons.DELETE` | Resolves to a *module*, then `AttributeError` | `ft.Icons.DELETE` |
+| `ft.Icons.DATABASE` | Not a member | `ft.Icons.STORAGE` / `TABLE_CHART` / `DATASET` |
+| `ft.UserControl`, `ft.MaterialState` | Removed / renamed | subclass a control or `ft.Component`; `ft.ControlState` |
+| `page.platform == "android"` | Always `False` — `PagePlatform` is a str-valued Enum but **not** a `str` subclass | `page.platform == ft.PagePlatform.ANDROID`, or `.value` / `.is_mobile()` / `.is_apple()` |
+
+Event handlers may take **zero** arguments or exactly one `ft.Event[T]` — a bare
+`def on_click():` is fully supported and is the cleanest choice when the event is unused.
+
+---
+
+## Platform differences at runtime
+
+### `ModuleNotFoundError: No module named 'pwd'` on iOS only
+
+**Cause:** Flet's iOS Python runtime ships no `pwd` module and leaves
+`LOGNAME`/`USER`/`LNAME`/`USERNAME` unset, so `getpass.getuser()` falls through to
+`import pwd` and raises. Android ships `pwd` and is fine, which is why this only ever
+shows up on an iOS run.
+
+**Fix (app side, before importing the offending package):**
+
+```python
+import os
+os.environ.setdefault("LOGNAME", os.environ.get("USER") or "fletuser")
+```
+
+Harmless on Android. Confirmed case: aiomysql's `DEFAULT_USER = getpass.getuser()`
+guarded only by `except KeyError`. General lesson: a **pure-Python** package is not
+guaranteed to import on iOS — test pure-Python packages on the iOS simulator too.
+
+### A library silently returns nothing on iOS (empty list, zero results, no exception)
+
+**Cause:** the iOS runtime reports `platform.system() == "iOS"` (PEP 730), not `"Darwin"`,
+so code gating Darwin/BSD behaviour on `== "Darwin"` silently takes the Linux branch on a
+Darwin ABI. The iOS twin of the Python 3.13+ `sys.platform == "android"` class.
+
+**Fix:** in app code, test `in ("Darwin", "iOS", "iPadOS")`. When the gate is inside a
+*dependency*, it needs a patched recipe instead — see the ifaddr entry in
+`failure-catalogue.md`.
+
+### Anything built for python-for-android / kivy
+
+**Symptom:** on Android, an **uncatchable** `SIGABRT` at import (ART `JniAbort`) that no
+`try/except` can trap; on iOS, `NotImplementedError` or a framework-load failure.
+
+**Cause:** the package resolves `org.kivy.android.PythonActivity` or keys platform
+detection off `ANDROID_ARGUMENT`/`KIVY_BUILD`. Those come from python-for-android, not
+Flet's `serious_python`. Verified with plyer 2.1.0 on both platforms; in the same run
+`autoclass("android.os.Build")` succeeded, proving pyjnius/JNI itself is fine under Flet.
+
+**Fix:** there is no packaging fix — the backends need porting. Use Flet's own APIs, or
+call native APIs directly:
+
+```toml
+[tool.flet.android]
+dependencies = ["pyjnius"]
+[tool.flet.ios]
+dependencies = ["pyobjus"]
+```
+
+On Android, get Flet's activity (not kivy's):
+
+```python
+import os
+from jnius import autoclass
+activity = autoclass(os.getenv("MAIN_ACTIVITY_HOST_CLASS_NAME")).mActivity
+```
+
+On iOS, load frameworks via pyobjus's managed constants
+(`load_framework(INCLUDE.Foundation)`), not absolute `/System/Library/Frameworks/…` paths,
+which fail on the simulator.
+
+---
+
+## Adding entries
+
+Same rules as `failure-catalogue.md`: lead with the **symptom as the reader sees it**,
+give the cause in one paragraph, then the fix. State how to tell it apart from the
+neighbouring wheel-layer failure when they look alike. If a claim is version-coupled, name
+the version.

@@ -43,6 +43,12 @@ Key structural facts:
 - **On push**, `detect` diffs `recipes/**` against the base and builds every
   changed recipe. The detected package list is ordered like `git diff` output
   (pathname-sorted) — do not rely on that ordering for dependency chains.
+- **Consumer docs don't trigger builds.** `recipes/*/README.md` and
+  `recipes/*/examples/**` are in the `files_ignore` of the changed-files step,
+  since neither reaches the wheel. Consequence worth knowing: a PR that touches
+  *only* those paths detects zero changed recipes and falls back to
+  `SMOKE_TEST_PACKAGES` — the same cheap build any non-recipe PR gets, not a
+  no-op. A docs+recipe PR still builds the recipe normally.
 - **Each matrix job builds ONLY its own package(s).** Its `dist/` (and the
   `dist-test/` find-links dir the mobile test resolves from) contains that
   job's wheels plus whatever `prebuild_recipes` added — nothing from sibling
