@@ -1,7 +1,7 @@
 # pyarrow csv rollup
 
-A slider sets how many orders to invent — 10 000 to 100 000. **Roll up** writes them to a CSV
-in app storage, reads the file straight back with
+A slider sets how many orders to invent — 10 000 to 100 000. Let it go and the app writes them
+to a CSV in app storage, reads the file straight back with
 [Arrow's own CSV reader](https://arrow.apache.org/docs/python/csv.html), totals it per city,
 and reports how long each half took.
 
@@ -30,10 +30,13 @@ What it demonstrates:
   whether the gzip codec is there — `yes` on iOS, `no` on Android, which is the one functional
   difference between the two platforms.
 - **Compute off the UI thread** — the round trip runs in
-  [`page.run_thread(...)`](https://flet.dev/docs/controls/page/#flet.Page.run_thread) with the
-  button disabled and a spinner up, and ends with the explicit
+  [`page.run_thread(...)`](https://flet.dev/docs/controls/page/#flet.Page.run_thread) with a
+  spinner up, and ends with the explicit
   [`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update) that a background
-  thread needs.
+  thread needs. It starts from the slider's
+  [`on_change_end`](https://flet.dev/docs/controls/slider/#flet.Slider.on_change_end) so one
+  gesture means one run, and the slider is disabled while that run is in flight — two
+  overlapping runs would be writing the same CSV.
 
 The row generator is seeded, so the totals come out the same on every install and two devices
 can be compared directly. Only the two Arrow steps are timed: inventing the rows in Python

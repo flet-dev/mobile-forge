@@ -60,7 +60,7 @@ def line(label, *cells):
 
 
 def main(page: ft.Page):
-    """Show a row-count slider, a Roll up button, and the per-city totals.
+    """Show a row-count slider driving the round trip, and the per-city totals.
 
     The header line is the build describing itself: how many compute functions
     this Arrow registers, and whether it carries the gzip codec — the one
@@ -74,10 +74,12 @@ def main(page: ft.Page):
     def start():
         """Hand the round trip to a background thread and show that it is running.
 
-        The button stays disabled until compute() re-enables it, so two runs
-        cannot write the same file at the same time.
+        Driven by the slider's on_change_end, which fires once on release —
+        on_change would start a fresh run for every pixel of the drag. The
+        slider is disabled until compute() re-enables it, so two runs can never
+        be writing the same CSV at the same time.
         """
-        button.disabled = True
+        count.disabled = True
         spinner.visible = True
         page.update()
         page.run_thread(compute)
@@ -118,7 +120,7 @@ def main(page: ft.Page):
             f"{os.path.getsize(CSV_PATH) / 1e6:.2f} MB of CSV parsed in {parsed:.0f} ms "
             f"into {table.nbytes / 1e6:.2f} MB of Arrow, grouped in {grouped:.0f} ms"
         )
-        button.disabled = False
+        count.disabled = False
         spinner.visible = False
         page.update()  # auto-update does not reach background threads
 
@@ -135,7 +137,14 @@ def main(page: ft.Page):
                         f"{'yes' if pa.Codec.is_available('gzip') else 'no'}",
                         size=12,
                     ),
-                    caption := ft.Text(),
+                    ft.Row(
+                        controls=[
+                            caption := ft.Text(expand=True),
+                            spinner := ft.ProgressRing(
+                                width=16, height=16, visible=False
+                            ),
+                        ]
+                    ),
                     count := ft.Slider(
                         min=10_000,
                         max=100_000,
@@ -144,16 +153,7 @@ def main(page: ft.Page):
                         round=0,
                         label="{value}",
                         on_change=show_rows,
-                    ),
-                    ft.Row(
-                        controls=[
-                            button := ft.Button(
-                                "Roll up", icon=ft.Icons.TABLE_ROWS, on_click=start
-                            ),
-                            spinner := ft.ProgressRing(
-                                width=16, height=16, visible=False
-                            ),
-                        ]
+                        on_change_end=start,
                     ),
                     results := ft.Column(spacing=4),
                     footer := ft.Text(size=11),
