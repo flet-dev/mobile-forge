@@ -1,0 +1,12 @@
+.venv/
+.flet/
+build/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+uv.lock
+*.duckdb
+*.duckdb.wal
+*.duckdb.tmp/
+*.parquet
+.tmp/

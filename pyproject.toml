@@ -64,4 +64,6 @@ skip = '.git,*.pdf,*.svg'
 # the way to make case sensitive skips of words etc
 ignore-regex = '\bNd\b'
 # case insensitive
-# ignore-words-list = ''
+# "crate" is Rust's unit of compilation, in the polars and pydantic-core notes;
+# "unparseable" is spelt this way in the scikit-learn example.
+ignore-words-list = 'crate,crates,unparseable'

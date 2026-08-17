@@ -1,0 +1,19 @@
+[project]
+name = "duckdb-readings-warehouse"
+version = "1.0.0"
+description = "A million sensor readings queried and exported to Parquet on device."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "duckdb==1.5.4",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.android]
+target_arch = ["arm64-v8a", "x86_64"]
+
+[tool.flet.app]
+path = "src"

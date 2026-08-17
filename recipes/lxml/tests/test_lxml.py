@@ -2,8 +2,8 @@ import unittest
 
 
 class TestLxml(unittest.TestCase):
-
     def test_basic(self):
+        """Loads the etree extension and parses a document through libxml2."""
         from lxml import etree
 
         parent = etree.fromstring(

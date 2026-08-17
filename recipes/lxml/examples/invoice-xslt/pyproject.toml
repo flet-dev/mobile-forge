@@ -1,0 +1,16 @@
+[project]
+name = "lxml-invoice-xslt"
+version = "1.0.0"
+description = "Validates a generated invoice against an XSD and renders it with XSLT."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "lxml==6.1.1",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

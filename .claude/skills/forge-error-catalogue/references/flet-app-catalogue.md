@@ -153,6 +153,34 @@ the versions used here: `numpy==2.4.6`, `pandas==3.0.3`, `scikit-learn==1.9.0` �
 and run `uv lock` there. Deleting `.venv` and `uv.lock` in place works too. Do not treat a
 build that reused an existing lock as evidence.
 
+### Never run two `flet build`s at the same time on one machine
+
+**Run them one after another.** Concurrent builds share mutable state and fail in three ways,
+two loud and one silent. All three observed on 2026-08-17 building three examples at once:
+
+| Symptom | Where the sharing is |
+|---|---|
+| `Gradle task assembleRelease failed` … `libpythonbundle.so missing in jniLibs/armeabi-v7a` from `:serious_python_android:splitStdlib_<abi>` | `serious_python_android` lives in the shared pub cache; every build populates the *same* `jniLibs`, so one wipes what another is reading |
+| `Error (Xcode): could not determine executable path for bundle`, often after `Waiting for another flutter command to release the startup lock...` | the Flutter startup lock and shared build state are global |
+| **Nothing at all** — the build reports OK and the app hangs on the Flet splash screen on device | the app payload got another build's site-packages |
+
+The silent one is the dangerous one, and it does not look like a build problem on device — it
+looks like a broken recipe. Diagnose it by opening the payload rather than guessing:
+
+```bash
+unzip -p build/apk/<app>.apk assets/sitepackages.zip > /tmp/sp.zip && unzip -l /tmp/sp.zip | grep -c <your-package>
+```
+
+A count of 0 for the package the app is *about* (and a nonzero count for some other example's
+package) is the crossed bundle. The measured case: the lxml example's APK carried 0 lxml
+entries and 9 `pydantic_core` ones, with lxml's native `.so` files correctly present in
+`lib/<abi>/` — so the jniLibs half was right and only the Python half was crossed. A clean
+rebuild of that one example gave 75 lxml entries and 0 pydantic.
+
+Sequential builds of the same three examples all passed. Parallelism buys nothing here anyway:
+each build already saturates the machine, and a starved Android emulator then wedges its own
+SystemUI (see the blank-screen entry above).
+
 ### Pinning `flet` in a snippet people copy
 
 Not a failure, a rot source: a bare `flet` resolves to the latest release, so a version in

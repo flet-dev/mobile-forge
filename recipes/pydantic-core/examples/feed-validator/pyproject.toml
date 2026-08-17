@@ -1,0 +1,16 @@
+[project]
+name = "pydantic-feed-validator"
+version = "1.0.0"
+description = "Validates a generated JSON order feed and rejects the bad records."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "pydantic==2.13.4",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
