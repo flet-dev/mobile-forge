@@ -1,0 +1,16 @@
+[project]
+name = "bcrypt-cost-factor-explorer"
+version = "1.0.0"
+description = "Measures what each bcrypt cost factor costs on the device."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "bcrypt==5.0.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

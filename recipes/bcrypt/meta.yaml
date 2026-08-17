@@ -5,4 +5,6 @@ package:
 build:
   number: 1
   script_env:
+    # Force the TARGET sysconfigdata: without it setuptools-rust reads the build
+    # Python's and bakes host paths into the extension.
     _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'

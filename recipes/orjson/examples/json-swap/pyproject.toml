@@ -1,0 +1,16 @@
+[project]
+name = "orjson-json-swap"
+version = "1.0.0"
+description = "Times orjson against the stdlib json on device and shows where the two disagree."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "orjson==3.11.9",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

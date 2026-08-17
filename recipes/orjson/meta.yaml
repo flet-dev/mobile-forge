@@ -5,4 +5,6 @@ package:
 build:
   number: 10
   script_env:
+    # Force the TARGET sysconfigdata: without it PyO3 reads the build Python's
+    # and bakes host paths into the extension.
     _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
