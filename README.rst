@@ -319,6 +319,16 @@ is reviewed in the same pull request and bumped in the same commit as the recipe
     Python (cryptography ships 43.0.1 for cp312/cp313 and 48.0.0 for cp314): a single ``==``
     would fail to resolve on the other legs, so leave that package unpinned and pin only Flet.
 
+    **Raise** ``requires-python`` **to the floor of what you pinned.** ``flet create`` writes
+    ``>=3.10``, and uv resolves for every version in that range rather than only the
+    interpreter in use — so an ``==`` pin on a package whose own floor is higher makes the
+    lowest split unsatisfiable and ``flet build`` fails outright with *No solution found when
+    resolving dependencies for split*. At the versions used here ``numpy``, ``pandas`` and
+    ``scikit-learn`` need ``>=3.11`` and ``scipy`` needs ``>=3.12``. A stale ``.venv`` or
+    ``uv.lock`` hides this completely, so check it the way a consumer meets it: copy the
+    ``pyproject.toml`` alone into an empty directory and run ``uv lock`` there. A build that
+    reused an existing lock proves nothing.
+
     Examples belong here and **never** under ``tests/``: everything in ``tests/`` is copied
     into the on-device test app and collected by pytest. Do not put a ``meta.yaml`` in an
     example directory either — that is what marks a directory as a buildable recipe.
