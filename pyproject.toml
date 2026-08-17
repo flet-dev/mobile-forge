@@ -62,7 +62,9 @@ multi_line_output = 3
 [tool.codespell]
 skip = '.git,*.pdf,*.svg'
 # the way to make case sensitive skips of words etc
-ignore-regex = '\bNd\b'
+# the second alternative is PyYAML's escaped 'caf\xE9', quoted verbatim in the pyyaml
+# notes — matched precisely rather than allowing the bare word "caf" everywhere.
+ignore-regex = '\bNd\b|caf\\\\xE9'
 # case insensitive
 # "crate" is Rust's unit of compilation, in the polars and pydantic-core notes;
 # "unparseable" is spelt this way in the scikit-learn example.

@@ -161,13 +161,16 @@ stopped updating, not like an error.
   Python 3.14, Android reports libmpdec **2.5.1** and iOS **4.0.0**. Nothing in pydantic
   depends on the difference, but it is the kind of thing to check on screen rather than assume
   when a `Decimal` result differs between the two.
-- **On Android the extension module has no `__file__` at all.** Flet relocates every native
+- **On Android this extension module has no `__file__` at all.** Flet relocates every native
   extension out of site-packages, leaving a `.soref` pointer behind: on iOS the loaded module
   still reports a path (`_pydantic_core.fwork`), while on Android
   `getattr(pydantic_core._pydantic_core, "__file__", None)` is `None` — the example's header
-  prints `no __file__` there. Any code that locates a resource relative to a native module's
-  `__file__` breaks on Android for this reason, and the failure is an `AttributeError` or a
-  `TypeError` on `None`, not an import error.
+  prints `no __file__` there. It is not a blanket rule for the platform, though: under the same
+  Flet version [`pyyaml`](../pyyaml)'s `_yaml.__file__` on Android reads `libyaml-_yaml.so`, a
+  bare `jniLibs` filename. So the attribute may be missing *or* point somewhere unrelated to the
+  package. Either way, code locating a resource relative to a native module's `__file__` breaks
+  on Android — as an `AttributeError`, a `TypeError` on `None`, or a wrong path, never as an
+  import error.
 - **Zone-aware datetimes need no `tzdata` wheel.** A `datetime` string's offset is parsed inside
   the extension and comes back as pydantic-core's own
   [`TzInfo`](https://docs.pydantic.dev/latest/api/pydantic_core/#pydantic_core.TzInfo), which is
