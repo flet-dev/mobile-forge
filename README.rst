@@ -303,6 +303,13 @@ is reviewed in the same pull request and bumped in the same commit as the recipe
     must build as-is, because the per-example ``pyproject.toml`` is itself part of what is
     being taught.
 
+    **Every function in the example carries a docstring**, including ``main`` and the nested
+    handlers. Say what it does and, where it is not obvious, why it is shaped that way — the
+    example is teaching material, and a reader should never have to infer a function's job
+    from its body. Keep them proportionate: a line for a small helper, a few sentences for
+    the one doing the package's real work. The same restraint applies as to comments — a
+    docstring that restates the code is noise.
+
     **Pin the example's dependencies with** ``==`` — both Flet and the recipe's own package.
     The example is the artifact that gets built and run on a device, so its pins are the
     record of a combination that was verified; left floating, it silently drifts onto

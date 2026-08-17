@@ -1,7 +1,7 @@
 # numpy bell curve
 
 Each sample on this screen is the average of *k* uniform random draws. Move the slider to
-change *k*, tap **Draw**, and the histogram redraws: flat at k=1, a triangle at k=2,
+change *k*, and the histogram redraws when you let go: flat at k=1, a triangle at k=2,
 unmistakably bell-shaped by k=4, a narrow spike by k=12. The measured standard deviation
 sits next to the 1/√(12k) the central limit theorem predicts, and the two land within half
 a percent of each other every time.
@@ -24,7 +24,8 @@ What it demonstrates:
   64-bit on iOS, which is the one place these wheels differ from each other.
 - **Compute off the UI thread** — the sampling runs in
   [`page.run_thread(...)`](https://flet.dev/docs/controls/page/#flet.Page.run_thread) with
-  the button disabled and a spinner up, and the handler ends with the explicit
+  a spinner up, started from the slider's `on_change_end` so one gesture means one run,
+  and the handler ends with the explicit
   [`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update) that a
   background thread needs.
 

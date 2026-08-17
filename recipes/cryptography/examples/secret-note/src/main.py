@@ -26,13 +26,29 @@ vault_lock = threading.Lock()
 
 
 def derive_key(passphrase: str, salt: bytes) -> bytes:
-    """Turn a passphrase into a Fernet key. Slow on purpose."""
+    """Turn a passphrase into a Fernet key. Slow on purpose.
+
+    The salt comes from the caller and is stored beside the ciphertext, because the
+    same passphrase has to derive the same key again on the next launch.
+    """
     kdf = Scrypt(salt=salt, length=32, n=SCRYPT_N, r=SCRYPT_R, p=SCRYPT_P)
     return base64.urlsafe_b64encode(kdf.derive(passphrase.encode()))
 
 
 def main(page: ft.Page):
+    """A passphrase field, the note itself, Lock and Unlock, and a status line.
+
+    The header names the cryptography build and the OpenSSL it links, both of which
+    change with the Python version the app is built for.
+    """
+
     def lock(passphrase: str, text: str):
+        """Seal the note into the vault file, salt first, ciphertext after.
+
+        A fresh salt each time means the same passphrase and the same note still
+        produce a different file. Runs in the thread pool, since the derivation is
+        the slow part.
+        """
         salt = os.urandom(SALT_BYTES)
         with vault_lock:
             token = Fernet(derive_key(passphrase, salt)).encrypt(text.encode())
@@ -43,6 +59,12 @@ def main(page: ft.Page):
         finish(f"Sealed {len(token)} bytes of ciphertext.")
 
     def unlock(passphrase: str):
+        """Re-derive the key from the stored salt and bring the note back.
+
+        A wrong passphrase is an ordinary outcome here, not a failure: Fernet raises
+        InvalidToken, which is caught and shown on the field. Left uncaught in a
+        worker thread it would surface nowhere at all.
+        """
         with vault_lock:
             with open(VAULT, "rb") as f:
                 blob = f.read()
@@ -58,10 +80,16 @@ def main(page: ft.Page):
         finish(f"Opened {len(plaintext)} bytes of plaintext.")
 
     def finish(message: str):
+        """Land a background handler's outcome on the screen."""
         status.value = message
         page.update()  # auto-update does not reach background threads
 
     def start(handler, *args):
+        """Check the passphrase, then hand the derivation to the thread pool.
+
+        Both buttons come through here so that the empty-passphrase case and the
+        interim status are written once rather than twice.
+        """
         passphrase = (passphrase_field.value or "").strip()
         if not passphrase:
             passphrase_field.error = "Enter a passphrase"
@@ -73,12 +101,19 @@ def main(page: ft.Page):
         page.run_thread(handler, passphrase, *args)
 
     def on_lock():
+        """Seal whatever is in the note field."""
         start(lock, note.value or "")
 
     def on_unlock():
+        """Reopen the sealed note."""
         start(unlock)
 
     def refresh():
+        """Show whether a vault already exists, which is all the app knows at startup.
+
+        The note stays read-only while it is sealed: the field is empty then, and
+        typing into it would look like editing the note rather than replacing it.
+        """
         sealed = os.path.exists(VAULT)
         note.read_only = sealed
         status.value = "Sealed — unlock it." if sealed else "Nothing sealed yet."

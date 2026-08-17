@@ -51,6 +51,7 @@ def source_image():
 
 
 def encode(img):
+    """Encode to PNG bytes, which ft.Image.src takes directly — no temp file, no base64."""
     buffer = io.BytesIO()
     img.save(buffer, "PNG")
     return buffer.getvalue()
@@ -60,12 +61,21 @@ SOURCE = source_image()
 
 
 def main(page: ft.Page):
+    """Show the filtered picture, the codecs this build has, and the two controls."""
+
     def render():
+        """Raise the spinner and hand the filtering to a background thread."""
         spinner.visible = True
         page.update()
         page.run_thread(compute)
 
     def compute():
+        """Apply the chosen effect at the chosen strength and swap in the new bytes.
+
+        Filtering and PNG encoding are the compiled loops this app keeps off the UI
+        thread. Every effect returns a new image and leaves the source alone, so each
+        render starts from the same untouched picture rather than compounding.
+        """
         name = effect.value
         amount = strength.value
         data = encode(EFFECTS[name](SOURCE, amount))

@@ -52,9 +52,20 @@ SPECIES = np.array(["setosa"] * 10 + ["versicolor"] * 10 + ["virginica"] * 10)
 
 
 def main(page: ft.Page):
+    """Two petal measurements, a Classify button, and the species the model predicts.
+
+    The line at the bottom says whether this launch fitted the model or reloaded the
+    one in app storage, and prints the path it lives at.
+    """
+
     model = None
 
     def prepare():
+        """Reload the saved model, or fit one and save it if this is the first launch.
+
+        Fitting is the expensive half, so it happens once per install rather than once
+        per launch. Runs in the thread pool and enables Classify when it lands.
+        """
         nonlocal model
         if os.path.exists(MODEL_PATH):
             model = joblib.load(MODEL_PATH)
@@ -67,6 +78,12 @@ def main(page: ft.Page):
         page.update()  # auto-update does not reach background threads
 
     def classify():
+        """Predict the species for the two typed measurements.
+
+        Both fields are free text, so anything unparseable is answered on screen
+        rather than raised. Stays on the event handler, which is why nothing here
+        updates the page itself.
+        """
         try:
             petal = [[float(length.value), float(width.value)]]
         except (TypeError, ValueError):

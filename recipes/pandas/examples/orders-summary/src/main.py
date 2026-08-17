@@ -18,6 +18,7 @@ KEYS = {"region": "Region", "product": "Product", "month": "Month"}
 
 
 def write_sample_csv():
+    """Write the app's own CSV on first launch, so nothing has to be bundled or fetched."""
     rng = random.Random(20260816)  # seeded, so every install shows the same totals
     start = date(2026, 1, 1)
     pd.DataFrame(
@@ -35,6 +36,11 @@ def write_sample_csv():
 
 
 def load_orders():
+    """Read the CSV into a frame and derive the two columns the summaries need.
+
+    Writes the sample file first when it is missing, so a fresh install has something to
+    show and every launch after that is a plain read of a file the app owns.
+    """
     if not os.path.exists(CSV_PATH):
         write_sample_csv()
     orders = pd.read_csv(CSV_PATH, parse_dates=["date"])
@@ -46,6 +52,12 @@ def load_orders():
 
 
 def summarise(orders, key):
+    """Group the orders by one column into counts, units and revenue, biggest first.
+
+    The three differently-aggregated columns come from a single named aggregation rather
+    than three passes, and the index is reset so the group label arrives as an ordinary
+    column that the table code can read like any other.
+    """
     summary = orders.groupby(key).agg(
         orders=("units", "size"),
         units=("units", "sum"),
@@ -55,9 +67,19 @@ def summarise(orders, key):
 
 
 def main(page: ft.Page):
+    """Show the totals for the chosen grouping, with the CSV's full path at the foot.
+
+    The frame is read once and kept in a closure variable, so switching between Region,
+    Product and Month re-groups what is already in memory instead of re-reading the file.
+    """
     orders = None
 
     def refresh():
+        """Put the screen into its loading state and run the grouping off the UI thread.
+
+        Disabling the selector for the duration keeps a second tap from starting a
+        parallel group-by that could finish out of order and overwrite the newer table.
+        """
         results.controls = []
         choice.disabled = True
         spinner.visible = True
@@ -65,6 +87,13 @@ def main(page: ft.Page):
         page.run_thread(compute)
 
     def compute():
+        """Group the frame and rebuild the table, on the thread refresh started.
+
+        The CSV is read on the first call only, which is why the read lives here rather
+        than at import time: a slow first read must not hold up the first frame. The
+        header line reports which string backend pandas picked — `python`, or `pyarrow`
+        if that optional package is installed.
+        """
         nonlocal orders
         if orders is None:
             orders = load_orders()

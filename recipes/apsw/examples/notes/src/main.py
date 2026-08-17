@@ -26,7 +26,18 @@ db_lock = threading.Lock()
 
 
 def main(page: ft.Page):
+    """A field to type a note into, an Add button, and the rows already in the table.
+
+    The header prints the SQLite apsw embeds next to the one the stdlib sees, which is
+    the quickest way to see how far apart they are on a given device.
+    """
+
     def load():
+        """Rebuild the list from the table.
+
+        Leaves the update to the caller: this runs both at startup, where auto-update
+        covers it, and from a worker thread, where it does not.
+        """
         with db_lock:
             # Materialise inside the lock: an unconsumed cursor keeps the
             # connection busy, which is what another thread would collide with.
@@ -34,12 +45,18 @@ def main(page: ft.Page):
         notes.controls = [ft.Text(f"{note_id}. {text}") for note_id, text in rows]
 
     def insert(text: str):
+        """Write one note and redraw the list. Runs in the thread pool."""
         with db_lock:
             db.execute("INSERT INTO notes(text) VALUES(?)", (text,))
         load()
         page.update()  # auto-update does not reach background threads
 
     def add():
+        """Take the typed note and send the write off the UI thread.
+
+        Serves both the button and the field's on_submit, and clears the field before
+        dispatching so a second tap cannot resend the same text.
+        """
         text = (field.value or "").strip()
         if text:
             field.value = ""

@@ -17,10 +17,19 @@ BLAS = f"{_blas.get('name', 'unknown')} {_blas.get('version', '')}".strip()
 
 
 def model(t, amplitude, decay, frequency, phase):
+    """The damped sinusoid, used both to generate the signal and to fit it back."""
     return amplitude * np.exp(-decay * t) * np.sin(2.0 * np.pi * frequency * t + phase)
 
 
 def analyse(noise):
+    """Bury the true waveform in noise, filter it, and fit its parameters back out.
+
+    Three stages of compiled scipy in one call — a Butterworth low-pass, an FFT to
+    find the dominant frequency, and a least-squares fit seeded from that peak.
+    Returns the peak, the fitted parameters keyed by the same names as TRUE, and
+    the RMS error against the noise-free signal, which is what says whether the
+    recovery actually worked.
+    """
     clean = model(t, **TRUE)
     noisy = clean + np.random.default_rng().normal(scale=noise, size=t.size)
 
@@ -42,22 +51,42 @@ def analyse(noise):
 
 
 def row(label, *cells):
+    """One line of the results table: a label, then a column per value."""
     return ft.Row(
         controls=[ft.Text(label, expand=3), *(ft.Text(c, expand=2) for c in cells)]
     )
 
 
 def main(page: ft.Page):
+    """Show a noise slider, a Fit button, and a table of true against fitted values.
+
+    The header line reports the scipy build the app is running on, including the
+    BLAS it is linked against — OpenBLAS on both mobile platforms, where a desktop
+    Mac would say Accelerate.
+    """
+
     def show_noise():
+        """Report the noise the next fit will use; the slider sets it, Fit runs it."""
         caption.value = f"Noise added before filtering: {noise.value:.1f}"
 
     def fit():
+        """Run the analysis on a background thread, so the UI stays live.
+
+        The button stays disabled until compute() re-enables it, which keeps two
+        fits from overlapping and writing the table in the wrong order.
+        """
         button.disabled = True
         spinner.visible = True
         page.update()
         page.run_thread(compute)
 
     def compute():
+        """Fit at the slider's noise level and fill in the results table.
+
+        The body of the thread fit() starts. Push the noise up and the fitted
+        amplitude starts to wander while the frequency holds: the spectrum peak
+        survives noise that the tail of a decaying signal does not.
+        """
         peak, fitted, error = analyse(noise.value)
         results.controls = [
             row("", "true", "fitted"),
