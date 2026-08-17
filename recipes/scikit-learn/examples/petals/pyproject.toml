@@ -2,7 +2,7 @@
 name = "scikit-learn-petals"
 version = "1.0.0"
 description = "An iris classifier fitted on device and cached in app storage."
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 dependencies = [
     "flet==0.86.5",

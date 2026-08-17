@@ -1,0 +1,21 @@
+[project]
+name = "matplotlib-zoomable-series"
+version = "1.0.0"
+description = "A pannable, zoomable matplotlib figure driven by MatplotlibChart."
+requires-python = ">=3.11"
+
+dependencies = [
+    "flet==0.86.5",
+    "flet-charts==0.86.5",
+    "matplotlib==3.10.9",
+    "numpy==2.4.6",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
+
+[tool.flet.android]
+extract_packages = ["matplotlib"]

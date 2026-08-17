@@ -82,6 +82,32 @@ bar, and use both when you want a title *and* bottom-edge safety.
 Verified on an Android emulator and an iPhone simulator: with **neither**, the header text
 sits under the status bar on both platforms; with both, it is clear on both.
 
+### A control row shows Flutter's yellow/black "OVERFLOWED BY n PIXELS" stripes
+
+**Symptom:** a striped marker down one edge of the screen, with the overflow amount
+printed sideways in red. Only ever visible on a narrow (phone-width) screen.
+
+**Cause:** a non-scrolling `ft.Row` whose children are wider than the viewport. It is not
+always *your* Row — a composite control can carry one. `flet_charts`'
+`MatplotlibChartWithToolbar` lays six `IconButton`s plus a `Dropdown` and a message `Text`
+in one plain `Row`, which overflows by ~122 px at 393 pt (verified on an iPhone simulator).
+
+**Fix:** for your own rows, `scroll=ft.ScrollMode.AUTO`, `ft.ResponsiveRow`, or `wrap=True`.
+For a composite whose internals you should not reach into, drop to the plain control and
+build the toolbar yourself — `MatplotlibChart` exposes `home()`, `back()`, `forward()`,
+`pan()` and `zoom()` publicly, so three buttons reproduce what a phone actually needs.
+
+### Date-axis tick labels collide into an unreadable smear once zoomed
+
+**Symptom:** a matplotlib date axis is legible at full extent, then overlaps into a solid
+run of digits after zooming in (`202120122-01212-032203…`).
+
+**Cause:** the default `AutoDateFormatter` spells each tick out in full, and a phone-width
+axis has no room for them once the locator switches to days.
+
+**Fix:** `mdates.ConciseDateFormatter(locator)` with an `AutoDateLocator` — it omits
+whatever the neighbouring tick already implies, so labels stay short at every zoom level.
+
 ### A blank white screen right after launching on an emulator
 
 **Not necessarily a failure.** Flet's first draw on a software-GPU emulator can take well
@@ -106,6 +132,26 @@ project directory.
 
 **Fix:** keep app code in `src/` and set `path = "src"` (what `flet create` generates).
 Measured: an example app with `path = "."` shipped 7 files, of which 1 was the app.
+
+### `flet build` fails resolving deps, but only from a clean checkout
+
+**Symptom:** `No solution found when resolving dependencies for split (markers:
+python_full_version == '3.10.*')` — e.g. "numpy==2.4.6 depends on Python>=3.11 … your
+project's requirements are unsatisfiable". The same project built fine minutes earlier.
+
+**Cause:** `flet create` writes `requires-python = ">=3.10"`, and uv resolves for *every*
+version in that range, not just the interpreter in use. A dependency pinned with `==` whose
+own floor is higher than 3.10 makes the lowest split unsatisfiable. It stays hidden while a
+`.venv`/lock from before the pin exists, and only surfaces once those are removed — which
+is exactly the state a consumer cloning the repo is in.
+
+**Fix:** raise `requires-python` to the true floor of the pinned set. Floors that bite at
+the versions used here: `numpy==2.4.6`, `pandas==3.0.3`, `scikit-learn==1.9.0` → `>=3.11`;
+`scipy==1.18.0` → `>=3.12`.
+
+**Verify like a consumer would:** copy the `pyproject.toml` alone into an empty directory
+and run `uv lock` there. Deleting `.venv` and `uv.lock` in place works too. Do not treat a
+build that reused an existing lock as evidence.
 
 ### Pinning `flet` in a snippet people copy
 
@@ -136,6 +182,7 @@ by introspection against an installed 0.86.5.
 | `ft.Icons.DATABASE` | Not a member | `ft.Icons.STORAGE` / `TABLE_CHART` / `DATASET` |
 | `ft.UserControl`, `ft.MaterialState` | Removed / renamed | subclass a control or `ft.Component`; `ft.ControlState` |
 | `page.platform == "android"` | Always `False` — `PagePlatform` is a str-valued Enum but **not** a `str` subclass | `page.platform == ft.PagePlatform.ANDROID`, or `.value` / `.is_mobile()` / `.is_apple()` |
+| `ft.SegmentedButton(selected={"a"})` | `TypeError: can not serialize 'set' object` from `msgpack._packer`, **only once a real client attaches** — the docstring still says "a set of `Segment.value`s", but the field is declared `list[str]` | `selected=["a"]`, read back with `selected[0]` |
 
 Event handlers may take **zero** arguments or exactly one `ft.Event[T]` — a bare
 `def on_click():` is fully supported and is the cleanest choice when the event is unused.

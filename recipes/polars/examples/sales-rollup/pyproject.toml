@@ -1,0 +1,19 @@
+[project]
+name = "polars-sales-rollup"
+version = "1.0.0"
+description = "Joins and groups a synthetic order book with the polars lazy API."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "polars==1.33.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.android]
+target_arch = ["arm64-v8a", "x86_64"]
+
+[tool.flet.app]
+path = "src"

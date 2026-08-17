@@ -1,11 +1,12 @@
 [project]
-name = "numpy-bell-curve"
+name = "matplotlib-heatmap-image"
 version = "1.0.0"
-description = "Averages uniform random draws with numpy until a bell curve appears."
+description = "Renders a matplotlib heat map to PNG bytes and shows it in an Image."
 requires-python = ">=3.11"
 
 dependencies = [
     "flet==0.86.5",
+    "matplotlib==3.10.9",
     "numpy==2.4.6",
 ]
 
@@ -14,3 +15,6 @@ dev = ["flet-cli", "flet-desktop", "flet-web"]
 
 [tool.flet.app]
 path = "src"
+
+[tool.flet.android]
+extract_packages = ["matplotlib"]

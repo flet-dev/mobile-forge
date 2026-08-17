@@ -2,7 +2,7 @@
 name = "scipy-signal-fit"
 version = "1.0.0"
 description = "Filters a noisy waveform with scipy and fits its parameters back out."
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 
 dependencies = [
     "flet==0.86.5",
