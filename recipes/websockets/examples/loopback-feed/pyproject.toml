@@ -1,0 +1,16 @@
+[project]
+name = "websockets-loopback-feed"
+version = "1.0.0"
+description = "Streams a WebSocket feed from a server to a client on loopback."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "websockets==16.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

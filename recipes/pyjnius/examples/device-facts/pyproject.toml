@@ -1,0 +1,20 @@
+[project]
+name = "pyjnius-device-facts"
+version = "1.0.0"
+description = "Android platform facts read through JNI, each checked against a second source."
+requires-python = ">=3.12"
+
+dependencies = [
+    "flet==0.86.5",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.android]
+dependencies = [
+    "pyjnius==1.7.0",
+]
+
+[tool.flet.app]
+path = "src"

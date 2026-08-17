@@ -1,0 +1,16 @@
+[project]
+name = "zstandard-level-lab"
+version = "1.0.0"
+description = "Measures zstd against the stdlib codecs on device and shows what each level costs."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "zstandard==0.25.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

@@ -1,0 +1,17 @@
+[project]
+name = "rapidfuzz-fuzzy-search"
+version = "1.0.0"
+description = "Fuzzy search over 4,000 in-app strings, cross-checked three ways."
+requires-python = ">=3.11"
+
+dependencies = [
+    "flet==0.86.5",
+    "rapidfuzz==3.14.5",
+    "numpy==2.4.6",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

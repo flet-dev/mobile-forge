@@ -1,0 +1,18 @@
+[project]
+name = "psutil-sandbox-probe"
+version = "1.0.0"
+description = "Runs a fixed list of psutil queries and shows which ones the sandbox allows."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.android]
+dependencies = ["psutil==7.2.2"]
+
+[tool.flet.app]
+path = "src"
