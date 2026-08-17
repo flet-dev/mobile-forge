@@ -1546,6 +1546,46 @@ app's Python. opencv-python 5.0.0.93 `mobile.patch`.
 
 ---
 
+### iOS: `symbol not found in flat namespace '_<sym>'` at dlopen, where the symbol belongs to a TRANSITIVE dep of a static `flet-lib*` (`_geod_init`, `_TIFFClientOpen`, `_psl_builtin`, …)
+
+**Cause:** distinct from the OBJECT-library entry above, and far more common in the
+geospatial chain. Every iOS `flet-lib*` is a **static archive** (`-DBUILD_SHARED_LIBS=OFF`).
+When the upper library was linked at *its* build time, the linker kept only the object
+files whose symbols that library itself referenced; anything a *consumer* would later need
+was left undefined inside the `.a`. Nothing complains at link time, because iOS links the
+extension with `-undefined dynamic_lookup`. At runtime, dyld resolves the flat namespace
+eagerly at dlopen and aborts on the first miss.
+
+The tell is a symbol that plainly belongs to a *different* library than the one you linked:
+`import fiona` failing on `_geod_init` (that is PROJ, not GDAL), or on `_TIFFClientOpen`
+(libtiff) or `_psl_builtin` (libpsl).
+
+**Fix:** name the whole dependency chain, not just the top library, so each extension's
+link command pulls the missing objects straight out of the archives. In the recipe's
+iOS branch:
+
+```yaml
+# {% if sdk != 'android' %}
+    GDAL_LIBS: gdal,proj,tiff,curl,psl,sqlite3,jpeg,ssl,crypto,z
+    LDFLAGS: '-undefined dynamic_lookup'
+# {% endif %}
+```
+
+Shipped in `recipes/{gdal,fiona,rasterio,pyogrio}` (`GDAL_LIBS`) and `recipes/pyproj`
+(`PROJ_LIBS`, minus `gdal`). **Mind the variable name** — pyogrio takes
+`GDAL_LIBRARY_PATH` (one directory), fiona and rasterio take `GDAL_LIB_PATH` (a
+colon-separated list); they differ by one word and are easy to copy wrong.
+
+The real fix is upstream of all of them: align `flet-libgdal`'s iOS cmake with its Android
+side (`-DGDAL_USE_CURL=OFF`, `-DGDAL_USE_TIFF_INTERNAL=ON`, …) so `libgdal.a` stops
+leaking references in the first place. Until that lands, every new GDAL or PROJ consumer
+needs the same list.
+
+**Only a device or simulator catches this** — the wheel builds green, and you cannot
+`import` an iOS wheel on the macOS build host.
+
+---
+
 ### `ImportError: dlopen failed: library "libc++_shared.so" not found` (Android, at first import)
 
 **Cause:** ujson, grpcio, opencv-python, pandas, etc. all link C++ code against NDK's libc++_shared. The `.so` they ship has a runtime DT_NEEDED entry for `libc++_shared.so`, which has to be packaged into the APK's `lib/<abi>/`. Without `flet-libcpp-shared` as a host dep, it isn't.

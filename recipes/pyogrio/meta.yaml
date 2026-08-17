@@ -15,23 +15,17 @@ build:
   number: 1
   script_env:
     GDAL_VERSION: 3.13.1
+    # pyogrio reads GDAL_LIBRARY_PATH (one directory). fiona and rasterio read
+    # GDAL_LIB_PATH (a colon-separated list) — one word apart, easy to copy wrong.
     GDAL_LIBRARY_PATH: '{platlib}/opt/lib'
     GDAL_INCLUDE_PATH: '{platlib}/opt/include'
 # {% if sdk != 'android' %}
-    # On iOS every native dep is a static archive (libgdal, libproj,
-    # libtiff, libcurl, libpsl all `-DBUILD_SHARED_LIBS=OFF`). When
-    # GDAL was linked at its own build time the linker only kept
-    # object files for symbols GDAL itself referenced — anything else
-    # was left undefined in libgdal.a. iOS dyld eagerly resolves the
-    # flat namespace at dlopen and aborts on the first miss
-    # (`_geod_init`, `_TIFFClientOpen`, `_psl_builtin`, …). Adding the
-    # full dep chain to GDAL_LIBS makes pyogrio's `_io`/`_ogr` link
-    # commands pull every missing object straight out of its archive.
-    #
-    # Identical fix shipped in recipes/fiona, recipes/gdal. The right
-    # long-term fix lives in `flet-libgdal`: align iOS cmake with
-    # Android (`-DGDAL_USE_CURL=OFF`, `-DGDAL_USE_TIFF_INTERNAL=ON`,
-    # …) so libgdal.a stops leaking refs at all.
+    # iOS links every flet-lib* as a static archive, so the upper library is
+    # missing the objects its own dependencies need; dyld aborts at dlopen on
+    # the first unresolved symbol (_geod_init). Naming the whole chain here makes
+    # each extension's link pull them in. Full explanation, and the upstream fix
+    # that would retire it, in forge-error-catalogue: "symbol not found in flat
+    # namespace" (iOS, transitive dep of a static flet-lib*).
     GDAL_LIBS: gdal,proj,tiff,curl,psl,sqlite3,jpeg,ssl,crypto,z
     LDFLAGS: '-undefined dynamic_lookup'
 # {% endif %}

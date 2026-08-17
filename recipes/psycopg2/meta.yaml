@@ -12,9 +12,10 @@ build:
 
 requirements:
   host:
-    # openssl resolves libpq's TLS symbols (-lssl -lcrypto, added by setup.py's
-    # finalize_darwin since the build host is macOS). It lives in the base flet
-    # runtime, so it isn't promoted to Requires-Dist.
+    # openssl resolves libpq's TLS symbols. The -lssl -lcrypto come from
+    # mobile.patch: setup.py dispatches finalize_<sys.platform>, which under
+    # crossenv is ios/android, so its finalize_darwin never runs. openssl lives
+    # in the base flet runtime, so it isn't promoted to Requires-Dist.
     - openssl ^3.0.12
   host_build:
     # flet-libpq is STATICALLY folded into _psycopg.so (static_libpq=1,
