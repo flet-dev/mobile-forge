@@ -153,6 +153,34 @@ the versions used here: `numpy==2.4.6`, `pandas==3.0.3`, `scikit-learn==1.9.0` �
 and run `uv lock` there. Deleting `.venv` and `uv.lock` in place works too. Do not treat a
 build that reused an existing lock as evidence.
 
+### A build reports OK but the app on screen is a DIFFERENT app
+
+**Symptom:** `flet build` succeeds, the artifact installs, and the running app shows content that
+does not exist anywhere in your `src/main.py` — a screen from some other project entirely.
+
+**Cause:** the packaged payload was reused from a stale cache rather than rebuilt. Observed
+2026-08-18: an iOS bundle shipped an 8,191-byte `main.pyc` from an unrelated probe app while the
+same build's `build/python-app/main.pyc` was the correct 22,847-byte file, and the APK from that
+same run was correct. `rm -rf build` alone did NOT prevent it; the hashes under `build/.hash`
+(`package`, `template-*`, `icons`, `splashes`) let the iOS half skip re-packaging.
+
+**Fix:** clear the hash cache and the Flutter tree, not just `build/`:
+
+```bash
+rm -rf build/.hash build/flutter build/ios-simulator && uv run flet build ios-simulator
+```
+
+**Detect it before shipping — never trust "apk OK" alone.** Diff the payload against something
+only your code contains:
+
+```bash
+strings "$(find build/ios-simulator -name main.pyc -path '*app*' | head -1)" | grep -c '<a string only your app has>'
+```
+
+Do the same for Android via `assets/app.zip`. A payload whose size or contents disagree with
+`build/python-app/main.pyc` is the tell. This is the sibling failure to the crossed-`sitepackages`
+bundle above: there the *dependency* half was wrong, here the *app* half is.
+
 ### Never run two `flet build`s at the same time on one machine
 
 **Run them one after another.** Concurrent builds share mutable state and fail in three ways,

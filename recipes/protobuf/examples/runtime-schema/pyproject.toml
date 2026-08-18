@@ -1,0 +1,16 @@
+[project]
+name = "protobuf-runtime-schema"
+version = "1.0.0"
+description = "Builds a protobuf schema at runtime and measures it against json on device."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "protobuf==7.35.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

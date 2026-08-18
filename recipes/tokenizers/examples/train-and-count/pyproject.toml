@@ -1,0 +1,16 @@
+[project]
+name = "tokenizers-train-and-count"
+version = "1.0.0"
+description = "A byte-level BPE tokenizer trained and used entirely on device."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "tokenizers==0.23.1",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
