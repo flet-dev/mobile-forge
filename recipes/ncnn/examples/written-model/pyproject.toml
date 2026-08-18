@@ -1,0 +1,16 @@
+[project]
+name = "ncnn-written-model"
+version = "1.0.0"
+description = "A conv net written by the app at runtime, run by ncnn and checked against numpy."
+requires-python = ">=3.11"
+
+dependencies = [
+    "flet==0.86.5",
+    "ncnn==1.0.20260526",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

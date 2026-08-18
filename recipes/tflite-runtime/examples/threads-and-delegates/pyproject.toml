@@ -1,0 +1,22 @@
+[project]
+name = "tflite-runtime-threads-and-delegates"
+version = "1.0.0"
+description = "Runs a 1 KB TFLite model on device at three thread counts and checks it against numpy."
+requires-python = ">=3.12"
+
+dependencies = [
+    "flet==0.86.5",
+    "numpy==2.4.6",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.android]
+dependencies = ["tflite-runtime==2.21.0"]
+
+[tool.flet.ios]
+dependencies = ["tflite-runtime==2.21.0"]
+
+[tool.flet.app]
+path = "src"

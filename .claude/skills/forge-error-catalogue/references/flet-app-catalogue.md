@@ -153,6 +153,38 @@ the versions used here: `numpy==2.4.6`, `pandas==3.0.3`, `scikit-learn==1.9.0` �
 and run `uv lock` there. Deleting `.venv` and `uv.lock` in place works too. Do not treat a
 build that reused an existing lock as evidence.
 
+### `flet build apk` fails with a wheel hash mismatch that the server disproves
+
+**Symptom:** the Android build dies in the pip step with
+
+```
+ERROR: THESE PACKAGES DO NOT MATCH THE HASHES FROM THE REQUIREMENTS FILE.
+    <pkg>==<ver> from https://pypi.flet.dev/-/ver_XXXX/<wheel>.whl#sha256=<expected>
+        Expected sha256 <expected>
+             Got e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+```
+
+**Read the "Got" value first.** `e3b0c442…b855` is the SHA-256 of the **empty string** — pip
+received zero bytes, so this is a truncated download or a cached empty body, not a tampered or
+mis-published wheel. Confirm the index is fine before blaming it:
+
+```bash
+curl -sL -o /tmp/w.whl "<the URL from the error>" && wc -c /tmp/w.whl && shasum -a 256 /tmp/w.whl
+```
+
+Observed 2026-08-18 on `tflite_runtime … android_24_armeabi_v7a.whl`: the server served
+1,983,598 bytes with the expected digest, while the build failed identically **twice** — so a
+plain retry does not clear it.
+
+**Fix:** bypass pip's cache for the build.
+
+```bash
+PIP_NO_CACHE_DIR=1 uv run flet build apk
+```
+
+That built first time. Note this is pip's cache inside the app build, not uv's — clearing
+`~/.cache/uv` will not help, and neither will `rm -rf build/`.
+
 ### A build reports OK but the app on screen is a DIFFERENT app
 
 **Symptom:** `flet build` succeeds, the artifact installs, and the running app shows content that

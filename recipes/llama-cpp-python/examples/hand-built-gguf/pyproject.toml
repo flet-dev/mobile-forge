@@ -1,0 +1,16 @@
+[project]
+name = "llama-cpp-python-hand-built-gguf"
+version = "1.0.0"
+description = "A GGUF model written in the app, run on device and checked against numpy."
+requires-python = ">=3.11"
+
+dependencies = [
+    "flet==0.86.5",
+    "llama-cpp-python==0.3.32",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
