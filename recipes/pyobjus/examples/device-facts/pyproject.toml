@@ -1,0 +1,20 @@
+[project]
+name = "pyobjus-device-facts"
+version = "1.0.0"
+description = "iOS platform facts read through the Objective-C runtime, each checked against a second source."
+requires-python = ">=3.12"
+
+dependencies = [
+    "flet==0.86.5",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.ios]
+dependencies = [
+    "pyobjus==1.2.4",
+]
+
+[tool.flet.app]
+path = "src"

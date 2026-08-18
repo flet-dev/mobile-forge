@@ -1,0 +1,17 @@
+[project]
+name = "msgspec-three-ways"
+version = "1.0.0"
+description = "Decodes one document three ways on device and shows which one validated it."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "msgspec==0.21.1",
+    "orjson==3.11.9",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
