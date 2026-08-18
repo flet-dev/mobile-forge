@@ -1,0 +1,16 @@
+[project]
+name = "faiss-nearest"
+version = "1.0.0"
+description = "Exact and approximate vector search over 20,000 embeddings built on device."
+requires-python = ">=3.11"
+
+dependencies = [
+    "flet==0.86.5",
+    "faiss-cpu==1.14.3",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

@@ -1,0 +1,19 @@
+[project]
+name = "onnxruntime-hand-built-mlp"
+version = "1.0.0"
+description = "An ONNX graph written in the app, run on device and checked against numpy."
+requires-python = ">=3.11"
+
+dependencies = [
+    "flet==0.86.5",
+    "onnxruntime==1.27.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
+
+[tool.flet.android]
+target_arch = ["arm64-v8a", "x86_64"]
