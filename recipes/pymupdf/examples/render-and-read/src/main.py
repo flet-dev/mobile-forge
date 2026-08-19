@@ -262,9 +262,15 @@ def main(page: ft.Page):
                         f"pymupdf {pymupdf.__version__} · MuPDF {pymupdf.mupdf_version}",
                         size=11,
                     ),
+                    # search_for matches the literal string, so the phone keyboard
+                    # must not "help": autocorrect turned quartz into Quarts on a
+                    # simulator, which searches for a word the page does not contain.
                     ft.TextField(
                         label="Search this page",
                         dense=True,
+                        autocorrect=False,
+                        enable_suggestions=False,
+                        capitalization=ft.TextCapitalization.NONE,
                         on_submit=on_search,
                         on_blur=on_search,
                     ),
