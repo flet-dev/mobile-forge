@@ -53,8 +53,17 @@ Key structural facts:
   canonical (first-listed, i.e. 3.12) leg**. On the 3.13/3.14 legs they are
   filtered out of the package list entirely.
 - **Mobile tests run only on the legs listed in `mobile_test_pythons`**
-  (default `3.12` — and per hard experience, 3.12 is the only leg whose mobile
-  tests pass on this fork; never dispatch `mobile_test_pythons=ALL`).
+  (default `3.12`). `ALL` used to be structurally impossible — flet 0.85's
+  packager bundled its own CPython 3.12 and could only consume cp312 wheels, so
+  3.13/3.14 died at `No matching distribution`. **That was lifted on
+  2026-07-14**: under flet 0.86's version-specific packager plus a python-build
+  containing dc76612 (`_pyrepl` pruning + the mimalloc seccomp `open()` fix),
+  3.13 and 3.14 pass genuinely on both platforms. The pinned
+  `PYTHON_BUILD_RELEASE` in `setup.sh` has been new enough since **20260730**
+  (dc76612 landed 2026-07-12), so a plain dispatch no longer needs
+  `python_build_run_id` — check that pin before trusting this. On an older pin,
+  pass a `python_build_run_id` whose run has the fix, or the stale release takes
+  3.13/3.14 red again.
 - The mobile test bumps local wheels' build tag to `9999` in `dist-test/` so
   pip prefers them over same-version wheels already published on
   pypi.flet.dev.
@@ -218,7 +227,7 @@ the log.
 | `packages` | `"name:"` entries, comma-separated; `:` suffix means default version. `ALL` expands to every recipe |
 | `prebuild_recipes` | comma-separated, **ordered**, built per-job before packages |
 | `python_versions` | defaults to all three; narrow for a quick re-run (e.g. `3.12.13`) |
-| `mobile_test_pythons` | default `3.12` — leave it; never `ALL` on this fork. Pass `""` to build wheels WITHOUT the on-device test (e.g. when the test can't pass yet because the fix lives in unreleased serious_python — you'll test locally) |
+| `mobile_test_pythons` | default `3.12`. `ALL` is valid again since the 20260730 python-build pin (see "How a run is shaped") — use it when you want every leg tested on device, and expect the run to take proportionally longer. Pass `""` to build wheels WITHOUT the on-device test (e.g. when the test can't pass yet because the fix lives in unreleased serious_python — you'll test locally) |
 | `archs` | default `android,iOS` |
 | `python_build_run_id` | a `flet-dev/python-build` Actions run-id whose artifacts to use instead of the pinned release; empty → the hardcoded FALLBACK in `build-wheels-version.yml` (grep `PYTHON_BUILD_RUN_ID: ${{ … || '<id>' }}`). Bump that fallback to ship an unreleased python-build fix to every job |
 

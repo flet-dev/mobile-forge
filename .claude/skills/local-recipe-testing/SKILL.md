@@ -42,8 +42,8 @@ cp dist/<recipe>-*-android_24_arm64_v8a.whl /tmp/rt_dist/   # forge's dist/ whee
 rm -rf tests/recipe-tester/build/site-packages tests/recipe-tester/build/.hash
 cd tests/recipe-tester
 PIP_FIND_LINKS=/tmp/rt_dist \
-  uvx --prerelease allow --default-index https://pypi.flet.dev --index https://pypi.org/simple \
-    --from flet-cli flet build apk --arch arm64-v8a --yes --python-version 3.12
+  uvx --prerelease allow --with 'flet-cli' --with 'flet' \
+    flet build apk --arch arm64-v8a --yes --python-version 3.12
 cd "$REPO"
 
 # 4. Boot the rootable AVD (gotcha #4/#5), install, launch
@@ -75,8 +75,8 @@ forge iphoneos:arm64 <recipe> ; forge iphonesimulator:arm64 <recipe> ; forge iph
 rm -rf tests/recipe-tester/build/site-packages tests/recipe-tester/build/.hash
 cd tests/recipe-tester
 PIP_FIND_LINKS="$(realpath ../../dist)" \
-  uvx --prerelease allow --default-index https://pypi.flet.dev --index https://pypi.org/simple \
-    --from flet-cli flet build ios-simulator --yes --python-version 3.12   # 0.86 pin — gotcha #13
+  uvx --prerelease allow --with 'flet-cli' --with 'flet' \
+    flet build ios-simulator --yes --python-version 3.12   # 0.86 pin — gotcha #13
 
 # 3. Boot any available iPhone sim, install, launch — ALWAYS by explicit UDID
 #    (gotcha #11: `booted` is ambiguous the moment two sims are booted)
@@ -138,7 +138,7 @@ for i in $(seq 1 30); do grep EXIT "$DATA/Library/Caches/console.log" 2>/dev/nul
 
 12. **Verify the staged tests + the on-device test COUNT — staging can fail silently.** `stage_recipe.sh` wipes and re-stages `recipe_tests/`; if the invocation ever fails without you noticing (a scripted loop with a bad variable — zsh does NOT word-split unquoted `$VAR` like bash, so a `for r in $RECIPES`-style loop can pass the whole list as ONE argument), the PREVIOUS recipe's tests are still staged and run happily, reporting "N passed" for the wrong package. Two cheap checks after staging: `ls tests/recipe-tester/recipe_tests/` shows YOUR test files, and the "N passed" in console.log matches your recipe's test count. (Bit during the h5py→keras loop: the same 4 stale h5py tests "passed" three times.) **Stronger still — verify the built APK's CONTENTS, not just `recipe_tests/`:** a build that *fails* can leave a STALE `build/apk/recipe-tester.apk` that installs the wrong app entirely. `unzip -l build/apk/recipe-tester.apk` should show your recipe's test `.py` inside `app.zip` AND (for a native recipe) `lib/<abi>/lib*.so` for its libs. Caught an opaque run that silently installed a stale pysodium APK and reported "2 passed" for the wrong package. When in doubt nuke `build/apk` too, not just `build/site-packages`.
 
-13. **Flet >=0.86** — plain `flet build` gets the 0.86+ packaging model; the old `uvx --prerelease allow --default-index https://pypi.flet.dev …` incantation is obsolete (harmless, but stop cargo-culting it). 0.86 ships site-packages as `sitepackages.zip` and relocates native `.so` to jniLibs — a whole class of on-device loader/data-file failures lives there (`forge-error-catalogue` § the `sitepackages.zip` class). **New default trap replacing the old one: 0.86.5's `flet build` bundles Python 3.14 by DEFAULT** — an end-user-default build resolves **cp314** wheels (verified: flet-cv2-example APK shipped `libpython3.14.so` + the cp314 opencv wheel). The loop's explicit `--python-version 3.12` still works and matches `setup.sh 3.12.13`-built recipe wheels; just know that "what users get by default" is now cp314, so a recipe published only for cp312 is invisible to a default build.
+13. **Flet >=0.86 — but `uvx --with flet-cli` alone does NOT get you 0.86.** It resolved **flet-cli 0.85.2** (2026-08-19), whose `flet build` has no `--python-version` flag at all and dies with `unrecognized arguments: --python-version`. Use the form CI uses, which pulls the runtime alongside the CLI so the pair resolves to 0.86.x: `uvx --prerelease allow --with 'flet-cli' --with 'flet' flet build apk|ios-simulator --yes --python-version 3.12` (`.github/workflows/build-wheels-version.yml`). The old `--default-index https://pypi.flet.dev` incantation is separately obsolete. 0.86 ships site-packages as `sitepackages.zip` and relocates native `.so` to jniLibs — a whole class of on-device loader/data-file failures lives there (`forge-error-catalogue` § the `sitepackages.zip` class). **New default trap replacing the old one: 0.86.5's `flet build` bundles Python 3.14 by DEFAULT** — an end-user-default build resolves **cp314** wheels (verified: flet-cv2-example APK shipped `libpython3.14.so` + the cp314 opencv wheel). The loop's explicit `--python-version 3.12` still works and matches `setup.sh 3.12.13`-built recipe wheels; just know that "what users get by default" is now cp314, so a recipe published only for cp312 is invisible to a default build.
 
 ## Model assets & test-only deps
 
