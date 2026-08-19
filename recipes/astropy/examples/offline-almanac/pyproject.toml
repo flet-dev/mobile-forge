@@ -1,0 +1,19 @@
+[project]
+name = "astropy-offline-almanac"
+version = "1.0.0"
+description = "Sky positions, time scales and a FITS round trip computed with the network off."
+requires-python = ">=3.12"
+
+dependencies = [
+    "flet==0.86.5",
+    "astropy==8.0.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
+
+[tool.flet.android]
+extract_packages = ["astropy", "astropy_iers_data"]

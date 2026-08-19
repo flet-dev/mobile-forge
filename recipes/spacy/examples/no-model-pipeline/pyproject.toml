@@ -1,0 +1,19 @@
+[project]
+name = "spacy-no-model-pipeline"
+version = "1.0.0"
+description = "A rule-based spaCy pipeline that runs with no model and audits its own output."
+requires-python = ">=3.12"
+
+dependencies = [
+    "flet==0.86.5",
+    "spacy==3.8.13",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
+
+[tool.flet.android]
+extract_packages = ["spacy", "thinc"]

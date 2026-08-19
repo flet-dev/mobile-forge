@@ -1,0 +1,16 @@
+[project]
+name = "pyproj-control-points"
+version = "1.0.0"
+description = "Coordinate transforms cross-checked on device, with no PROJ database."
+requires-python = ">=3.11"
+
+dependencies = [
+    "flet==0.86.5",
+    "pyproj==3.7.2",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
