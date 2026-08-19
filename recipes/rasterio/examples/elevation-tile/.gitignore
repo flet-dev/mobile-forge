@@ -1,0 +1,9 @@
+.venv/
+.flet/
+build/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+uv.lock
+*.tif
+*.tif.aux.xml

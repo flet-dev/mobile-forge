@@ -1,0 +1,17 @@
+[project]
+name = "rasterio-elevation-tile"
+version = "1.0.0"
+description = "Writes a GeoTIFF on device and differences the read-back against its source array."
+requires-python = ">=3.12"
+
+dependencies = [
+    "flet==0.86.5",
+    "rasterio==1.5.0",
+    "numpy==2.4.6",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

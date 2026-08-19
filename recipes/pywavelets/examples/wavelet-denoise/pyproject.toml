@@ -1,0 +1,17 @@
+[project]
+name = "pywavelets-wavelet-denoise"
+version = "1.0.0"
+description = "Wavelet denoising of a signal and an image, checked on screen."
+requires-python = ">=3.11"
+
+dependencies = [
+    "flet==0.86.5",
+    "pywavelets==1.9.0",
+    "numpy==2.4.6",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

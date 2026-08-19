@@ -1,0 +1,16 @@
+[project]
+name = "grpcio-loopback-rpc"
+version = "1.0.0"
+description = "Runs a gRPC server and grpc's own client on loopback with a byte counter between them."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "grpcio==1.81.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
