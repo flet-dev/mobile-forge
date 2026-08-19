@@ -1,0 +1,22 @@
+[project]
+name = "gdal-geotiff-roundtrip"
+version = "1.0.0"
+description = "Writes a GeoTIFF on device and checks the read-back against the values it came from."
+requires-python = ">=3.11"
+
+dependencies = [
+    "flet==0.86.5",
+    "numpy==2.4.6",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.android]
+dependencies = ["gdal==3.13.1"]
+
+[tool.flet.ios]
+dependencies = ["gdal==3.13.1"]
+
+[tool.flet.app]
+path = "src"

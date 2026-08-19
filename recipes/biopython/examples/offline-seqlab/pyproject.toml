@@ -1,0 +1,19 @@
+[project]
+name = "biopython-offline-seqlab"
+version = "1.0.0"
+description = "Sequence parsing, translation and alignment checked against hand-computed answers."
+requires-python = ">=3.11"
+
+dependencies = [
+    "flet==0.86.5",
+    "biopython==1.87",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
+
+[tool.flet.android]
+extract_packages = ["Bio"]
