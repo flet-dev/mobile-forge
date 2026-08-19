@@ -16,7 +16,11 @@ Android-only for now.** Raster I/O works on Android and fails on iOS: measured o
 1,048,576 pixels differing) and cannot open one at all on an iPhone simulator, where
 `rasterio.open(..., "w", driver="GTiff")` raises
 `DriverRegistrationError: ('No such driver registered: %s', b'GTiff')` even though the same
-process has just listed `GTiff` among its eleven registered drivers.
+process has just listed `GTiff` among its eleven registered drivers. If you need raster I/O on
+iOS, use [`gdal`](../gdal) — GDAL's own SWIG bindings against this same `flet-libgdal`. The
+split that breaks rasterio does not exist in its module layout, and the device confirms it:
+measured 2026-08-19, its example round-trips a 512x512 GeoTIFF with 0 of 262,144 pixels
+differing on the iPhone simulator as well as on Android.
 
 Beyond that, these wheels are a deliberately small GDAL: four raster drivers, no `proj.db`,
 no libcurl. On Android GeoTIFF work is complete and fast; EPSG codes, PNG/JPEG/netCDF files
@@ -255,6 +259,12 @@ Measured 2026-08-19 with the [`elevation-tile`](examples/elevation-tile) example
 arm64 emulator wrote 2,377,664 B and read it back with 0 pixels differing; the iPhone
 simulator failed both. Until this is fixed, an iOS app can import rasterio and read its
 version and driver list, and can do nothing else with a raster.
+
+The diagnosis is specific to how rasterio is split, which is why [`gdal`](../gdal#ios-notes) is
+worth trying instead on that platform: `osgeo/gdal.py` binds every native call to one
+extension, `_gdal`, whose own module init calls `GDALAllRegister` — so the register-here,
+look-up-there gap above has nowhere to open. That structural argument from the symbol
+tables is now backed by a device run — see [that page](../gdal#ios-notes) for the numbers.
 
 | slice (cp314) | wheel | unpacked | after cleanup |
 | --- | --- | --- | --- |
