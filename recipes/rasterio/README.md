@@ -238,15 +238,18 @@ and `cache` are 0.1–1.2 MB. **259,746,200 bytes of extension on the device sli
 `import rasterio` loads eleven of the fifteen regardless, so an app that only reads a
 GeoTIFF pays for all of it. Budget for it; there is nothing a consumer can do.
 
-**And that absorption appears to cost iOS its driver registry.** Each extension carrying
-its own `libgdal.a` means each carries its own copy of GDAL's global driver table.
+**And that absorption is what costs iOS its driver registry.** The symbol tables say so
+directly: on iOS `_env`, `_io`, `_base` and `_features` each *define* `GDALRegister_GTiff`
+themselves and import it from nobody, so each carries its own copy of GDAL's global driver
+table. On Android every extension instead carries `DT_NEEDED: libgdal.so` and `_env` imports
+`GDALAllRegister` as an undefined symbol resolved at load — one library, one table, shared.
 `rasterio.Env()` lives in `_env` and registers drivers there; `rasterio.open` resolves the
 name in `_io`. On Android, where a single shared `libgdal.so` is linked by all of them,
 that is one table and everything works. On iOS the two do not agree: `env.drivers()`
 returns the full eleven while `rasterio.open(path, "w", driver="GTiff")` raises
 `DriverRegistrationError`, and a windowed read of an existing file raises
 `SystemError: Unknown GDAL Error`. Entering an explicit `rasterio.Env()` around the call
-does not help, which is what rules out the ordinary per-thread explanation.
+does not help, which independently rules out the ordinary per-thread explanation.
 
 Measured 2026-08-19 with the [`elevation-tile`](examples/elevation-tile) example: Android
 arm64 emulator wrote 2,377,664 B and read it back with 0 pixels differing; the iPhone
