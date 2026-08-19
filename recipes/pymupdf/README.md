@@ -83,8 +83,8 @@ files you own on disk — not for the `stream=` case.
 
 See runnable Flet apps in [`examples/`](examples):
 
-- [`render-and-read`](examples/render-and-read) — builds a three-page PDF, rasterises it at a
-  zoom you choose, and highlights search hits on the rendered page.
+- [`render-and-read`](examples/render-and-read) — builds a three-page PDF, rasterises it to
+  an image, and highlights search hits on the rendered page.
 
 ## Threading
 
@@ -99,8 +99,8 @@ None of the four libraries starts a thread of its own: no extension in either wh
 references `pthread_create`, or any OpenMP symbol. So all the concurrency is whatever your
 app introduces.
 
-Rendering is genuinely slow enough to need a thread — a full page at high zoom is several
-megapixels — and MuPDF releases the GIL while it works, so
+Rendering is genuinely slow enough to need a thread — a full page at a useful scale is
+several megapixels — and MuPDF releases the GIL while it works, so
 [`page.run_thread(...)`](https://flet.dev/docs/controls/page/#flet.Page.run_thread) really
 does keep the UI live. But `run_thread` submits to a thread *pool*, so two handlers started
 close together will run inside MuPDF at the same time. Serialise them yourself:

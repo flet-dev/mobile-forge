@@ -13,6 +13,10 @@ import pymupdf
 MUPDF = threading.Lock()
 
 PAGE_W, PAGE_H = 400.0, 520.0
+# Real pixels asked of MuPDF per point of page. Phones draw at 2-3x and Flet
+# reports no device ratio, so this is a fixed compromise: crisp on a phone at
+# 800x1040 px, and only ~2.4 MB of samples per render.
+RENDER_SCALE = 2.0
 INK = (0.11, 0.12, 0.16)
 MUTED = (0.42, 0.45, 0.52)
 ACCENT = (0.15, 0.39, 0.92)
@@ -66,8 +70,8 @@ def typography_page(doc):
         pymupdf.Rect(26, y + 10, PAGE_W - 26, PAGE_H - 20),
         "These are four of the base-14 PDF faces. A phone carries no PostScript "
         "fonts and no fontconfig, so every glyph above came out of the library "
-        "itself. Zoom in: they stay sharp, because the page stores outlines and "
-        "the rasteriser fills them at whatever scale you ask for.",
+        "itself. The page stores outlines rather than pixels, so the rasteriser "
+        "fills them at whatever size it is asked for.",
         fontname="helv",
         fontsize=8.5,
         color=MUTED,
@@ -78,9 +82,8 @@ def typography_page(doc):
 def vector_page(doc):
     """A bar chart and some primitives, drawn with page operators rather than pixels.
 
-    The point of the page is what the zoom slider does to it: these shapes are
-    stored as coordinates, so raising the scale produces genuinely more detail
-    instead of a larger blur.
+    Everything here is stored as coordinates rather than pixels, so it is the
+    rasteriser that decides how many of them each shape becomes.
     """
     page = doc.new_page(width=PAGE_W, height=PAGE_H)
     banner(page, 2, TITLES[1])
@@ -111,8 +114,7 @@ def vector_page(doc):
         pymupdf.Point(26, base), pymupdf.Point(PAGE_W - 26, base), color=INK, width=0.9
     )
 
-    # A Shape batches drawing commands into one page operator run; the curve and
-    # the three primitives below it exist to give the zoom something to sharpen.
+    # A Shape batches drawing commands into a single page operator run.
     shape = page.new_shape()
     shape.draw_bezier(
         pymupdf.Point(34, 400),
@@ -139,9 +141,9 @@ def text_page(doc):
         "highlight gets placed.\n\n"
         "Type a word into the search field to see it marked on the page. Try "
         "quartz, or rectangle, or MuPDF.\n\n"
-        "Because glyphs carry their own coordinates, extraction is unaffected by "
-        "the zoom. The rectangle of a hit is measured in points on the page; only "
-        "the renderer decides how many pixels a point becomes.",
+        "Because glyphs carry their own coordinates, a hit is measured in points "
+        "on the page, and stays put however many pixels the renderer decides a "
+        "point should become.",
         fontname="helv",
         fontsize=10,
         color=INK,
@@ -166,8 +168,8 @@ def build_document():
 DOC = build_document()
 
 
-def render(index, zoom, term):
-    """Rasterise one page at `zoom`, highlighting `term`, and return PNG bytes.
+def render(index, term):
+    """Rasterise one page, highlighting `term`, and return PNG bytes.
 
     Hits are marked with real highlight annotations and deleted again once the
     pixmap exists, which keeps the document itself unchanged between renders --
@@ -180,13 +182,13 @@ def render(index, zoom, term):
         annotations = [page.add_highlight_annot(rect) for rect in hits]
 
         started = time.perf_counter()
-        pixmap = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom))
+        pixmap = page.get_pixmap(matrix=pymupdf.Matrix(RENDER_SCALE, RENDER_SCALE))
         png = pixmap.tobytes("png")
         elapsed = time.perf_counter() - started
 
         # Read the dimensions and drop the pixmap before releasing the lock: every
-        # attribute on it is a call back into MuPDF, and a full page at 4x is tens
-        # of megabytes of samples that nothing needs once the PNG exists.
+        # attribute on it is a call back into MuPDF, and the samples are megabytes
+        # that nothing needs once the PNG exists.
         size = (pixmap.width, pixmap.height)
         del pixmap
 
@@ -197,13 +199,12 @@ def render(index, zoom, term):
 
 
 def main(page: ft.Page):
-    """Show one rendered page at a time, with page navigation, zoom and search.
+    """Show one rendered page at a time, with page navigation and search.
 
-    Rendering is pushed to a background thread: at the top of the zoom range a
-    page is several megapixels, and doing that on the UI thread would stall the
-    slider mid-drag.
+    Rendering is pushed to a background thread: a page is a few megabytes of
+    samples, and doing that on the UI thread would freeze it mid-tap.
     """
-    state = {"index": 0, "zoom": 2.0, "term": ""}
+    state = {"index": 0, "term": ""}
 
     def redraw():
         """Kick off a render for the current state, with the spinner up."""
@@ -213,9 +214,7 @@ def main(page: ft.Page):
 
     def work():
         """Render on a background thread, then refill the image and the caption."""
-        png, hits, (width, height), elapsed = render(
-            state["index"], state["zoom"], state["term"]
-        )
+        png, hits, (width, height), elapsed = render(state["index"], state["term"])
         sheet.src = png
         position.value = (
             f"{state['index'] + 1} / {DOC.page_count}  ·  {TITLES[state['index']]}"
@@ -224,7 +223,8 @@ def main(page: ft.Page):
             "" if not state["term"] else f"{hits} hit{'' if hits == 1 else 's'}"
         )
         stats.value = (
-            f"{width}x{height} px at {state['zoom']:.1f}x in {elapsed * 1e3:.0f} ms"
+            f"rasterised {width}x{height} px in {elapsed * 1e3:.0f} ms · "
+            f"{len(png) / 1024:.0f} KB PNG"
         )
         spinner.visible = False
         page.update()  # auto-update does not reach background threads
@@ -237,15 +237,6 @@ def main(page: ft.Page):
             redraw()
 
         return handler
-
-    def on_zoom(e):
-        """Re-render at the slider's scale once the finger lifts.
-
-        on_change_end rather than on_change: a drag emits a value per pixel, and
-        each one would queue a full-page rasterisation.
-        """
-        state["zoom"] = e.control.value
-        redraw()
 
     def on_search(e):
         """Re-render with the new search term highlighted."""
@@ -303,22 +294,12 @@ def main(page: ft.Page):
                     ),
                     ft.Row(
                         controls=[
-                            ft.Text("zoom", size=11),
-                            ft.Slider(
-                                min=1.0,
-                                max=4.0,
-                                value=2.0,
-                                divisions=6,
-                                label="{value}x",
-                                expand=True,
-                                on_change_end=on_zoom,
-                            ),
+                            stats := ft.Text(size=11, expand=True),
                             spinner := ft.ProgressRing(
                                 width=14, height=14, visible=False
                             ),
                         ]
                     ),
-                    stats := ft.Text(size=11),
                 ]
             ),
         )

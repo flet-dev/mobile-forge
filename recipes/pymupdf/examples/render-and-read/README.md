@@ -1,9 +1,9 @@
 # pymupdf render and read
 
 A three-page PDF, built in memory when the app starts, then shown one page at a time as a
-rendered image. Page through it, drag the zoom from 1× to 4× and watch the caption report
-the pixel count and the milliseconds it took, and type a word into the search field to see
-every occurrence highlighted in yellow on the page.
+rendered image. Page through it, and type a word into the search field to see every
+occurrence highlighted in yellow on the page. The caption reports how many pixels MuPDF
+produced and how long it took.
 
 What it demonstrates:
 
@@ -17,21 +17,21 @@ What it demonstrates:
 - **That the fonts are inside the wheel.** Page 1 sets the same sentence in four of the
   base-14 faces. Nothing loads a font file; a phone has no PostScript fonts and no
   fontconfig, and the glyphs still draw because MuPDF compiles them into the library.
-- **Vector, not pixels.** Page 2 is a bar chart, a Bézier and three primitives written with
-  page operators, so raising the zoom produces real detail rather than a bigger blur. The
-  same slider on a page of scanned images would only enlarge them.
+- **Vector, not pixels.** Page 2 is a bar chart, a Bézier and three primitives written as
+  page operators rather than an image, so the renderer decides how many pixels each one
+  becomes. Ask for a larger pixmap and you get more detail, not a bigger blur.
 - **Text that survives the render.**
   [`page.search_for`](https://pymupdf.readthedocs.io/en/latest/page.html#Page.search_for)
   returns a rectangle per hit, in page points; the app turns each into a
   [highlight annotation](https://pymupdf.readthedocs.io/en/latest/page.html#Page.add_highlight_annot),
   renders, then deletes the annotations again so the document is unchanged between renders.
-  Hit coordinates do not move when you zoom — only the renderer's scale does.
+  A hit is measured in page points, independent of the scale it is drawn at.
 - **Compute off the UI thread** — every render runs in
   [`page.run_thread(...)`](https://flet.dev/docs/controls/page/#flet.Page.run_thread) with a
-  spinner up, driven from the slider's `on_change_end` so one gesture means one
-  rasterisation, and the handler ends with the explicit
+  spinner up, and the handler ends with the explicit
   [`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update) that a background
-  thread needs.
+  thread needs. A module-level lock serialises the renders, because PyMuPDF does not support
+  concurrent use and `run_thread` hands work to a pool.
 
 The document is generated rather than bundled, so the example ships no asset — and
 composing a PDF is itself half of what PyMuPDF does.
