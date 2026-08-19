@@ -565,24 +565,28 @@ class Builder(ABC):
             env["ANDROID_API_LEVEL"] = str(self.cross_venv.sdk_version)
             env["HOST_TRIPLET"] = self.cross_venv.platform_triplet
 
+        # `env` wins. Everything forge has adjusted above — the compiler and
+        # binutils re-pointed at the installed NDK, and the CFLAGS/CPPFLAGS/LDFLAGS
+        # it extended with SDK, sysroot and `opt/lib` search paths — also exists as
+        # a build-time constant in `_sysconfigdata`, so merging sysconfig last would
+        # hand recipe templates the stale value. That is how `{CC}` came to expand
+        # to a path inside an embedded NDK that is not present on this host
+        # ("clang: not found" from a sub-make on the Android 3.14 tree), and how
+        # `{LDFLAGS}` came to omit the `opt/lib` a `flet-lib*` host dep installs
+        # into. Ordering it this way states the rule once instead of maintaining a
+        # list of keys to re-assert.
+        #
+        # This is forge's environment, not the recipe's: the loop below *appends*
+        # to env's LDFLAGS/CFLAGS/CPPFLAGS as it processes `script_env`, and
+        # `script_vars` is a snapshot taken before that. A recipe that both sets
+        # one of those and refers to it as `{...}` elsewhere therefore sees the
+        # value without its own additions.
         script_vars = {
-            **env,
-            **self.cross_venv.scheme_paths,
             **self.cross_venv.sysconfig_data,
+            **self.cross_venv.scheme_paths,
+            **env,
             "sysconfigdata_name": self.cross_venv.sysconfigdata_name,
         }
-
-        # `**sysconfig_data` above re-shadows the compiler/binutils keys with the
-        # values python-build baked into `_sysconfigdata`, which on some support
-        # trees (e.g. Android 3.14) are absolute paths into an embedded NDK that
-        # isn't present on this host. `env` already re-pointed those to the real
-        # installed toolchain (see the NDK_HOME fix-up above), so re-assert the
-        # env values here — otherwise a recipe that references `{CC}`/`{CXX}`/...
-        # in `script_env` (e.g. to hand a cross compiler to a sub-`make`) would
-        # receive the stale embedded path and fail with "clang: not found".
-        for _tool in ("CC", "CXX", "AR", "RANLIB", "STRIP"):
-            if _tool in env:
-                script_vars[_tool] = env[_tool]
 
         # Set up any additional environment variables needed in the script environment.
         for key, value in self.package.meta["build"]["script_env"].items():
