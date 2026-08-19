@@ -203,7 +203,7 @@ that difference. zstd, lz4, snappy, brotli and bz2 are unavailable on both.
 - **Parquet is not available, and installing pyarrow does not change that.** There is no
   `_parquet` extension in this wheel and `fastparquet` has no mobile wheel either, so
   `pandas.to_parquet` raises `ImportError: Unable to find a usable engine` whatever you install
-  — the [`pandas`](../pandas) page says the same thing from the other side. Feather is the
+  — [`pandas`](../pandas) covers the same limit from the DataFrame side. Feather is the
   columnar file format you have instead: it is Arrow IPC on disk, reads and writes at full
   speed, keeps the schema, and pandas can use it once pyarrow is installed. It is bigger than
   the Parquet you wanted, because nothing here can compress it.

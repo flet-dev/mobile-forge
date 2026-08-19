@@ -147,8 +147,9 @@ dependencies = ["pyjnius"]
 dependencies = ["pyobjus"]
 ```
 
-Everything pyjnius's page says about `libpyjni`, `JNI_OnLoad`, the app `ClassLoader`,
-`FLET_JNI_READY` and `PythonActivity.mActivity` is an Android-runtime concept with no iOS analogue.
+`libpyjni`, `JNI_OnLoad`, the app `ClassLoader`, `FLET_JNI_READY` and
+`PythonActivity.mActivity` are Android-runtime concepts with no iOS analogue — they belong to
+the JVM bridge [`pyjnius`](../pyjnius) uses, not to this one.
 There is no environment variable to check here and nothing to load: on iOS the bridge is the
 process's own Objective-C runtime.
 

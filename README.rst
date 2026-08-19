@@ -284,6 +284,16 @@ is reviewed in the same pull request and bumped in the same commit as the recipe
     flet.dev canonicalises to a trailing slash before the fragment
     (``…/environment-variables/#flet_app_storage_data``).
 
+    Cross-link sibling recipes freely, but **never let a sentence's meaning depend on what
+    another page currently says**. A link is navigation; it is not a place to keep a fact.
+    "The cost is the same one ``psutil``'s page states" and "see that page for the numbers"
+    both stop making sense the moment the other page is edited, and nothing here would show
+    it had gone stale. State the fact on this page, in full, and let the link be an invitation
+    rather than a dependency. Citing a measurement made while documenting another package is
+    fine and often valuable — "for the same Flet version ``pydantic-core`` reports no
+    ``__file__`` at all on Android" — because that is a claim about the *package*, checkable
+    against the wheel, not a claim about the *page*.
+
     Do not restate the recipe version — ``meta.yaml`` is the source of truth and prose goes
     stale on the first bump. Claims about the wheel should be checked against the wheel, and
     claims about on-device behaviour should be backed by a test in ``tests/``.

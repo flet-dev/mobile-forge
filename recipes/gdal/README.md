@@ -31,9 +31,9 @@ dependencies = [
 ]
 ```
 
-**The platform tables are not a style choice here either, and the reason differs from
-[`psutil`](../psutil)'s.** gdal is not platform-exclusive — both mobile platforms have wheels
-on the index — but **upstream publishes no wheel for any desktop**: PyPI carries exactly one
+**The platform tables are not a style choice.** Note the reason, because it is not the usual
+one: gdal is not platform-exclusive — both Android and iOS have wheels on the index — but
+**upstream publishes no wheel for any desktop**: PyPI carries exactly one
 file for 3.13.1, `gdal-3.13.1.tar.gz`, and building it needs a system libgdal and
 `gdal-config`. Flet
 [appends](https://flet.dev/docs/publish/#app-dependencies) `[tool.flet.<platform>].dependencies`
@@ -43,11 +43,12 @@ build with `Call to setuptools.build_meta.build_wheel failed`, before it ever re
 device. Measured 2026-08-19: that failure hit `flet build apk` and `flet build ios-simulator`
 alike until the entry moved into the two tables above.
 
-The cost is the same one psutil's page states: **gdal is then absent from `flet run` on your
-desktop**, because nothing outside a `flet build` for that platform reads those tables. Guard
-the import so a desktop or web run explains itself instead of raising — the
-[`geotiff-roundtrip`](examples/geotiff-roundtrip) example does exactly that, and renders a
-card naming the missing module rather than a crash screen.
+That has a cost worth stating plainly: **gdal is then absent from `flet run` on your desktop
+and from a web build**, because nothing outside a `flet build` for Android or iOS reads those
+tables. So `from osgeo import gdal` raises `ModuleNotFoundError` everywhere you develop, and
+only resolves on the two targets above. Guard the import so those runs explain themselves
+instead of raising — the [`geotiff-roundtrip`](examples/geotiff-roundtrip) example does exactly
+that, rendering a card that names the missing module rather than a crash screen.
 
 **`numpy` is an optional extra, not a dependency.** The wheel declares
 `Provides-Extra: numpy` and `Requires-Dist: numpy>1.0.0; extra == "numpy"`, so a bare
