@@ -4,7 +4,7 @@ The wheel ships four interdependent native libraries — libmupdf, libmupdfcpp,
 _mupdf (the SWIG wrapper over MuPDF's C++ API) and _extra — so the first thing
 these tests prove is that all four resolve and load. Everything after that
 exercises a layer that a cross-compiled MuPDF can plausibly get wrong: the
-rasterizer, the base-14 fonts compiled into the library, the image codecs, and
+rasteriser, the base-14 fonts compiled into the library, the image codecs, and
 the PDF writer.
 """
 
@@ -12,10 +12,10 @@ import pymupdf
 
 
 def render(page, dpi=72):
-    """Rasterize a page and return (pixmap, count of non-white pixels).
+    """Rasterise a page and return (pixmap, count of non-white pixels).
 
     The count is what separates "MuPDF rendered something" from "MuPDF returned
-    a correctly-sized blank" — a missing font or a broken rasterizer produces
+    a correctly-sized blank" — a missing font or a broken rasteriser produces
     the latter, and only the pixel data tells them apart.
     """
     pix = page.get_pixmap(dpi=dpi)
@@ -76,7 +76,7 @@ def test_metadata():
 def test_render_page_to_pixels():
     """Rendering produces real pixels, at the size and depth asked for.
 
-    This is the test that proves the MuPDF rasterizer was cross-compiled into
+    This is the test that proves the MuPDF rasteriser was cross-compiled into
     something that runs: `get_pixmap` walks the display list and writes RGB
     samples. A page with a filled rectangle on it must come back with ink.
     """
@@ -99,7 +99,7 @@ def test_base14_fonts_are_built_in():
 
     MuPDF turns its bundled fonts into C arrays at build time, so a phone with
     no fontconfig and no /usr/share/fonts still draws glyphs. If that codegen
-    were skipped, this page would rasterize blank while `get_text` still
+    were skipped, this page would rasterise blank while `get_text` still
     reported the string, so the assertion has to be about pixels.
     """
     doc = pymupdf.open()

@@ -185,17 +185,21 @@ There is no `libc++_shared` equivalent: the extensions link the system `/usr/lib
   [`insert_font`](https://pymupdf.readthedocs.io/en/latest/page.html#Page.insert_font).
 - **There is no OCR.** MuPDF is built without Tesseract, so
   [`page.get_textpage_ocr()`](https://pymupdf.readthedocs.io/en/latest/page.html#Page.get_textpage_ocr)
-  and everything downstream of it fails at runtime. A scanned PDF is a page of images to this
-  build: it renders perfectly and extracts no text. Tesseract would bring its own language
-  data files as well as the engine, which is not something to add by accident.
+  and anything else that builds an OCR device raises `OCR Disabled in this build`. It fails
+  loudly rather than returning nothing, which is the good case — but a scanned PDF is a page
+  of images to this build: it renders perfectly and extracts no text. Tesseract would bring
+  its own language data files as well as the engine, which is not something to add by
+  accident.
 - **There is no signature support.** MuPDF is built without libcrypto, so PKCS#7 signing and
   signature *verification* are unavailable. Encryption is unaffected — the standard security
   handler is MuPDF's own code, so opening a password-protected PDF with
   `pymupdf.open(path)` then `doc.authenticate(password)` works, as does saving with
   `encryption=` and owner/user passwords.
-- **Also absent:** barcode generation and decoding (upstream exposes no Python API for it at
-  this version, and the ZXing library it would need is ~2 MB), and the `curl`, `X11` and
-  `glut` integrations, which are desktop viewer plumbing with no meaning in a Flet app.
+- **Also absent:** barcode generation and decoding — MuPDF's own entry points answer
+  `Barcode functionality not included`, though PyMuPDF exposes no Python API for them at this
+  version anyway, which is why the ~2 MB ZXing library is left out. Likewise the `curl`,
+  `X11` and `glut` integrations, which are desktop viewer plumbing with no meaning in a Flet
+  app.
 - **Rendering is the API to reach for, and the pixmap is the memory hazard, not the PNG.**
   `page.get_pixmap(dpi=...)` returns raw RGB samples, and they grow with the square of the
   scale: a text-filled A4 page is 1.4 MB at 72 dpi, 5.7 MB at 144 and **24.9 MB at 300**,
@@ -208,6 +212,11 @@ There is no `libc++_shared` equivalent: the extensions link the system `/usr/lib
   all of it `libmupdf`. There is no test suite or header directory to trim with
   `[tool.flet.cleanup]` — the library *is* the package. What you can do is ship fewer copies:
   on Android, `split_per_abi` or a `target_arch` narrowed to the ABIs you support.
+- **The Python API is upstream's, unchanged**, so upstream's documentation and the answers
+  you find online apply as written. The wheel ships the same 13 Python files as the
+  same-version desktop wheel, nine of them byte-identical; the four that differ are
+  `__init__.py` (the iOS preload described above), `_build.py` (build metadata) and the two
+  SWIG-generated layers, which are regenerated per target by construction.
 - **`flet run` on your desktop uses PyPI's wheel, not this one.** That build has a different
   font set and different compiled-in features, so a desktop run proves your code and not the
   device build. `pymupdf.TOOLS.fitz_config` reports what the wheel actually has, and it
@@ -278,5 +287,7 @@ What to re-verify on a bump, in rough order of how quietly it can go wrong:
 
 The tests cover import through both names, page composition, rendering to real pixels, the
 base-14 fonts, PNG encoding, search geometry, structured text, image round-trip, page
-surgery and a save/reopen through the filesystem. They do not cover encrypted documents, the
-non-PDF input formats, or `insert_htmlbox`.
+surgery, an encrypted round-trip, PNG and CBZ input, and a save/reopen through the
+filesystem. What they do not touch: `insert_htmlbox` and the HTML engine behind it, EPUB and
+XPS input (both only asserted through `fitz_config`), and any of the compiled-out features —
+the absence of OCR and signing is checked by reading the built library, not on device.
