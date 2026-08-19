@@ -1,0 +1,16 @@
+[project]
+name = "pyclipper-boolean-canvas"
+version = "1.0.0"
+description = "Polygon boolean ops and offsetting, drawn and checked against hand arithmetic."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "pyclipper==1.4.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

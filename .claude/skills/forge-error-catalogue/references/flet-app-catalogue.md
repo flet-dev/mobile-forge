@@ -213,6 +213,23 @@ Do the same for Android via `assets/app.zip`. A payload whose size or contents d
 `build/python-app/main.pyc` is the tell. This is the sibling failure to the crossed-`sitepackages`
 bundle above: there the *dependency* half was wrong, here the *app* half is.
 
+**Do not compare `main.pyc` by hash across two builds — it always mismatches, and the mismatch
+means nothing.** serious_python compiles the app in a fresh `mkdtemp`, so `co_filename` carries a
+random 6-character suffix (`/T/serious_python_tempme0dSM/main.py`) that is baked into the `.pyc`.
+Measured 2026-08-19 on fiona: the Android and iOS payloads from one back-to-back pair differed in
+exactly 6 bytes, all inside that suffix, with identical 16-byte headers (same source mtime, same
+source size) and identical 19,835-byte body lengths. Two consequences:
+
+- `build/python-app/main.pyc` is only a valid reference **for the build that just ran** — the next
+  build overwrites it, so check each artifact before starting the next one.
+- To compare two artifacts, compare the bodies with the temp path normalised, not the raw bytes:
+
+```bash
+python3 -c 'import re,sys; f=lambda p: re.sub(rb"serious_python_temp.{6}", b"T", open(p,"rb").read()[16:]); print("MATCH" if f(sys.argv[1])==f(sys.argv[2]) else "DIFFER")' a/main.pyc b/main.pyc
+```
+
+A real crossed payload is nothing like 6 bytes: the 2026-08-18 case was 8,191 bytes against 22,847.
+
 ### Never run two `flet build`s at the same time on one machine
 
 **Run them one after another.** Concurrent builds share mutable state and fail in three ways,

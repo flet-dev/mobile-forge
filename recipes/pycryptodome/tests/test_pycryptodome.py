@@ -34,7 +34,7 @@ def test_aes_cbc_roundtrip():
 
 
 def test_sha256_vector():
-    """SHA-256 has well-known reference vectors. NIST FIPS 180-4."""
+    """SHA-256 of "abc", from NIST's published example values."""
     from Crypto.Hash import SHA256
 
     h = SHA256.new()
