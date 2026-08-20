@@ -565,10 +565,26 @@ class Builder(ABC):
             env["ANDROID_API_LEVEL"] = str(self.cross_venv.sdk_version)
             env["HOST_TRIPLET"] = self.cross_venv.platform_triplet
 
+        # `env` wins. Everything forge has adjusted above — the compiler and
+        # binutils re-pointed at the installed NDK, and the CFLAGS/CPPFLAGS/LDFLAGS
+        # it extended with SDK, sysroot and `opt/lib` search paths — also exists as
+        # a build-time constant in `_sysconfigdata`, so merging sysconfig last would
+        # hand recipe templates the stale value. That is how `{CC}` came to expand
+        # to a path inside an embedded NDK that is not present on this host
+        # ("clang: not found" from a sub-make on the Android 3.14 tree), and how
+        # `{LDFLAGS}` came to omit the `opt/lib` a `flet-lib*` host dep installs
+        # into. Ordering it this way states the rule once instead of maintaining a
+        # list of keys to re-assert.
+        #
+        # This is forge's environment, not the recipe's: the loop below *appends*
+        # to env's LDFLAGS/CFLAGS/CPPFLAGS as it processes `script_env`, and
+        # `script_vars` is a snapshot taken before that. A recipe that both sets
+        # one of those and refers to it as `{...}` elsewhere therefore sees the
+        # value without its own additions.
         script_vars = {
-            **env,
-            **self.cross_venv.scheme_paths,
             **self.cross_venv.sysconfig_data,
+            **self.cross_venv.scheme_paths,
+            **env,
             "sysconfigdata_name": self.cross_venv.sysconfigdata_name,
         }
 

@@ -1,0 +1,66 @@
+iOS: preload the MuPDF dylibs before the extension modules import them.
+
+_extra and _mupdf name libmupdf and libmupdfcpp through @rpath. serious-python
+(PR #223, released in 4.2.1) relocates every bundled binary into its own
+framework bundle, and nothing on the extension modules' rpath points at where the
+dylibs land -- so dyld cannot resolve them, and because CPython's import
+machinery is what loads _extra, the failure is an ImportError at first use rather
+than something a later shim could repair.
+
+Loading the two dylibs with RTLD_GLOBAL first sidesteps the search entirely:
+dyld binds each @rpath reference by matching an already-loaded image's
+install-id, which crossenv-codegen.patch has pointed at the framework path. Order
+matters -- libmupdfcpp depends on libmupdf.
+
+The lookup tries a plain sibling .dylib first, then falls back to reading the
+'<name>.fwork' marker serious-python leaves behind and walking up the parent
+directories to find the framework it names. Failures are swallowed: on Android
+the DT_NEEDED entries resolve by basename from jniLibs and on desktop the wheel
+is unpatched upstream, so on both this block is dead weight that must not be able
+to break the import.
+
+--- a/src/__init__.py
++++ b/src/__init__.py
+@@ -29,6 +29,42 @@
+ import warnings
+ import weakref
+ import zipfile
++
++# mobile-forge (iOS): _extra.so / _mupdf.so link libmupdf.dylib + libmupdfcpp.dylib
++# via @rpath, but flet relocates the extension modules into per-module *.framework
++# bundles while those dependency dylibs ship as plain files in this package dir,
++# and nothing on the ext modules' rpath resolves them. Preload the two dylibs
++# (RTLD_GLOBAL, dependency order libmupdf -> libmupdfcpp) so dyld binds each @rpath
++# reference by the already-loaded image's install-id. Follow a '<name>.fwork' marker
++# when a serious_python build (>=4.2.1, PR #223) relocated the dylib into a framework.
++# No-op on Android (DT_NEEDED resolves by basename from jniLibs) and on desktop.
++try:
++    import ctypes as _mf_ct
++    _mf_dir = os.path.dirname(os.path.abspath(__file__))
++    for _mf_b in ('libmupdf', 'libmupdfcpp'):
++        _mf_dl = os.path.join(_mf_dir, _mf_b + '.dylib')
++        if os.path.exists(_mf_dl):
++            try:
++                _mf_ct.CDLL(_mf_dl, mode=_mf_ct.RTLD_GLOBAL)
++            except OSError:
++                pass
++            continue
++        _mf_fw = os.path.join(_mf_dir, _mf_b + '.fwork')
++        if not os.path.exists(_mf_fw):
++            continue
++        _mf_rel = open(_mf_fw).read().strip()
++        _mf_p = _mf_dir
++        for _mf_i in range(12):
++            _mf_p = os.path.dirname(_mf_p)
++            _mf_fb = os.path.join(_mf_p, _mf_rel)
++            if os.path.exists(_mf_fb):
++                try:
++                    _mf_ct.CDLL(_mf_fb, mode=_mf_ct.RTLD_GLOBAL)
++                except OSError:
++                    pass
++                break
++except Exception:
++    pass
+ 
+ from . import extra
+ 
