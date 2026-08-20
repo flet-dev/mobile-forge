@@ -2,18 +2,21 @@
 
 Nine shapes are drawn on a grid, then buried under Gaussian noise you control with a
 slider. [OpenCV](https://opencv.org/) segments them back out, names each one from its
-contour, and the annotated picture comes back on screen as JPEG bytes.
+contour, and the annotated picture comes back on screen as JPEG bytes. The table reports
+what was placed against what was found, how many contours survived the threshold before the
+area filter, and how long the pipeline took.
 
 What it demonstrates:
 
 - **Showing an OpenCV result without a GUI backend** — the mobile wheels have none, so
-  `cv2.imshow` raises. The frame is encoded with
+  [`cv2.imshow`](https://docs.opencv.org/5.x/main_modules/highgui.html#imshow) raises. The
+  frame is encoded with
   [`imencode`](https://docs.opencv.org/5.x/main_modules/imgcodecs.html#imencode) and
   handed straight to [`ft.Image.src`](https://flet.dev/docs/controls/image/#flet.Image.src),
   which accepts `bytes` as well as a path. JPEG rather than PNG because the buffer
   crosses the Flet transport on every run — at the top of the slider a PNG of the same
   frame is about four times larger.
-- **A real segmentation pipeline in one handler** —
+- **A real segmentation pipeline in one call** —
   [`cvtColor`](https://docs.opencv.org/5.x/main_modules/imgproc_color_conversions.html#cvtcolor),
   an Otsu [`threshold`](https://docs.opencv.org/5.x/main_modules/imgproc_misc.html#threshold)
   that picks its own cut point,
@@ -27,9 +30,8 @@ What it demonstrates:
   [`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update) that a
   background thread needs. The slider fires on
   [`on_change_end`](https://flet.dev/docs/controls/slider/#flet.Slider.on_change_end), not
-  `on_change`, so one drag runs the pipeline once instead of once per pixel travelled.
-- **Which stage actually survives noise** — the table reports the number of contours
-  found *before* the minimum-area filter alongside the final counts.
+  [`on_change`](https://flet.dev/docs/controls/slider/#flet.Slider.on_change), so one drag
+  runs the pipeline once instead of once per pixel travelled.
 
 Push the slider up and that contour count runs from nine into five figures while the
 shape counts hold: it is the area filter, not the threshold, doing the work. Push it all

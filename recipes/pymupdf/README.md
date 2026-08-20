@@ -18,10 +18,25 @@ Import it as `pymupdf`. The historical `fitz` name is still shipped as a separat
 module and still works, which matters because most PyMuPDF code you will find in the wild
 opens with `import fitz`.
 
+## Supported targets
+
+| Platform | Architectures |
+| -------- | ------------- |
+| [Android](https://flet.dev/docs/publish/android/#supported-target-architectures) | `arm64-v8a`, `armeabi-v7a`, `x86_64` |
+| [iOS device](https://flet.dev/docs/publish/ios/#flet-build-ipa) | `arm64` |
+| [iOS simulator](https://flet.dev/docs/publish/ios/#flet-build-ios-simulator) | `arm64`, `x86_64` |
+
+Built for Python 3.12, 3.13 and 3.14.
+
+This page describes pymupdf 1.27.2.3. Other published versions can differ in both Python
+and architecture coverage — [the index listing](https://pypi.flet.dev/pymupdf/) is the
+record of every wheel that actually exists.
+
 ## Install
 
+Add it to your `pyproject.toml`:
+
 ```toml
-# pyproject.toml
 dependencies = [
     "flet",
     "pymupdf",
@@ -35,14 +50,18 @@ relocating its bundled libraries into framework bundles, and on the marker files
 behind; on an older Flet the libraries land somewhere the loader will not look and the app
 dies at `import pymupdf` with `Library not loaded: @rpath/libmupdf.dylib`.
 
-Builds for all three Android ABIs Flet targets (arm64-v8a, armeabi-v7a, x86_64) and for iOS
-device and simulator, on Python 3.12, 3.13 and 3.14.
+## Examples
+
+See runnable Flet apps in [`examples/`](examples):
+
+- [`render-and-read`](examples/render-and-read) — builds a three-page PDF, rasterises it to
+  an image, and highlights search hits on the rendered page.
 
 ## Storage
 
 Most of the time you want no file at all. A document can be opened from a `bytes` object and
-written back to one, and a rendered page goes straight into a Flet control like [`Image`](https://flet.dev/docs/controls/image)
-which supports `bytes` as source:
+written back to one, and a rendered page goes straight into a Flet control like
+[`Image`](https://flet.dev/docs/controls/image), which supports `bytes` as source:
 
 ```python
 doc = pymupdf.open(stream=blob, filetype="pdf")           # no path
@@ -64,20 +83,13 @@ doc.save(os.path.join(data, "report.pdf"))
 is for documents the user expects to keep;
 [`FLET_APP_STORAGE_TEMP`](https://flet.dev/docs/reference/environment-variables/#flet_app_storage_temp)
 is for anything you can regenerate, such as a cache of rendered page images, and may be
-cleared between launches. A PDF shipped with the app is an asset: put it in your 
+cleared between launches. A PDF shipped with the app is an asset: put it in your
 [assets directory](https://flet.dev/docs/cookbook/assets) and read it later on using
 [`FLET_ASSETS_DIR`](https://flet.dev/docs/reference/environment-variables/#flet_assets_dir).
 
 [`doc.save(path, incremental=True)`](https://pymupdf.readthedocs.io/en/latest/document.html#Document.save)
 needs the document to have been opened from that same path, so it is only available for
 files you own on disk — not for the `stream=` case.
-
-## Examples
-
-See runnable Flet apps in [`examples/`](examples):
-
-- [`render-and-read`](examples/render-and-read) — builds a three-page PDF, rasterises it to
-  an image, and highlights search hits on the rendered page.
 
 ## Threading
 
@@ -198,7 +210,7 @@ preload is why the [Flet floor](#install) exists. It is inert on Android and on 
   version anyway, which is why the ~2 MB ZXing library is left out. Likewise the `curl`,
   `X11` and `glut` integrations, which are desktop viewer plumbing with no meaning in a Flet
   app.
-- **Rendering is the API to reach for, and the pixmap is the memory hazard, not the PNG:** 
+- **Rendering is the API to reach for, and the pixmap is the memory hazard, not the PNG:**
   `page.get_pixmap(dpi=...)` returns raw RGB samples, and they grow with the square of the
   scale: a text-filled A4 page is 1.4 MB at 72 dpi, 5.7 MB at 144 and **24.9 MB at 300**,
   where the PNG `tobytes("png")` produces is 14 KB, 248 KB and 522 KB. Only the PNG crosses

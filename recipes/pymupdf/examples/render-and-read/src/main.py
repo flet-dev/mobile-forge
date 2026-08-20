@@ -1,5 +1,4 @@
 import flet as ft
-
 from document import TITLES, VERSIONS, render
 
 
