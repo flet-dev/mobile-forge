@@ -7,10 +7,10 @@ to a bitmap at any scale; pulls the text back out with coordinates; and writes d
 scratch. On mobile that matters twice over — the file never leaves the device, and rendering
 a page locally is the difference between a viewer and a download button.
 
-**The wheel is self-contained: four native libraries ship inside it.** MuPDF itself
+The wheel is self-contained: four native libraries ship inside it, i.e., MuPDF itself
 (`libmupdf`), its C++ wrapper (`libmupdfcpp`), the SWIG module over that wrapper (`_mupdf`)
-and PyMuPDF's own accelerator (`_extra`). There is no companion `flet-lib*` package to add —
-but the four have to find each other at load time, and how that works differs between the
+and PyMuPDF's own accelerator (`_extra`). They have to find each other at load time,
+and how that works differs between the
 platforms, so it is described under [Android notes](#android-notes) and
 [iOS notes](#ios-notes) rather than here.
 
@@ -28,20 +28,12 @@ dependencies = [
 ]
 ```
 
-Nothing else to configure on Android: one extra wheel comes along and needs no entry of its
-own, `flet-libcpp-shared`, the NDK C++ runtime that MuPDF's C++ wrapper links against. On
-iOS there is no such dependency — the system `/usr/lib/libc++.1.dylib` covers it.
-
-**iOS needs Flet 0.86 or newer.** The iOS wheel relies on serious-python 4.2.1 (PR #223)
+**iOS needs Flet 0.86 or newer:** The iOS wheel relies on
+[serious-python](https://github.com/flet-dev/serious-python) 4.2.1
+([PR #223](https://github.com/flet-dev/serious-python/pull/223))
 relocating its bundled libraries into framework bundles, and on the marker files that leaves
 behind; on an older Flet the libraries land somewhere the loader will not look and the app
-dies at `import pymupdf` with `Library not loaded: @rpath/libmupdf.dylib`. Android has no
-such floor.
-
-No [`[tool.flet.android] extract_packages`](https://flet.dev/docs/publish/android/#extract-packages)
-entry is needed. Under Flet 0.86 Android ships site-packages as a compressed archive, which
-breaks any package that opens a bundled data file by path — pymupdf has none. The only
-non-code file in the wheel is an empty `py.typed`.
+dies at `import pymupdf` with `Library not loaded: @rpath/libmupdf.dylib`.
 
 Builds for all three Android ABIs Flet targets (arm64-v8a, armeabi-v7a, x86_64) and for iOS
 device and simulator, on Python 3.12, 3.13 and 3.14.
@@ -49,12 +41,13 @@ device and simulator, on Python 3.12, 3.13 and 3.14.
 ## Storage
 
 Most of the time you want no file at all. A document can be opened from a `bytes` object and
-written back to one, and a rendered page goes straight into a Flet control:
+written back to one, and a rendered page goes straight into a Flet control like [`Image`](https://flet.dev/docs/controls/image)
+which supports `bytes` as source:
 
 ```python
 doc = pymupdf.open(stream=blob, filetype="pdf")           # no path
 png = doc[0].get_pixmap(dpi=144).tobytes("png")
-image.src = png                                            # ft.Image.src takes bytes
+ft.Image(src=png)
 ```
 
 When a document does belong on disk, put it in Flet's app storage — the working directory is
@@ -71,8 +64,8 @@ doc.save(os.path.join(data, "report.pdf"))
 is for documents the user expects to keep;
 [`FLET_APP_STORAGE_TEMP`](https://flet.dev/docs/reference/environment-variables/#flet_app_storage_temp)
 is for anything you can regenerate, such as a cache of rendered page images, and may be
-cleared between launches. A PDF shipped with the app is an asset: put it under `src/assets/`
-and read it from
+cleared between launches. A PDF shipped with the app is an asset: put it in your 
+[assets directory](https://flet.dev/docs/cookbook/assets) and read it later on using
 [`FLET_ASSETS_DIR`](https://flet.dev/docs/reference/environment-variables/#flet_assets_dir).
 
 [`doc.save(path, incremental=True)`](https://pymupdf.readthedocs.io/en/latest/document.html#Document.save)
@@ -118,8 +111,15 @@ def work():
 Disabling the button that starts the work is not a substitute — it cannot catch a tap already
 in flight. Note also that exceptions raised inside `run_thread` are swallowed, so wrap the
 body if you want to see a `pymupdf.FileDataError` rather than a screen that never updates.
-If you need real parallelism, upstream's answer is multiprocessing with one document per
-process, which is not available to you here.
+If you need real parallelism, upstream's answer is
+[multiprocessing](https://flet.dev/docs/cookbook/multiprocessing) with one document per
+process — which mobile rules out, since neither platform lets an app spawn children.
+[Subinterpreters](https://flet.dev/docs/cookbook/subinterpreters), the in-process
+alternative on Python 3.14, do not help either: PyMuPDF's extensions use single-phase
+init, so importing it inside one fails with `ImportError: module _extra does not support
+loading in subinterpreters`, and every entry point — `pymupdf`, `fitz`, `pymupdf.mupdf` —
+trips the same check. That is upstream's to change, not this recipe's; it fails the same
+way on desktop. On device, one thread behind the lock is the whole story.
 
 ## Android notes
 
@@ -129,8 +129,8 @@ accepts bare `lib*.so`, so a stock `libmupdf.so.27.2` soname would leave `_mupdf
 a file that cannot be packaged. What ships is `libmupdf.so`, and the dependency entries
 naming it match.
 
-`libmupdfcpp`, `_mupdf` and `libmupdf` all link `libc++_shared.so`, which is the
-`flet-libcpp-shared` dependency in [Install](#install); Android does not provide the NDK C++
+`libmupdfcpp`, `_mupdf` and `libmupdf` all link `libc++_shared.so` (from
+`flet-libcpp-shared` dependency); Android does not provide the NDK C++
 runtime itself. Every `PT_LOAD` segment is 16 KB-aligned, so the wheels load on Android 15
 devices with 16 KB pages.
 
@@ -155,8 +155,6 @@ loads `libmupdf` and then `libmupdfcpp` with `RTLD_GLOBAL` before importing `_ex
 lets dyld satisfy each `@rpath` reference from an image that is already in memory. That
 preload is why the [Flet floor](#install) exists. It is inert on Android and on desktop.
 
-There is no `libc++_shared` equivalent: the extensions link the system `/usr/lib/libc++.1.dylib`.
-
 | | device arm64 | simulator arm64 | simulator x86_64 |
 | --- | --- | --- | --- |
 | `libmupdf.dylib` | 54.3 MB | 54.9 MB | 55.0 MB |
@@ -167,7 +165,7 @@ There is no `libc++_shared` equivalent: the extensions link the system `/usr/lib
 
 ## Things to know
 
-- **Fonts are compiled into the library, and that is most of the wheel.** MuPDF turns its
+- **Fonts are compiled into the library, and that is most of the wheel:** MuPDF turns its
   bundled fonts into C arrays at build time, so text renders on a device that has no
   PostScript fonts and no fontconfig — including scripts a PDF did not embed a font for.
   This build keeps the whole set: the base-14 faces, 159 Noto families, `DroidSansFallback`
@@ -176,21 +174,21 @@ There is no `libc++_shared` equivalent: the extensions link the system `/usr/lib
   the Noto set. If your PDFs embed their own fonts — most produced by real software do — you
   are paying for a fallback you will not use, but the choice is made at build time and
   cannot be changed from an app.
-- **The base-14 faces are Latin-1 only.** `page.insert_text(..., fontname="helv")` with an em
+- **The base-14 faces are Latin-1 only:** `page.insert_text(..., fontname="helv")` with an em
   dash, a curly quote or any non-Latin-1 character silently rasterises it as `?`. There is no
   exception; the string you read back with `get_text` is not what you see. Use
   [`insert_htmlbox`](https://pymupdf.readthedocs.io/en/latest/page.html#Page.insert_htmlbox),
   which lays text out through MuPDF's HTML engine and picks a font that has the glyph, or
   embed a font of your own with
   [`insert_font`](https://pymupdf.readthedocs.io/en/latest/page.html#Page.insert_font).
-- **There is no OCR.** MuPDF is built without Tesseract, so
+- **There is no OCR:** MuPDF is built without Tesseract, so
   [`page.get_textpage_ocr()`](https://pymupdf.readthedocs.io/en/latest/page.html#Page.get_textpage_ocr)
   and anything else that builds an OCR device raises `OCR Disabled in this build`. It fails
   loudly rather than returning nothing, which is the good case — but a scanned PDF is a page
   of images to this build: it renders perfectly and extracts no text. Tesseract would bring
   its own language data files as well as the engine, which is not something to add by
   accident.
-- **There is no signature support.** MuPDF is built without libcrypto, so PKCS#7 signing and
+- **There is no signature support:** MuPDF is built without libcrypto, so PKCS#7 signing and
   signature *verification* are unavailable. Encryption is unaffected — the standard security
   handler is MuPDF's own code, so opening a password-protected PDF with
   `pymupdf.open(path)` then `doc.authenticate(password)` works, as does saving with
@@ -200,7 +198,7 @@ There is no `libc++_shared` equivalent: the extensions link the system `/usr/lib
   version anyway, which is why the ~2 MB ZXing library is left out. Likewise the `curl`,
   `X11` and `glut` integrations, which are desktop viewer plumbing with no meaning in a Flet
   app.
-- **Rendering is the API to reach for, and the pixmap is the memory hazard, not the PNG.**
+- **Rendering is the API to reach for, and the pixmap is the memory hazard, not the PNG:** 
   `page.get_pixmap(dpi=...)` returns raw RGB samples, and they grow with the square of the
   scale: a text-filled A4 page is 1.4 MB at 72 dpi, 5.7 MB at 144 and **24.9 MB at 300**,
   where the PNG `tobytes("png")` produces is 14 KB, 248 KB and 522 KB. Only the PNG crosses
@@ -208,7 +206,7 @@ There is no `libc++_shared` equivalent: the extensions link the system `/usr/lib
   have the bytes, and set
   [`gapless_playback=True`](https://flet.dev/docs/controls/image/) on the `ft.Image` or it
   blanks between frames.
-- **Size.** The wheel is about 41 MB and unpacks to 69–74 MB depending on the slice, nearly
+- **Size:** The wheel is about 41 MB and unpacks to 69–74 MB depending on the slice, nearly
   all of it `libmupdf`. There is no test suite or header directory to trim with
   `[tool.flet.cleanup]` — the library *is* the package. What you can do is ship fewer copies:
   on Android, `split_per_abi` or a `target_arch` narrowed to the ABIs you support.
@@ -217,7 +215,7 @@ There is no `libc++_shared` equivalent: the extensions link the system `/usr/lib
   same-version desktop wheel, nine of them byte-identical; the four that differ are
   `__init__.py` (the iOS preload described above), `_build.py` (build metadata) and the two
   SWIG-generated layers, which are regenerated per target by construction.
-- **`flet run` on your desktop uses PyPI's wheel, not this one.** That build has a different
+- **`flet run` on your desktop uses PyPI's wheel, not this one:** That build has a different
   font set and different compiled-in features, so a desktop run proves your code and not the
   device build. `pymupdf.TOOLS.fitz_config` reports what the wheel actually has, and it
   differs between the two.
@@ -256,7 +254,7 @@ change with its own CI run.
 
 What to re-verify on a bump, in rough order of how quietly it can go wrong:
 
-- **That barcode is still off.** `MUPDF_MAKE` says `barcode=no`, and that setting alone does
+- **That barcode is still off:** `MUPDF_MAKE` says `barcode=no`, and that setting alone does
   nothing: MuPDF's wrapper script appends `barcode=yes` after it and make lets the last
   command-line assignment win, so the patch has to rewrite that token too. If either half is
   lost the build stays green and ZXing quietly returns. Check `strings libmupdf.so | grep
@@ -264,7 +262,7 @@ What to re-verify on a bump, in rough order of how quietly it can go wrong:
 - **The sonames, on Android.** They must be unversioned. A change in how `SO_VERSION=` is
   handled upstream produces a wheel that builds, packages and then fails to `dlopen` on
   device — the first symptom is an on-device test failure, not a build error.
-- **`_extra` on both platforms.** It is the one library pipcl links from its own flag list,
+- **`_extra` on both platforms:** It is the one library pipcl links from its own flag list,
   ignoring everything forge exports, so it is where dropped link flags show up: 16 KB
   `PT_LOAD` alignment on Android, and `LC_BUILD_VERSION` with a sane `minos` rather than a
   legacy `LC_VERSION_MIN_IPHONEOS` on iOS. Both are re-added by the patch and both are easy
@@ -275,7 +273,7 @@ What to re-verify on a bump, in rough order of how quietly it can go wrong:
 - **The compiled-out feature list**, read out of the built library rather than off the
   `MUPDF_MAKE` flags. The barcode case above is precisely why: a flag in the recipe is not
   evidence about the wheel.
-- **Whether `extract_packages` is still unnecessary.** It holds only while nothing in the
+- **Whether `extract_packages` is necessary:** It holds only if something in the
   package opens a bundled file by path. A new data file upstream flips it, and the symptom is
   an import failure on Android only.
 - **The font set**, which is the size story and the [Things to know](#things-to-know) claim

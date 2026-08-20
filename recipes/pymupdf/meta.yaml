@@ -1,35 +1,9 @@
 package:
   name: pymupdf
-  version: 1.27.2.3
-
-patches:
-  - crossenv-codegen.patch
-  - ios-dylib-preload.patch
-
-requirements:
-  build:
-    # PyMuPDF's build (setup.py -> pipcl -> mupdf/scripts/mupdfwrap.py) needs SWIG
-    # to wrap MuPDF's C++ API, and python clang bindings (libclang) to parse the
-    # MuPDF headers when generating the C++ wrapper. Both run on the host.
-    - swig
-    - libclang
-    - setuptools
-    # PyMuPDF's pyproject.toml asks for a bare `pipcl`, so the build would otherwise
-    # float on whatever version PyPI serves that day (12 releases in the four months
-    # to 2026-07). pipcl is the build backend AND the linker for _mupdf/_extra, and
-    # crossenv-codegen.patch monkeypatches pipcl.darwin, so an upstream refactor
-    # breaks the build with no change on our side. Installed first, which satisfies
-    # the unpinned requirement. Re-test and raise deliberately.
-    - pipcl 12
-# {% if sdk == 'android' %}
-  host:
-    # The MuPDF C++ wrapper (libmupdfcpp.so) + _mupdf.so are C++; on Android they
-    # link libc++_shared.so, which the device runtime doesn't provide unless bundled.
-    - flet-libcpp-shared >=27.2.12479018
-# {% endif %}
+  version: "1.27.2.3"
 
 build:
-  number: 0
+  number: 1
   script_env:
     # The libclang wrapper-codegen parse needs the real per-arch target triple so
     # MuPDF's manual size_t/int typedefs (rewritten to clang __*_TYPE__ builtins
@@ -123,3 +97,29 @@ build:
 # {% if sdk == 'android' %}
     LDFLAGS: -llog -L{HOST_PYTHON_HOME}/lib -lpython{py_version_short}
 # {% endif %}
+
+requirements:
+  build:
+    # PyMuPDF's build (setup.py -> pipcl -> mupdf/scripts/mupdfwrap.py) needs SWIG
+    # to wrap MuPDF's C++ API, and python clang bindings (libclang) to parse the
+    # MuPDF headers when generating the C++ wrapper. Both run on the host.
+    - swig
+    - libclang
+    - setuptools
+    # PyMuPDF's pyproject.toml asks for a bare `pipcl`, so the build would otherwise
+    # float on whatever version PyPI serves that day (12 releases in the four months
+    # to 2026-07). pipcl is the build backend AND the linker for _mupdf/_extra, and
+    # crossenv-codegen.patch monkeypatches pipcl.darwin, so an upstream refactor
+    # breaks the build with no change on our side. Installed first, which satisfies
+    # the unpinned requirement. Re-test and raise deliberately.
+    - pipcl 12
+# {% if sdk == 'android' %}
+  host:
+    # The MuPDF C++ wrapper (libmupdfcpp.so) + _mupdf.so are C++; on Android they
+    # link libc++_shared.so, which the device runtime doesn't provide unless bundled.
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
+
+patches:
+  - crossenv-codegen.patch
+  - ios-dylib-preload.patch

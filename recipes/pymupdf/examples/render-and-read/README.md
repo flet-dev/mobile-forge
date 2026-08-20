@@ -3,7 +3,7 @@
 A three-page PDF, built in memory when the app starts, then shown one page at a time as a
 rendered image. Page through it, and type a word into the search field to see every
 occurrence highlighted in yellow on the page. The caption reports how many pixels MuPDF
-produced and how long it took.
+produced, how long it took, and how big the PNG came out.
 
 What it demonstrates:
 
@@ -14,13 +14,13 @@ What it demonstrates:
   encodes the result, which
   [`ft.Image.src`](https://flet.dev/docs/controls/image/#flet.Image.src) accepts as bytes —
   no temp file, no base64.
-- **That the fonts are inside the wheel.** Page 1 sets the same sentence in four of the
+- **That the fonts are inside the wheel.:** Page 1 sets the same sentence in four of the
   base-14 faces. Nothing loads a font file; a phone has no PostScript fonts and no
   fontconfig, and the glyphs still draw because MuPDF compiles them into the library.
 - **Vector, not pixels.** Page 2 is a bar chart, a Bézier and three primitives written as
   page operators rather than an image, so the renderer decides how many pixels each one
   becomes. Ask for a larger pixmap and you get more detail, not a bigger blur.
-- **Text that survives the render.**
+- **Text that survives the render:**
   [`page.search_for`](https://pymupdf.readthedocs.io/en/latest/page.html#Page.search_for)
   returns a rectangle per hit, in page points; the app turns each into a
   [highlight annotation](https://pymupdf.readthedocs.io/en/latest/page.html#Page.add_highlight_annot),
