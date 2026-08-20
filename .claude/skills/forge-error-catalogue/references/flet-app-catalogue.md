@@ -82,6 +82,37 @@ bar, and use both when you want a title *and* bottom-edge safety.
 Verified on an Android emulator and an iPhone simulator: with **neither**, the header text
 sits under the status bar on both platforms; with both, it is clear on both.
 
+### Everything below the AppBar is blank on iOS, and Android renders it fine
+
+**Symptom:** the app builds its whole control tree — the log shows every `Text build:`,
+`Column build:`, the computed values, the `applyPatch` messages — and the screen shows the
+AppBar title over empty space. **No exception, no overflow stripes, no error of any kind**, on
+either side. The same build renders correctly on Android.
+
+**Cause:** a control with `expand=True` sitting as a **direct child of a scrolling `Column`**
+(`ft.Column(scroll=ft.ScrollMode.AUTO, controls=[... ft.SegmentedButton(expand=True) ...])`).
+A scroll viewport is unbounded in its scroll direction, so a flex child has nothing to expand
+into. Android tolerates it; iOS collapses **the entire viewport** to zero height, taking every
+sibling with it, which is why the failure looks like "the app produced nothing" rather than
+"one control is wrong".
+
+**Fix:** give it a bounded parent, or drop the `expand`. Wrapping in a `Row` keeps the
+full-width appearance:
+
+```python
+ft.Row(controls=[ft.SegmentedButton(expand=True, ...)])   # renders on both
+```
+
+Measured 2026-08-20 across five examples built the same day, which isolates it cleanly: two
+with `expand=True` inside a `Row` rendered, two with no `expand` as direct children rendered,
+and the one with `expand=True` as a direct child of the scrolling `Column` was blank on iOS and
+correct on Android.
+
+**Diagnosing it:** the tell is that the log is *healthy*. If you see the control tree being
+built and patched with real values while the screen stays empty, stop looking for an exception
+and start looking for a layout contradiction — an `expand` under a scroll, an unbounded
+`ListView` inside a `Column`, or a `Row` inside a horizontally-unbounded parent.
+
 ### A control row shows Flutter's yellow/black "OVERFLOWED BY n PIXELS" stripes
 
 **Symptom:** a striped marker down one edge of the screen, with the overflow amount

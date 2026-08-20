@@ -1,0 +1,16 @@
+[project]
+name = "greenlet-coroutine-switch"
+version = "1.0.0"
+description = "greenlet's stack-switching assembly measured and validated on device."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "greenlet==3.5.1",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

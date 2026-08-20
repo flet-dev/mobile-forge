@@ -1,0 +1,16 @@
+[project]
+name = "uuid-utils-id-generator"
+version = "1.0.0"
+description = "Four UUID schemes judged as database keys, on device."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "uuid-utils==0.17.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

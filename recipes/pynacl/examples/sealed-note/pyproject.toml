@@ -1,0 +1,16 @@
+[project]
+name = "pynacl-sealed-note"
+version = "1.0.0"
+description = "Seals a note with a passphrase and a public key, then flips every bit of it."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "pynacl==1.6.2",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

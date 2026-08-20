@@ -1,0 +1,16 @@
+[project]
+name = "selectolax-page-scrape"
+version = "1.0.0"
+description = "A broken HTML page scraped with selectolax, priced against html.parser."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "selectolax==0.4.10",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
