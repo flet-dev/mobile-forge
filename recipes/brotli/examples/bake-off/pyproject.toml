@@ -1,0 +1,16 @@
+[project]
+name = "brotli-bake-off"
+version = "1.0.0"
+description = "brotli measured against zlib, gzip, lzma and bz2 on the same bytes, on device."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "brotli==1.2.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

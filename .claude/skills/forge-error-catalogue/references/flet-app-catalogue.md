@@ -133,6 +133,42 @@ project directory.
 **Fix:** keep app code in `src/` and set `path = "src"` (what `flet create` generates).
 Measured: an example app with `path = "."` shipped 7 files, of which 1 was the app.
 
+### A library reads its own source with `open(__file__)` and gets bytecode
+
+**Symptom:** a package that inspects its own file at runtime — self-tests, doctest collectors,
+`inspect.getsource`, license printers — fails or returns garbage on device, on **both** platforms,
+while working on desktop.
+
+**Cause:** `compile.packages` defaults to true, so what ships is `foo.pyc` with no `foo.py`
+alongside it. On a sourceless module `__file__` points at the **`.pyc`**, so `open(__file__, "rb")`
+hands back bytecode starting with the magic number, not source. Verified 2026-08-19 with
+`compileall -b`, deleting the source, then reading `m.__file__` — it resolves to the `.pyc` and the
+first bytes are `2b0e0d0a` (the CPython 3.14 magic). `extract_packages` does not help: it changes
+*where* the file lives, not whether a `.py` exists beside it.
+
+**Fix:** set `compile.packages = false` in `[tool.flet]` if you need real source on device, or
+avoid the code path. Do not assume this is iOS-only — the sourceless `__file__` is identical on
+Android, and a page claiming otherwise is wrong.
+
+### `sitepackages.zip` contains `__init__.py` files that exist in no wheel
+
+**Symptom:** a check like "package X's test suite can never be imported, because there is no
+`X/tests/__init__.py`" is false on Android, and any conclusion resting on it is wrong.
+
+**Cause:** `zipimport` has **no namespace-package support**, so serious_python's zip step
+synthesises a **zero-byte `__init__.py`** for every namespace directory on the way in. Measured
+2026-08-19 in a built APK: `regex/tests/__init__.py` and `flet/messaging/__init__.py` were both
+present at zero bytes in `assets/sitepackages.zip` and in no wheel; the iOS `build/site-packages/`
+tree — a real directory, not a zip — had neither.
+
+**Consequence:** Android turns namespace dirs into importable packages and iOS does not, so
+"is it importable?" can differ per platform for the same source. Check the built payload, not the
+wheel:
+
+```bash
+unzip -p build/apk/<app>.apk assets/sitepackages.zip > /tmp/sp.zip && unzip -l /tmp/sp.zip | grep '__init__.py'
+```
+
 ### `flet build` fails resolving deps, but only from a clean checkout
 
 **Symptom:** `No solution found when resolving dependencies for split (markers:
@@ -184,6 +220,50 @@ PIP_NO_CACHE_DIR=1 uv run flet build apk
 
 That built first time. Note this is pip's cache inside the app build, not uv's — clearing
 `~/.cache/uv` will not help, and neither will `rm -rf build/`.
+
+### Blank screen, no traceback, and the log stops at `after Py_Initialize()`
+
+**Symptom:** `flet build` succeeds, the app installs and launches, the activity reports
+`Fully drawn`, and the screen stays blank forever. logcat shows serious_python getting as far as:
+
+```
+[serious_python] CPython loaded
+[serious_python] after Py_Initialize()
+```
+
+and then **nothing** — no `Traceback`, no `ModuleNotFoundError`, no crash. The app is not hung on
+your code; it never reached it.
+
+**Cause:** the build targeted a **different Python minor version than the one that compiled the
+payload**. flet compiles `main.py` and the site-packages to bytecode with the *host* interpreter,
+so a 3.14 host against a 3.12 runtime produces `.pyc` files whose magic number the runtime
+rejects, and the import machinery fails before any Python-level error handler exists to report it.
+
+Observed 2026-08-20: four examples that had built and run correctly at 3.14 rebuilt two hours later
+targeting 3.12 — same `flet-cli` 0.86.5, same default `v0.85.2` template, same 3.14 host venv, same
+sources. The trigger was a **mutated project venv**: a process had rewritten packages inside
+`.venv` between the two runs.
+
+**Diagnose in one command** — the APK names the runtime it will load:
+
+```bash
+unzip -l build/apk/<app>.apk | grep -oE 'libpython3\.[0-9]+\.so' | head -1
+```
+
+Compare it against the host that did the compiling (`.venv/bin/python -V`). They must agree on the
+minor version. The iOS equivalent is the extension suffix under `build/site-packages/`:
+`foo.cpython-312-iphoneos.so` vs `cpython-314`.
+
+**Fix:** delete the project venv *and* the lock, then rebuild — clearing `build/` alone is not
+enough, because the wrong runtime is chosen during dependency resolution:
+
+```bash
+rm -rf .venv uv.lock build && uv run flet build apk
+```
+
+**Do not chase this in your app code.** Nothing in `main.py` can cause it and nothing in `main.py`
+can fix it; the symptom is identical for every app in the batch, which is the tell that it is
+environmental rather than a bug you introduced.
 
 ### A build reports OK but the app on screen is a DIFFERENT app
 

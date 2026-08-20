@@ -1,0 +1,16 @@
+[project]
+name = "regex-vs-re"
+version = "1.0.0"
+description = "The same pattern through re and through regex, with the difference on screen."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "regex==2026.5.9",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

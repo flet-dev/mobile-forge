@@ -1,0 +1,16 @@
+[project]
+name = "ujson-shape-bench"
+version = "1.0.0"
+description = "Times ujson against the stdlib json per payload shape and audits the swap."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "ujson==5.12.1",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

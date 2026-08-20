@@ -1,0 +1,16 @@
+[project]
+name = "bitarray-bloom-filter"
+version = "1.0.0"
+description = "A Bloom filter drawn as a bitmap, with its error rate measured against theory."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "bitarray==3.8.1",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
