@@ -1,0 +1,16 @@
+[project]
+name = "rpds-py-undo-stack"
+version = "1.0.0"
+description = "Keeps every version of a document with rpds-py's persistent HashTrieMap."
+requires-python = ">=3.11"
+
+dependencies = [
+    "flet==0.86.5",
+    "rpds-py==2026.5.1",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

@@ -1,0 +1,16 @@
+[project]
+name = "tornado-local-server"
+version = "1.0.0"
+description = "Runs a tornado HTTP server inside a Flet app and calls it over loopback."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "tornado==6.5.7",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

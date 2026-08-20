@@ -1,0 +1,16 @@
+[project]
+name = "pyxirr-cashflow-desk"
+version = "1.0.0"
+description = "Solves dated cash flow schedules for XIRR with pyxirr and checks the answer."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "pyxirr==0.10.8",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

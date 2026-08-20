@@ -1,0 +1,17 @@
+[project]
+name = "jiter-partial-json"
+version = "1.0.0"
+description = "Parses a JSON document while it is still arriving, with jiter's partial mode."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "jiter==0.15.0",
+    "ujson==5.12.1",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

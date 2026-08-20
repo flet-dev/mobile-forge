@@ -256,19 +256,28 @@ is reviewed in the same pull request and bumped in the same commit as the recipe
        of getting it wrong — not as a pin in the snippet. (The example's own
        ``pyproject.toml`` is the opposite case and *is* pinned — see below. One is material to
        imitate, the other is a combination to reproduce.)
-    #. ``## Storage`` — only if the package reads or writes files. Where they belong, in terms
-       of Flet's app-storage environment variables.
     #. ``## Examples`` — a **link to** ``examples/`` and a one-line bullet per example, and
        nothing more. No code, not even an excerpt; no run commands; no description of what
        the app demonstrates. All of that lives in the example's own ``README.md``, which is
        the single source of truth for it — anything repeated here is a second copy to keep
        in sync, and it will not be kept in sync.
-    #. ``## Threading`` — only if there is something to say about background work.
-    #. ``## Android notes`` / ``## iOS notes`` — only where the two platforms genuinely differ.
+    #. ``## Usage in a Flet app`` — the heart of the page, written as a manual rather than a
+       report. Lead with code the reader can paste: the two or three calls that do the job,
+       and the Flet control the result goes into. Then ``###`` subsections, omitting any that
+       do not apply — ``Storage`` (where files belong, in terms of Flet's app-storage
+       environment variables), ``Threading``, one named for whatever this package actually
+       makes you think about (``Rendering and memory``, ``Precision``, ``Model files``),
+       ``App size`` (the figure *and* the lever: app bundle, split APKs, ``target_arch``),
+       and ``Other considerations`` — where the desktop ``flet run`` wheel differs from the
+       mobile one, and what to validate on a device because of it.
     #. ``## Things to know`` — bulleted gotchas and recommendations; the last consumer-facing
        section. State what breaks and the symptom it produces, not just the rule.
     #. ``## Build notes (maintainers)`` — the only maintainer-facing section, and the reason
-       it is explicitly labelled: everything above it addresses the app author. It does
+       it is explicitly labelled: everything above it addresses the app author. Give it
+       ``###`` subsections: ``Recipe shape`` (why it is built this way, and what was tried
+       and rejected), ``Upgrade hazards``, ``Re-verification checklist`` and ``Coverage
+       gaps`` — what the on-device tests do *not* exercise, so nobody mistakes a green run
+       for full cover. It does
        **not** explain the patches or the build flags. A patch explains itself in its own
        preamble, and a ``meta.yaml`` setting is explained in a comment next to it; repeating
        either here just creates a third copy to keep in sync. What belongs here is only what
@@ -294,6 +303,22 @@ is reviewed in the same pull request and bumped in the same commit as the recipe
     ``__file__`` at all on Android" — because that is a claim about the *package*, checkable
     against the wheel, not a claim about the *page*.
 
+    **Sizes are decimal** — MB is 10⁶ bytes, KB is 10³, matching how a wheel's own byte count
+    reads and how package indexes report it. ``du`` and the Finder use binary units, so a
+    maintainer re-measuring a "1.7 MB" payload with ``du -h`` sees 1.6 M and can mistake a unit
+    for a regression. Quote decimal, and where a page invites re-measurement say which tool to
+    use — the same care a memory figure needs, since ``sys.getsizeof`` and resident-set growth
+    answer different questions and can differ by a factor of four for the same object.
+
+    **Write a manual, not a report.** The reader is adding a package to an app, not auditing
+    a wheel. Wheel sizes, symbol tables, ``DT_NEEDED`` lists and byte-exact inventories are
+    maintainer material: either they support a piece of consumer advice — a size figure that
+    justifies narrowing ``target_arch``, a missing symbol that explains a missing feature — or
+    they belong under ``## Build notes (maintainers)``, or nowhere. Prefer a round number and
+    a range ("approximately 40–41 MB compressed") to false precision, and spend the words on
+    what the reader should *do*. A recipe page that runs much past two hundred lines is
+    usually a report wearing a manual's headings.
+
     Do not restate the recipe version — ``meta.yaml`` is the source of truth and prose goes
     stale on the first bump. Claims about the wheel should be checked against the wheel, and
     claims about on-device behaviour should be backed by a test in ``tests/``.
@@ -312,6 +337,18 @@ is reviewed in the same pull request and bumped in the same commit as the recipe
     file are one example. Each app must show a result computed by the package on screen, and
     must build as-is, because the per-example ``pyproject.toml`` is itself part of what is
     being taught.
+
+    **Keep** ``main.py`` **to the app, and put the package's work in its own module.** A
+    single file that mixes Flet layout with the library's real code is harder to read than
+    the two files it should have been, and the layout ends up burying the part the reader
+    came for. ``main.py`` holds the UI and its wiring — the controls, the handlers, the
+    background-thread plumbing — and imports what it needs from a sibling module named for
+    the domain (``shapes.py``, ``document.py``), which owns the constants and the functions
+    that actually use the package and returns plain values. ``src/`` is the package root, so
+    the import is flat: ``from shapes import analyse, scene``. As a rule of thumb ``main.py``
+    stays around a hundred lines; when it grows past that, the excess is usually domain code
+    that wants moving. A genuinely tiny example may stay one file, but reach for the split
+    before writing a third screenful.
 
     **Every function in the example carries a docstring**, including ``main`` and the nested
     handlers. Say what it does and, where it is not obvious, why it is shaped that way — the

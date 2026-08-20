@@ -1,0 +1,16 @@
+[project]
+name = "markupsafe-escape-inspector"
+version = "1.0.0"
+description = "Builds one comment four ways and counts the tags the input smuggles in."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "markupsafe==3.0.3",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
