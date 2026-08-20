@@ -18,8 +18,6 @@ dependencies = [
 ]
 ```
 
-`numpy` is installed automatically.
-
 **Install exactly one OpenCV distribution.** All three choices below provide the same
 top-level package, `cv2`. Installing more than one lets their files overwrite each other and
 leaves the result dependent on installation order. This is the same restriction documented
