@@ -1140,6 +1140,72 @@ A real recipe break reproduces on rerun and names a compiler/CMake error.
 
 ---
 
+### A recipe flag in `MUPDF_MAKE` / any sub-`make` command line provably has no effect
+
+**Cause:** the upstream build script appends **its own** make arguments *after* the
+string it took from your env var, and `make` lets the **last** command-line
+assignment win. PyMuPDF's `mupdfwrap.py` does exactly this — it honours
+`$MUPDF_MAKE` verbatim and then appends
+`' HAVE_GLUT=no HAVE_PTHREAD=yes verbose=yes barcode=yes'`, so the recipe's
+`barcode=no` was silently overridden and ~16 MB of ZXing C++ shipped in every
+wheel for a feature PyMuPDF exposes no Python API for.
+
+**Fix:** don't trust the flag — **verify the outcome in the built artifact**
+(`strings libmupdf.so | grep -c ZXing`), then patch the appending line itself.
+The recipe already patches the upstream scripts, so this is one more idempotent
+`_mf_edit`: `"verbose=yes barcode=yes"` → `"verbose=yes barcode=no"`. Keep the
+`meta.yaml` flag as well and say in a comment that the two must stay in step.
+Before flipping a feature off, check the C source has a **stub** rather than
+dropping the symbol — MuPDF's `barcode.c` keeps `fz_new_barcode_pixmap` under
+`#if !FZ_ENABLE_BARCODE` and throws, so the generated C++ wrapper still links.
+(From `recipes/pymupdf`.) The general tell: a `meta.yaml` flag that a build-log
+grep shows on the command line *and* whose effect is absent from the binary.
+
+---
+
+### Only one extension in the wheel is missing a link flag forge exports (16 KB alignment, iOS deployment target)
+
+**Cause:** the package links that one library with a build backend that composes
+its own link line and never reads `$LDFLAGS`. PyMuPDF's `pipcl` builds
+`_extra.so` from `linker_command / general_flags / libpaths / libs /
+linker_extra / pythonflags.ldflags / rpath_flag` — forge's `LDFLAGS` is not in
+that list, while the other three libraries get everything through MuPDF's own
+`make`. Two different symptoms, one cause:
+
+- Android — forge's `_check_elf_alignment` *raises* on the 4 KB `PT_LOAD`,
+  failing the wheel.
+- iOS — no failure at all. The linker just writes a legacy
+  `LC_VERSION_MIN_IPHONEOS 7.0` where the siblings carry `LC_BUILD_VERSION` /
+  `minos 13.0`, which only shows up in `otool -l`.
+
+**Fix:** re-add the flags inside the backend, keyed off `CROSS_VENV_SDK`, and
+source the values from the environment forge already exports so they cannot
+drift (`-Wl,-z,max-page-size=16384` on android; on iOS, re-use the
+`-mios-version-min=…` token parsed out of `$CFLAGS`). **Diagnostic:** compare
+the load commands of every native file in the wheel against each other —
+`llvm-readelf -l` / `otool -l | grep -A3 LC_BUILD_VERSION` — an odd one out is
+the one its build backend linked. (From `recipes/pymupdf`.)
+
+---
+
+### The build breaks with no change on your side (unpinned build backend)
+
+**Cause:** the package's `[build-system] requires` names a build backend with
+**no version bound**, and forge installs `pyproject["build-system"]["requires"]`
+as-is, so every build resolves whatever PyPI serves that day. PyMuPDF requires a
+bare `pipcl` — which is simultaneously its PEP 517 backend and the linker for
+`_mupdf`/`_extra`, and which the recipe monkeypatches — and pipcl shipped twelve
+releases in the four months to 2026-07.
+
+**Fix:** pin it in `requirements.build` (`- pipcl 12`). `install_requirements`
+runs before the pyproject requires are installed and targets the same build env,
+and a bare `pipcl` requirement is then already satisfied, so the pin wins with no
+patching. Raise it deliberately, with a build. **Check for this whenever a recipe
+patches or monkeypatches anything in its build backend** — that is the case where
+upstream drift becomes your build break. (From `recipes/pymupdf`.)
+
+---
+
 ## Runtime failures (on device/emulator/simulator)
 
 ### Flet 0.86 changed Android packaging — `sitepackages.zip` + jniLibs relocation (the umbrella behind a whole class of "worked under 0.85, fails now" on-device failures)

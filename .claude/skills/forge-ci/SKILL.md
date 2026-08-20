@@ -58,9 +58,7 @@ Key structural facts:
   wheels that are identical on every Python leg, so they build **only on the
   canonical (first-listed, i.e. 3.12) leg**. On the 3.13/3.14 legs they are
   filtered out of the package list entirely.
-- **Mobile tests run only on the legs listed in `mobile_test_pythons`**
-  (default `3.12` — and per hard experience, 3.12 is the only leg whose mobile
-  tests pass on this fork; never dispatch `mobile_test_pythons=ALL`).
+- Mobile tests run only on the legs listed in `mobile_test_pythons` (default: `3.12`).
 - The mobile test bumps local wheels' build tag to `9999` in `dist-test/` so
   pip prefers them over same-version wheels already published on
   pypi.flet.dev.
@@ -214,8 +212,27 @@ Seen repeatedly on this fork; all are safe to retry once:
   it's not transient — see the `forge-error-catalogue` skill (`User for
   pypi.flet.dev:` entry).
 
+- **`Execution failed for task ':serious_python_android:downloadDistArchive_<abi>'`**
+  → `groovy.json.JsonException: Unable to determine the current character …
+  The current character read is '\0' … index number 255` in the **"Stage
+  tests + build recipe-tester APK"** step. serious_python's Gradle download
+  task got a truncated/corrupt body where JSON was expected. Nothing to do
+  with the recipe. It is **easy to misread as a recipe failure** because the
+  step name mentions the recipe and the flet output has no `##[error]` of its
+  own — the log just stops and cleanup terminates orphan java/adb processes.
+  TELLS that it is this: all wheels built (`Successfully built <pkg>-…whl`
+  for every ABI) and the `wheels-*` artifact exists for the red leg, the
+  failure is *after* the wheel phase, and `Gradle task assembleRelease failed
+  with exit code 1` is the only error. Find the root cause by grepping the
+  extracted log for `What went wrong` — not for `##[error]`/`Error building
+  Flet`, which only match the generic tail. Rerun clears it.
+
 Real failures reproduce on rerun. Don't retry more than once without reading
 the log.
+
+Note `PKG_VERSION` being empty in `stage_recipe.sh <pkg> ''` is **not** a
+fault: it is derived from the *dispatch input* (`packages="pkg:"` → empty),
+not from `meta.yaml`, so a trailing colon always stages an unpinned dep.
 
 ## Dispatch inputs quick reference
 
@@ -224,7 +241,7 @@ the log.
 | `packages` | `"name:"` entries, comma-separated; `:` suffix means default version. `ALL` expands to every recipe |
 | `prebuild_recipes` | comma-separated, **ordered**, built per-job before packages |
 | `python_versions` | defaults to all three; narrow for a quick re-run (e.g. `3.12.13`) |
-| `mobile_test_pythons` | default `3.12` — leave it; never `ALL` on this fork. Pass `""` to build wheels WITHOUT the on-device test (e.g. when the test can't pass yet because the fix lives in unreleased serious_python — you'll test locally) |
+| `mobile_test_pythons` | default `3.12`. |
 | `archs` | default `android,iOS` |
 | `python_build_run_id` | a `flet-dev/python-build` Actions run-id whose artifacts to use instead of the pinned release; empty → the hardcoded FALLBACK in `build-wheels-version.yml` (grep `PYTHON_BUILD_RUN_ID: ${{ … || '<id>' }}`). Bump that fallback to ship an unreleased python-build fix to every job |
 
