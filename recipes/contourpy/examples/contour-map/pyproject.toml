@@ -1,0 +1,17 @@
+[project]
+name = "contourpy-contour-map"
+version = "1.0.0"
+description = "Filled contour bands and isolines traced by contourpy and drawn on a canvas."
+requires-python = ">=3.11"
+
+dependencies = [
+    "flet==0.86.5",
+    "contourpy==1.3.3",
+    "numpy==2.4.6",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

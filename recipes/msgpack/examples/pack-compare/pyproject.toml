@@ -1,0 +1,16 @@
+[project]
+name = "msgpack-pack-compare"
+version = "1.0.0"
+description = "msgpack measured against json on the same objects, on device."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "msgpack==1.1.2",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

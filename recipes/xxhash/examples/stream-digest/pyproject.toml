@@ -1,0 +1,16 @@
+[project]
+name = "xxhash-stream-digest"
+version = "1.0.0"
+description = "xxhash measured against crc32, md5 and sha256 on the same bytes, on device."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "xxhash==3.8.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

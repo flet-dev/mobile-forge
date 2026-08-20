@@ -1,0 +1,16 @@
+[project]
+name = "time-machine-frozen-clock"
+version = "1.0.0"
+description = "Freeze a phone's clock with time-machine and see which readings follow."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "time-machine==3.2.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
