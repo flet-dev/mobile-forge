@@ -6,7 +6,7 @@ functions a spreadsheet calls XIRR, XNPV, IRR, NPV, MIRR, PMT, PV and FV, plus a
 private-equity measures such as DPI, TVPI, KS-PME and direct alpha. XIRR is the one it is
 named after: the annualised rate at which a schedule of *dated, irregularly spaced* cash
 flows breaks even. In a Flet app it prices a portfolio, a loan book or a fund's drawdowns
-on the device, offline — the wheel has no dependencies at all.
+on the device, offline.
 
 It is a numerical root-finder, so the interesting question is not throughput but whether
 the number it hands back is the one you wanted. See [Convergence](#convergence).
@@ -22,10 +22,9 @@ dependencies = [
 ]
 ```
 
-Nothing else is pulled in. pyxirr accepts `numpy` arrays and `pandas` Series and
-DataFrames if your app happens to have them — and hands a `numpy` array back when it was
-given one — but lists, tuples, dicts and generators work with neither installed, and
-importing pyxirr imports neither.
+Pass cash flows as lists, tuples, dicts or generators. pyxirr also takes `numpy` arrays and
+`pandas` Series and DataFrames when your app already has them, and hands a `numpy` array back
+when it was given one.
 
 ## Examples
 

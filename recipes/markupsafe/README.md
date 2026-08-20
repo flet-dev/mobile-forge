@@ -21,12 +21,6 @@ dependencies = [
 ]
 ```
 
-Nothing else is needed: the package is two small Python modules plus an optional C
-extension, with no dependencies of its own, no native library, and nothing it has to
-find on disk at runtime. Most apps never add it on purpose —
-[Jinja2](https://jinja.palletsprojects.com/) requires `MarkupSafe>=2.0`, so anything
-built on Jinja brings it in, and the mobile wheel is picked up automatically.
-
 ## Examples
 
 See runnable Flet apps in [`examples/`](examples):

@@ -21,10 +21,6 @@ dependencies = [
 ]
 ```
 
-The wheel is one self-contained extension module behind the small `__init__.py` that re-exports
-it. It has no Python dependencies, needs no `[tool.flet.*]` entries, and reads no files at
-runtime.
-
 ## Examples
 
 See runnable Flet apps in [`examples/`](examples):

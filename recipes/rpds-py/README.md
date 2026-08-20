@@ -23,10 +23,6 @@ dependencies = [
 ]
 ```
 
-Many apps already ship it without asking: both `jsonschema` and `referencing` require
-`rpds-py`, so an app that validates JSON Schema is installing this wheel already and
-`import rpds` costs it nothing.
-
 ## Examples
 
 See runnable Flet apps in [`examples/`](examples):

@@ -249,7 +249,18 @@ is reviewed in the same pull request and bumped in the same commit as the recipe
     #. An H1 with the pip name, then a short paragraph on what the package is and why you
        would use it on mobile.
     #. ``## Install`` — the ``pyproject.toml`` dependencies snippet, plus any ``[tool.flet.*]``
-       tables the package needs. List dependencies bare (``"flet"``, ``"<package>"``): a bare
+       tables the package needs. Usually that is the whole section. Say nothing about what the
+       package *does not* need: "it has no dependencies of its own", "needs no ``[tool.flet.*]``
+       entries", "nothing else is pulled in", "numpy is installed automatically" — a reader who
+       pastes the snippet and builds never had the question, and the sentence only invites one.
+       Do not name transitive machinery that resolves itself either: telling someone their
+       Android wheel pulls ``flet-libcpp-shared`` for ``libc++_shared.so`` hands them a term to
+       go and look up in exchange for nothing they can act on (it belongs in **Build notes**,
+       where a maintainer does need it). And do not list which other packages depend on this one
+       — no index does that, the list is never complete, and writing three implies there are
+       three. What *does* belong here is anything that changes what the reader types or what
+       happens when they build: a minimum Flet version and the symptom of getting it wrong, a
+       platform table and why, or the argument types the API will accept. List dependencies bare (``"flet"``, ``"<package>"``): a bare
        requirement resolves to the latest release, and a version in a snippet people paste is
        a pin they will still be carrying two releases later. Where the package really does
        need a minimum Flet version, say so **in prose** next to the snippet, with the symptom

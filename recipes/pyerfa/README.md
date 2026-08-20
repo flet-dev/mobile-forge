@@ -22,8 +22,6 @@ dependencies = [
 ]
 ```
 
-`numpy` is installed automatically.
-
 ## Examples
 
 See runnable Flet apps in [`examples/`](examples):

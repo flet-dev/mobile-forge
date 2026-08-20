@@ -21,8 +21,6 @@ dependencies = [
 ]
 ```
 
-Nothing else is pulled in: tornado declares no dependencies of its own.
-
 ## Examples
 
 See runnable Flet apps in [`examples/`](examples):

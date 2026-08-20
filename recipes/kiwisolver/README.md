@@ -24,11 +24,6 @@ dependencies = [
 ]
 ```
 
-It has no Python dependencies of its own. The Android wheels declare `flet-libcpp-shared`,
-which delivers the `libc++_shared.so` that the C++ extension links against; it resolves
-automatically and does not belong in your dependency list. An app that installs
-[`matplotlib`](../matplotlib) already has kiwisolver, because matplotlib requires it.
-
 ## Examples
 
 See runnable Flet apps in [`examples/`](examples):
