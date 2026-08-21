@@ -11,3 +11,6 @@ source:
   # The `file` project ships a release tarball with a pre-generated ./configure
   # (autotools), so no autoreconf is needed (unlike flet-libzbar).
   url: https://astron.com/pub/file/file-{{ version }}.tar.gz
+
+about:
+  license: BSD-2-Clause-Darwin AND BSD-2-Clause

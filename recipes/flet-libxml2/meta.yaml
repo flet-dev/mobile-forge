@@ -17,3 +17,7 @@ source:
 
 patches:
   - {{ patch }}
+
+about:
+  # The Copyright file excepts dict.c and list.c, both of which are always built.
+  license: MIT AND ISC-Veillard

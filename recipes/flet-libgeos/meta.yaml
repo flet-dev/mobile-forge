@@ -1,3 +1,8 @@
+# No `about.license`, deliberately: the source headers name no LGPL version
+# ("See the COPYING file"), so LGPL-2.1 section 13 lets a recipient choose any
+# FSF version -- broader than -or-later, and positively not -only. Neither
+# standard identifier is faithful, and src/deps/ryu (Apache-2.0 OR BSL-1.0) is
+# linked in besides. The COPYING file ships either way.
 {% set version = "3.13.1" %}
 
 package:

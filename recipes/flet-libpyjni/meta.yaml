@@ -16,3 +16,6 @@ source:
 requirements:
   build:
     - cmake
+
+about:
+  license: MIT

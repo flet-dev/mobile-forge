@@ -16,3 +16,10 @@ requirements:
 
 patches:
   - config.patch
+
+about:
+  # oniguruma is bundled (--with-oniguruma=builtin), so its notice ships too.
+  license_file:
+    - COPYING
+    - modules/oniguruma/COPYING
+  license: MIT AND BSD-2-Clause AND ICU AND dtoa

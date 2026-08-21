@@ -18,3 +18,9 @@ build:
 requirements:
   host:
     - openssl ^3.0.12
+
+about:
+  # COPYING_LIB.txt is the 1991 *Library* GPL v2, not 2.1. The plain-GPL
+  # notices cover src/pool and src/apps, which --disable-apps/server/pool
+  # excludes -- so GitHub's whole-repo answer of GPL-2.0 is wrong for this wheel.
+  license: LGPL-2.0-or-later

@@ -14,4 +14,11 @@ patches:
   - config.patch
 
 about:
-  license_file: docs/FTL.TXT
+  # LICENSE.TXT states the dual arm and is what a reader needs first; both
+  # arm texts ship beside it. MIT covers the bdf/pcf/fthash code compiled in.
+  # Parentheses are load-bearing: SPDX binds AND tighter than OR.
+  license_file:
+    - LICENSE.TXT
+    - docs/FTL.TXT
+    - docs/GPLv2.TXT
+  license: (FTL OR GPL-2.0-or-later) AND MIT

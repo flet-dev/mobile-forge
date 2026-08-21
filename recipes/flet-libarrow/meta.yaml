@@ -26,3 +26,6 @@ requirements:
     # libarrow.so is C++; on Android it links libc++_shared.so.
     - flet-libcpp-shared >=27.2.12479018
 # {% endif %}
+
+about:
+  license: Apache-2.0

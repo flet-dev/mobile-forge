@@ -12,3 +12,11 @@ build:
 
 patches:
   - config.patch
+
+about:
+  # The PSL data is compiled in (builtin is on), which is the MPL-2.0 part, and
+  # the Chromium DAFSA sources are BSD-3-Clause with their own notice.
+  license_file:
+    - COPYING
+    - src/LICENSE.chromium
+  license: MIT AND BSD-3-Clause AND MPL-2.0

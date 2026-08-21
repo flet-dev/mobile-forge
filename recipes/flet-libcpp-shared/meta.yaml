@@ -11,3 +11,6 @@ build:
 
 # No upstream archive: build.sh copies libc++_shared.so out of the NDK toolchain.
 source: null
+
+about:
+  license: Apache-2.0 WITH LLVM-exception

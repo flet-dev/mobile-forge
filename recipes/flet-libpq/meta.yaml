@@ -19,3 +19,6 @@ build:
 requirements:
   host:
     - openssl ^3.0.12
+
+about:
+  license: PostgreSQL

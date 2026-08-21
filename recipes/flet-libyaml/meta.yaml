@@ -9,3 +9,6 @@ build:
 
 source:
   url: https://github.com/yaml/libyaml/releases/download/{{ version }}/yaml-{{ version }}.tar.gz
+
+about:
+  license: MIT

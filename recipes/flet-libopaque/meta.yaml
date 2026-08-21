@@ -17,3 +17,6 @@ requirements:
 
 patches:
   - mobile.patch
+
+about:
+  license: LGPL-3.0-or-later

@@ -29,3 +29,6 @@ requirements:
     # no iconv at API 24, so provide the static GNU libiconv to compile + link.
     - flet-libiconv 1.17
 # {% endif %}
+
+about:
+  license: LGPL-2.1-or-later

@@ -12,3 +12,7 @@ source:
 
 patches:
   - config.patch
+
+about:
+  # Lowercase libpng-2.0: the capital-L `Libpng` licence applies only up to 1.6.35.
+  license: libpng-2.0

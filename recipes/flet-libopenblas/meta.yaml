@@ -9,3 +9,10 @@ build:
 
 source:
   url: https://github.com/OpenMathLib/OpenBLAS/releases/download/v{{ version }}/OpenBLAS-{{ version }}.tar.gz
+
+about:
+  # The GotoBLAS kernels carry their own notice, which LICENSE does not restate.
+  license_file:
+    - LICENSE
+    - GotoBLAS_00License.txt
+  license: BSD-3-Clause

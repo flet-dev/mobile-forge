@@ -13,3 +13,6 @@ source:
 requirements:
   build:
     - cmake
+
+about:
+  license: BSD-3-Clause
