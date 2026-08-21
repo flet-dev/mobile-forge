@@ -32,7 +32,22 @@ if TYPE_CHECKING:
     from forge.package import Package
 
 
+# Names a project uses for its licence notice. Matches the prefix rather than the whole
+# name so LICENSE.txt, COPYING.LGPL, LICENCE.md and LICENSE-THIRD-PARTY all qualify.
+# COPYRIGHT is included because for several projects here it IS the licence grant and
+# the only such file shipped — postgresql, libxml2 and libxslt each carry their full
+# permission notice in a file by that name and nothing else. NOTICE is included because
+# Apache-2.0 section 4(d) requires redistributing it alongside the licence, and an
+# ASF-sourced archive (arrow) keeps its attributions there rather than in LICENSE.
+LICENSE_FILE_RE = re.compile(r"^(licen[cs]e|copying|copyright|notice)", re.IGNORECASE)
+
+
 class Builder(ABC):
+    # Whether this builder writes the wheel's METADATA itself (and so is the one that
+    # can act on `about`). True only for the build.sh path; a Python package's backend
+    # produces its own.
+    synthesizes_metadata = False
+
     def __init__(self, cross_venv: CrossVEnv, package: Package):
         self.cross_venv = cross_venv
         self.package = package
@@ -674,7 +689,13 @@ class Builder(ABC):
     def write_message_file(self, filename: Path, data):
         msg = message.Message()
         for key, value in data.items():
-            msg[key] = value
+            # A list emits the header once per item: metadata fields like
+            # License-File are legitimately repeated, which a dict can't express.
+            if isinstance(value, (list, tuple)):
+                for item in value:
+                    msg[key] = item
+            else:
+                msg[key] = value
 
         # I don't know whether maxheaderlen is required, but it's used by bdist_wheel.
         with filename.open("w", encoding="utf-8") as f:
@@ -881,6 +902,16 @@ class Builder(ABC):
 
         log(self.log_file, f"[{self.cross_venv}] Fixing wheel contents")
 
+        # `about` drives metadata that only the build.sh path synthesises. A Python
+        # package's own build backend already carries upstream's licence through, so
+        # setting it there would be a no-op — say so rather than ignoring it silently.
+        if (self.package.meta.get("about") or {}) and not self.synthesizes_metadata:
+            log(
+                self.log_file,
+                f"[{self.cross_venv}] WARNING: `about` is only honoured for build.sh "
+                "recipes; this package's build backend supplies its own metadata.",
+            )
+
         # Normalize wheel tags to forge platform tags so repacked wheels use
         # android_24_arm64_v8a / ios_13_0_arm64_iphoneos style platform tags.
         wheel_metadata_path = next(wheel_dir.glob("*.dist-info")) / "WHEEL"
@@ -1057,6 +1088,8 @@ class Builder(ABC):
 class SimplePackageBuilder(Builder):
     """A builder for projects that have a build.sh entry point."""
 
+    synthesizes_metadata = True
+
     @property
     def source_archive_path(self) -> Path:
         url = self.download_source_url()
@@ -1101,6 +1134,61 @@ class SimplePackageBuilder(Builder):
         log(self.log_file, f"\n[{self.cross_venv}] Installing wheel-building tools")
         self.cross_venv.pip_install(self.log_file, ["wheel"], build=True)
 
+    def collect_license_files(self) -> list[tuple[Path, str]]:
+        """The licence files to ship, as (source path, path within licenses/) pairs.
+
+        Unlike a Python package — whose build backend carries the licence through from
+        upstream's own metadata — a build.sh recipe's wheel is synthesised here, so
+        nothing brings the licence along unless we do it. Every copyleft licence in
+        this tree (and most permissive ones) requires the notice to accompany the
+        binary, so a wheel wrapping LGPL object code with no licence text is a defect.
+
+        By default any top-level licence-shaped file in the source or the recipe
+        directory is picked up, which covers nearly every upstream unchanged. The
+        recipe directory is searched too, so a recipe can supply the notice for an
+        archive that ships none; a source file shadows a recipe file of the same name,
+        which is how a recipe can carry a fallback without overriding upstream.
+
+        `about.license_file` (a path, or a list of them) replaces that discovery
+        entirely, for the two cases it cannot get right on its own: excluding a notice
+        that covers something the wheel does not contain, and including one that lives
+        below the top level.
+
+        The relative path is preserved rather than flattened to a basename, both
+        because PEP 639 records License-File that way and because flattening would
+        silently drop one of two same-named notices (jq ships a COPYING for itself and
+        another for the oniguruma it bundles).
+        """
+        about = self.package.meta.get("about") or {}
+        search_dirs = [self.build_path, self.package.recipe_path]
+
+        explicit = about.get("license_file")
+        if explicit:
+            wanted = [explicit] if isinstance(explicit, str) else list(explicit)
+            resolved = []
+            for name in wanted:
+                for directory in search_dirs:
+                    candidate = directory / name
+                    if candidate.is_file():
+                        resolved.append((candidate, name))
+                        break
+                else:
+                    log(
+                        self.log_file,
+                        f"WARNING: about.license_file '{name}' not found in the source "
+                        "or recipe directory.",
+                    )
+            return resolved
+
+        found: dict[str, Path] = {}
+        for directory in search_dirs:
+            if not directory.is_dir():
+                continue
+            for candidate in sorted(directory.iterdir()):
+                if candidate.is_file() and LICENSE_FILE_RE.match(candidate.name):
+                    found.setdefault(candidate.name, candidate)
+        return [(path, name) for name, path in found.items()]
+
     def make_wheel(self):
         build_num = str(self.package.meta["build"]["number"])
         name = canonicalize_name(self.package.name)
@@ -1111,6 +1199,26 @@ class SimplePackageBuilder(Builder):
 
         log(self.log_file, f"\n[{self.cross_venv}] Writing wheel metadata")
         info_path.mkdir(exist_ok=True)
+
+        license_files = self.collect_license_files()
+        if license_files:
+            license_dir = info_path / "licenses"
+            for source, relative in license_files:
+                destination = license_dir / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, destination)
+            log(
+                self.log_file,
+                "Bundling licence "
+                + ("files: " if len(license_files) > 1 else "file: ")
+                + ", ".join(relative for _, relative in license_files),
+            )
+        else:
+            log(
+                self.log_file,
+                "WARNING: no licence file found in the source or recipe directory. "
+                "Set about.license_file, or add the notice to the recipe directory.",
+            )
 
         # Write the packaging metadata
         self.write_message_file(
@@ -1123,16 +1231,22 @@ class SimplePackageBuilder(Builder):
                 "Tag": self.wheel_tag,
             },
         )
-        self.write_message_file(
-            info_path / "METADATA",
-            {
-                "Metadata-Version": "1.2",
-                "Name": self.package.name,
-                "Version": self.package.version,
-                "Summary": "",  # Compulsory according to PEP 345,
-                "Download-URL": "",
-            },
-        )
+        # Metadata-Version 2.4 is the floor for PEP 639's License-Expression and
+        # License-File; below it, a consumer or licence scanner has no way to see
+        # what the wheel wraps short of unpacking it.
+        metadata = {
+            "Metadata-Version": "2.4",
+            "Name": self.package.name,
+            "Version": self.package.version,
+            "Summary": "",  # Compulsory according to PEP 345,
+            "Download-URL": "",
+        }
+        license_expression = (self.package.meta.get("about") or {}).get("license")
+        if license_expression:
+            metadata["License-Expression"] = license_expression
+        if license_files:
+            metadata["License-File"] = [relative for _, relative in license_files]
+        self.write_message_file(info_path / "METADATA", metadata)
 
         # fix wheel before packaging
         self.fix_wheel(self.build_path / "wheel")

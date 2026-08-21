@@ -228,14 +228,38 @@ properties:
     properties:
 
       license_file:
+        oneOf:
+          - type: string
+          - type: array
+            items:
+              type: string
+            minItems: 1
+        default: ""
+        description: >-
+          Path, or list of paths, relative to the source directory (or to
+          the recipe directory, for a notice the upstream archive doesn't
+          ship), to add to the wheel's .dist-info/licenses/. Any top-level
+          file in either directory whose name starts with "LICEN[CS]E",
+          "COPYING", "COPYRIGHT" or "NOTICE" (case-insensitive) is included
+          automatically, so most recipes need nothing here. Setting this
+          REPLACES that discovery, which is what you want in the two cases
+          it cannot get right: excluding a notice covering something the
+          wheel doesn't contain (libiconv's top-level COPYING is the GPL for
+          the `iconv` program, not the LGPL library we build), and including
+          one below the top level (a bundled library's own notice). Applies
+          to build.sh recipes: a Python package's build backend already
+          carries its licence through.
+
+      license:
         type: string
         default: ""
         description: >-
-          Filename, relative to the source directory, to add to the
-          wheel's .dist-info directory. build-wheel will automatically
-          include any file in the source or recipe directory whose name
-          starts with "LICEN[CS]E" or "COPYING", case-insensitive. If
-          there is no such file, then this setting is required.
+          SPDX licence expression for the packaged work, e.g. "LGPL-2.1-or-later"
+          or "MIT OR Apache-2.0", emitted as License-Expression in the wheel
+          metadata so tooling can read it without unpacking the licence text.
+          Optional and never guessed: state it only from the upstream project's
+          own declaration. The licence FILE is the authoritative artifact and
+          ships either way.
 
     additionalProperties: false
 

@@ -260,6 +260,52 @@ Renders the meta.yaml for all SDK contexts (iphoneos, iphonesimulator, android) 
   with a non-matching needle silently no-ops. Always `assert needle in text` before
   replacing, or grep the output file for the new content after.
 
+### 3.5b — Licences (`flet-lib*` / build.sh recipes only)
+
+A **Python package** carries its own licence: the build backend copies upstream's METADATA
+and licence files into the wheel, and forge preserves them. Nothing to do.
+
+A **build.sh recipe's wheel is synthesised by forge**, so the licence only gets there
+because the build does it. Since every licence in this tree requires its notice to
+accompany the binary, forge now bundles one automatically: any top-level
+`LICEN[CS]E*` / `COPYING*` / `COPYRIGHT*` in the **source** or the **recipe** directory is
+copied into `.dist-info/licenses/` and listed as `License-File`. That covers almost every
+upstream unchanged — so usually you write nothing.
+
+Three cases need a line in `meta.yaml`:
+
+- **The notice is not at the top level, or is named something else** — point at it:
+  ```yaml
+  about:
+    license_file: docs/FTL.TXT     # flet-libfreetype
+  ```
+  An explicit `license_file` is resolved against the source dir, then the recipe dir, and
+  **replaces** auto-detection: use it when upstream ships several notices and only one
+  applies to what the wheel actually contains.
+- **Machine-readable identifier**, so a licence scanner needn't unpack the wheel:
+  ```yaml
+  about:
+    license: LGPL-2.1-or-later     # emitted as License-Expression
+  ```
+  Never guess this. Read the licence text in the archive we ship from, note whether it says
+  "or (at your option) any later version" (`-or-later`) or names one version (`-only`), and
+  omit the field when the answer is not clear. A wrong identifier in shipped metadata is
+  worse than none — the licence *file* is the authoritative artifact and ships either way.
+- **`source: null` recipes** have no archive, so build.sh must stage the notice itself into
+  its working directory (which is the source root):
+  ```bash
+  cp "$toolchain/NOTICE" ./LICENSE     # flet-libcpp-shared, flet-libomp (android)
+  ```
+  Taking it from the same NDK the binary was copied from means the two cannot drift.
+  Where a recipe ships **different code per platform**, note that a source-dir file shadows
+  a recipe-dir file of the same name — `flet-libomp` uses exactly that to ship LLVM's notice
+  on Android and this repo's licence (for its own iOS stub) on iOS.
+
+**Watch the build log.** It prints `Bundling licence file: …`, or
+`WARNING: no licence file found …` — the warning means that wheel would ship no notice.
+Scope the expression to what the wheel *contains*: libiconv ships `COPYING` (GPL, for the
+`iconv` program) beside `COPYING.LIB` (LGPL, for the library we actually build).
+
 ### 3.6 — Cross-cutting conventions from the ML wave (CMake-heavy recipes)
 
 - **Version as a Jinja constant.** A bare `{% set version = "X.Y.Z" %}` as the first line, reused in `package.version` AND `source.url` — bumps become one-line edits. See `recipes/faiss-cpu/meta.yaml`; onnxruntime uses the same idiom.
