@@ -45,3 +45,9 @@ requirements:
     - numpy 1.26.4
 
 # {% endif %}
+
+test:
+  # DataFrame.style imports jinja2 at module level, but pandas ships it as an
+  # extra rather than a Requires-Dist, so the recipe-tester never installs it.
+  requires:
+    - jinja2
