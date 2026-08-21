@@ -425,6 +425,27 @@ Harmless on Android. Confirmed case: aiomysql's `DEFAULT_USER = getpass.getuser(
 guarded only by `except KeyError`. General lesson: a **pure-Python** package is not
 guaranteed to import on iOS — test pure-Python packages on the iOS simulator too.
 
+### A native library says the user "does not exist" on iOS
+
+**Cause:** the C twin of the `pwd` entry above, and the `LOGNAME` workaround does **not** fix
+it. iOS gives the app's uid no entry in the system passwd database, so a `getpwuid()` inside a
+*compiled* dependency fails no matter what the environment says. Android synthesises an entry
+for app uids, so the same code works there.
+
+**Confirmed case:** libpq derives the connection's user from the OS when the string omits
+`user`. On an iPhone 16 simulator `psycopg2.connect(host=..., port=...)` fails with
+`OperationalError: local user with ID 501 does not exist` — raised *before* libpq validates any
+other keyword.
+
+**Fix (app side):** pass the username explicitly rather than letting the library infer it.
+
+**Why it is worth an entry:** the error arrives early, so it *masks* whatever the call was
+actually testing. The psycopg2 `libpq-probe` example asked libpq which features were compiled
+in by reading which error came back, and on iOS every probe got this error instead — so a
+GSSAPI-less build reported GSSAPI as **present**, in green, on a screen that otherwise looked
+correct. If a probe decides something from "which error came back", make it require the error
+it expects rather than treating anything-but-the-sentinel as success.
+
 ### A library silently returns nothing on iOS (empty list, zero results, no exception)
 
 **Cause:** the iOS runtime reports `platform.system() == "iOS"` (PEP 730), not `"Darwin"`,

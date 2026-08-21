@@ -17,7 +17,11 @@ except Exception as error:  # noqa: BLE001 - the message is the screen's content
 
 # A port nothing listens on: the kernel refuses immediately, so every probe below
 # returns in about a millisecond and never leaves the device.
-CLOSED_PORT = {"host": "127.0.0.1", "port": 1, "connect_timeout": 2}
+# `user` is spelled out because libpq derives it from the operating system when
+# it is missing, and iOS has no passwd entry for the app's uid — the connection
+# then dies at "local user with ID 501 does not exist", before libpq has looked
+# at any other keyword.
+CLOSED_PORT = {"host": "127.0.0.1", "port": 1, "connect_timeout": 2, "user": "probe"}
 
 DEFAULT_DSN = "postgresql://app@127.0.0.1:1/orders?sslmode=require&connect_timeout=2"
 
@@ -26,6 +30,10 @@ DEFAULT_DSN = "postgresql://app@127.0.0.1:1/orders?sslmode=require&connect_timeo
 # and says "not compiled in" when the feature is absent from the build. Only a
 # build *missing* the feature carries that sentence, so a "yes" here means the
 # option was accepted and the attempt got as far as the network.
+# libpq says this once it is past parsing and talking to a socket. Requiring it
+# keeps an error raised *before* validation from reading as a present feature.
+REACHED_NETWORK = "connection to server"
+
 FEATURES = (
     ("TLS, sslmode=require", {"sslmode": "require"}, "SSL support is not compiled in"),
     (
@@ -95,6 +103,10 @@ def features():
     build that has the feature, so a present feature never says so in words: the
     evidence is that the option survived parsing and the failure that came back
     is about the network instead.
+
+    `present` is None when libpq failed before it validated the keyword, which
+    answers neither question — treating that as a "yes" is how this probe once
+    reported GSSAPI as compiled into a build that does not have it.
     """
     found = []
     for label, option, absent in FEATURES:
@@ -103,7 +115,13 @@ def features():
             said = "connected"
         except psycopg2.Error as error:
             said = " ".join(str(error).split())
-        found.append((label, absent not in said, said))
+        if absent in said:
+            present = False
+        elif said == "connected" or REACHED_NETWORK in said:
+            present = True
+        else:
+            present = None
+        found.append((label, present, said))
     return found
 
 

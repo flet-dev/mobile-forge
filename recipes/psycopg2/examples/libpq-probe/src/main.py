@@ -30,11 +30,20 @@ def marked(icon, colour, *controls):
 
 
 def flag(label, present, said):
-    """A compiled-in feature: a dot, the verdict, and the sentence libpq answered."""
+    """A compiled-in feature: a dot, the verdict, and the sentence libpq answered.
+
+    `present` is None when libpq never got as far as judging the keyword, which
+    is amber rather than a yes or a no.
+    """
+    colour, verdict = {
+        True: (ft.Colors.GREEN, "yes"),
+        False: (ft.Colors.RED, "no"),
+        None: (ft.Colors.AMBER, "no answer"),
+    }[present]
     return marked(
         ft.Icons.CIRCLE,
-        ft.Colors.GREEN if present else ft.Colors.RED,
-        ft.Text(f"{label}: {'yes' if present else 'no'}", size=11, expand=2),
+        colour,
+        ft.Text(f"{label}: {verdict}", size=11, expand=2),
         ft.Text(said, size=10, italic=True, expand=3),
     )
 

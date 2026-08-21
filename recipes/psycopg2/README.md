@@ -163,6 +163,14 @@ checked with `strings` on 2026-08-21. Nothing else changes: with GSSAPI absent l
 normally. Both questions run as recipe tests and in the
 [`libpq-probe`](examples/libpq-probe) example.
 
+**Name the user explicitly, or iOS will not get far enough to tell you anything else.** When
+the connection string leaves `user` out, libpq asks the operating system for the account name,
+and iOS gives the app's uid no passwd entry. The connection then fails with
+`OperationalError: local user with ID 501 does not exist` before libpq reads another keyword —
+so it masks whatever the string actually got right or wrong. Android supplies an entry and the
+same string works there, which is what makes this easy to miss. Measured on an iPhone 16
+simulator, 2026-08-22.
+
 `verify-ca` and `verify-full` need roots to check against, so pass `sslrootcert` explicitly.
 Give `connect_timeout` a number too: left out, libpq waits for the operating system to give up
 on the socket, which on a phone that just walked out of Wi-Fi range is a UI hung for as long as

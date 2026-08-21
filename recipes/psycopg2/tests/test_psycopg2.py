@@ -1,8 +1,11 @@
 import pytest
 
 # A port nothing listens on: the kernel refuses immediately, so these probes
-# return in about a millisecond and never leave the device.
-CLOSED_PORT = {"host": "127.0.0.1", "port": 1, "connect_timeout": 2}
+# return in about a millisecond and never leave the device. `user` is spelled out
+# because libpq otherwise derives it from the operating system, and iOS has no
+# passwd entry for the app's uid — the connection dies at "local user with ID 501
+# does not exist" before any other keyword is judged.
+CLOSED_PORT = {"host": "127.0.0.1", "port": 1, "connect_timeout": 2, "user": "probe"}
 
 
 def test_import():
