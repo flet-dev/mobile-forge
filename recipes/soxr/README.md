@@ -56,13 +56,22 @@ Set `last=True` exactly once, on the final chunk, to flush the filter tail — o
 last few milliseconds never come out. Chunked output then concatenates to the same result as
 one `resample` call over the whole signal.
 
-Input is mono `(frames,)` or multi-channel `(frames, channels)` — frames first, which is the
-opposite of the layout some audio libraries use.
+Quality defaults to `HQ`, which is also the best choice on a phone: it is the highest
+setting that still runs on libsoxr's SIMD engine. `VHQ` is a worse trade than it looks —
+see **Things to know**.
 
-Quality is one of `QQ`, `LQ`, `MQ`, `HQ` (the default) or `VHQ`, as a string or as the
-constant of that name. `HQ` is the best default on a phone: it is the highest setting that
-still runs on libsoxr's SIMD engine, and `VHQ` is a worse trade than it looks — see
-**Things to know**.
+In an app, run the conversion off the UI thread and put the result into a control:
+
+```python
+status = ft.Text()
+
+def work():
+    y = soxr.resample(x, 48000, 16000)
+    status.value = f"{len(x):,} frames @48k → {len(y):,} @16k"
+    page.update()          # a background thread needs this explicitly
+
+page.add(status, ft.Button("Resample", on_click=lambda _: page.run_thread(work)))
+```
 
 ### Storage
 
@@ -77,24 +86,17 @@ or codec needs its own package.
 
 ### Threading
 
-The compiled resampler releases the GIL around every conversion, so moving a long resample
-into [`page.run_thread(...)`](https://flet.dev/docs/controls/page/#flet.Page.run_thread)
-buys real concurrency rather than only a responsive UI:
+The compiled resampler releases the GIL around every conversion, so
+[`page.run_thread(...)`](https://flet.dev/docs/controls/page/#flet.Page.run_thread) above
+buys real concurrency rather than only a responsive UI — two conversions on two threads
+genuinely overlap.
 
-```python
-def work():
-    y = soxr.resample(x, 48000, 16000)
-    result.value = f"{len(y)} frames"
-    page.update()
-
-page.run_thread(work)
-```
-
-Catch exceptions inside the worker and finish with an explicit
-[`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update), which a background
-thread needs. A `ResampleStream` carries filter state, so calling `resample_chunk` on one
-stream from two threads at once corrupts it — give each thread its own stream, or serialise
-the calls behind a lock. `run_thread` uses a pool, so two quick taps can overlap.
+Catch exceptions inside the worker, and finish with an explicit
+[`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update): a background
+thread does not get the automatic one. A `ResampleStream` carries filter state, so calling
+`resample_chunk` on one stream from two threads at once corrupts it — give each thread its
+own stream, or serialise the calls behind a lock. `run_thread` uses a pool, so two quick
+taps can overlap.
 
 ### App size
 
