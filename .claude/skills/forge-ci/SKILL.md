@@ -40,9 +40,21 @@ build-wheels.yml (push / workflow_dispatch / workflow_call)
 
 Key structural facts:
 
-- **On push**, `detect` diffs `recipes/**` against the base and builds every
-  changed recipe. The detected package list is ordered like `git diff` output
+- **On push**, `detect` diffs `recipes/**` for **that push** (before..after) and builds
+  every changed recipe. The detected package list is ordered like `git diff` output
   (pathname-sorted) — do not rely on that ordering for dependency chains.
+- **FOOTGUN — a follow-up push that touches no recipe silently downgrades the branch's
+  CI and kills the real run.** The diff is per-push, *not* branch-vs-`main`, so a second
+  commit containing only `.claude/skills/**`, `README.rst`, `src/forge/**` or
+  `recipes/*/README.md` detects **zero** changed recipes and falls back to
+  `SMOKE_TEST_PACKAGES` (`lru-dict`, `pydantic-core`, `numpy`) — and branch concurrency
+  then **cancels the still-running recipe build** it superseded. Net effect: the branch's
+  newest run is green, and it never built your recipe. Tell: the job list names the smoke
+  packages and not yours; confirm in the `detect` log
+  (`pkgs="${INPUT_PACKAGES:-$SMOKE_TEST_PACKAGES}"`). Either land such commits **before**
+  the recipe commit, or recover with an explicit dispatch —
+  `gh workflow run build-wheels.yml --repo <fork> --ref <branch> -f packages="<recipe>:"`
+  — after cancelling the smoke run. Cost when missed: a full recipe matrix. soxr 1.1.0.
 - **Each matrix job builds ONLY its own package(s).** Its `dist/` (and the
   `dist-test/` find-links dir the mobile test resolves from) contains that
   job's wheels plus whatever `prebuild_recipes` added — nothing from sibling

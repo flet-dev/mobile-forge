@@ -925,6 +925,15 @@ libpython explicitly. But the libpython flags are multi-token and forge's
 `CMAKE_ARGS` is shlex-split, so `-DCMAKE_MODULE_LINKER_FLAGS=… -L… -lpython…` can't
 be passed as separate tokens.
 
+**Also fires with no upstream involvement at all:** the NDK toolchain adds
+`-Wl,--no-undefined` itself, so **any** `add_library(… MODULE …)` hits this on Android even
+when upstream sets no such flag. `nanobind_add_module` builds a MODULE target, which makes
+every nanobind recipe a candidate (soxr 1.1.0: ~20 `undefined symbol: PyExc_…` /
+`_Py_Dealloc` / `PyMem_Malloc` lines, all three ABIs, iOS unaffected). Confirm the target
+type with `grep -n "add_library" <nanobind>/cmake/nanobind-config.cmake` before reaching for
+`CMAKE_SHARED_LINKER_FLAGS` — for a MODULE it is `CMAKE_MODULE_LINKER_FLAGS` that applies,
+and setting the wrong one changes nothing.
+
 **Fix:** fold everything into ONE comma-joined `-Wl` token:
 `-DCMAKE_MODULE_LINKER_FLAGS=-Wl,-z,max-page-size=16384,-L{HOST_PYTHON_HOME}/lib,-lpython{py_version_short}`.
 The linker splits `-Wl` args on commas, dodging the single-token constraint. onnx.
@@ -1089,6 +1098,35 @@ opencv 4.12; opencv 5's stricter arch-gated asm exposes it.
 **Fix:** set `CMAKE_SYSTEM_PROCESSOR` **per-arch** on the iOS lane —
 `{{ 'x86_64' if arch == 'x86_64' else 'aarch64' }}` (arm64 unchanged). Android gets the
 right arch from the NDK toolchain, so it never needs this. opencv-python 5.0.0.93.
+
+---
+
+### iOS: a GREEN wheel that silently lost its SIMD/optimised code path (no `CMAKE_SYSTEM_PROCESSOR`)
+
+**Cause:** the mirror image of the entry above, and far nastier because **nothing fails**.
+CMake leaves `CMAKE_SYSTEM_PROCESSOR` **empty** on the iOS lane (only the NDK toolchain
+presets it), so a vendored library that runs its own CPU probe falls through to its *x86*
+branch, fails to compile the SSE test on arm64, and drops its SIMD sources from the archive.
+The build exits 0, the wheel loads, functional tests pass — it is just slower. libsoxr is the
+worked example: `SetSystemProcessor.cmake` probes only `__x86_64__` / `__i386__` / `__arm__`,
+and iOS arm64 defines `__aarch64__`, matching none of the three; `FindSIMD32` then takes its
+`xmmintrin.h` branch, `WITH_CR32S` becomes 0, and `cr32s`/`pffft32s`/`util32s` vanish.
+Measured cost of the resulting scalar build (`SOXR_USE_SIMD32=0`, 10 s mono 48k→16k, `HQ`,
+macOS arm64): **2.8x**, 0.70 ms → 1.98 ms.
+
+**Fix:** name the processor on the iOS lane, `-DCMAKE_SYSTEM_PROCESSOR={{ arch }}`, and
+**never** on Android. The exact token is library-specific — match it to the vendored
+project's own matcher rather than to a convention: libsoxr's `FindSIMD32` accepts `^arm` OR
+`^aarch64` (so `arm64` works), while opencv needs `aarch64` (entry above). Read the matcher
+before copying either recipe.
+
+**Tell it apart from a healthy build:** grep the configure log for the probe's own success
+line (`-- Found SIMD32:`) — its *absence* is the whole signal, and absence is easy to miss.
+Then confirm in the artifact: `strings <so> | grep -x cr32s`. The durable defence for this
+class is a test asserting the fast path is **compiled in**, not merely that the module
+imports — soxr's `test_simd_engine_compiled_in` asserts `engine() == "cr32s"` on device.
+Generalises to any recipe whose vendored dependency does its own
+`check_c_source_compiles`-style CPU detection. soxr 1.1.0.
 
 ---
 
