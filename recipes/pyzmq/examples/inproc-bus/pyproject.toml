@@ -1,0 +1,16 @@
+[project]
+name = "pyzmq-inproc-bus"
+version = "1.0.0"
+description = "Runs a ZeroMQ PUSH/PULL worker pipeline between threads of one Flet app."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "pyzmq==27.1.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

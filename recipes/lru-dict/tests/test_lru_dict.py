@@ -1,4 +1,5 @@
 def test_basic():
+    """A capacity eviction drops the least recently used key, and keys() is MRU-first."""
     from lru import LRU
 
     data = LRU(3)

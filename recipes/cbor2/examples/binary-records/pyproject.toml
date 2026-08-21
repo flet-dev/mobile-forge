@@ -1,0 +1,16 @@
+[project]
+name = "cbor2-binary-records"
+version = "1.0.0"
+description = "Round-trips tagged CBOR values and compares the result with json."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "cbor2==6.1.4",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

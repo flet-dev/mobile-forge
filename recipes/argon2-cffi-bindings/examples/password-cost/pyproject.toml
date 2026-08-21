@@ -1,0 +1,16 @@
+[project]
+name = "argon2-cffi-bindings-password-cost"
+version = "1.0.0"
+description = "Measures what Argon2 password hashing costs on the device it runs on."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "argon2-cffi-bindings==25.1.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

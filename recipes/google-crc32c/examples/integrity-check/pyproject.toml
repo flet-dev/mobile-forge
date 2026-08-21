@@ -1,0 +1,16 @@
+[project]
+name = "google-crc32c-integrity-check"
+version = "1.0.0"
+description = "Stores a blob under its CRC32C checksums, damages it, and catches the damage."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "google-crc32c==1.8.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

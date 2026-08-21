@@ -1,11 +1,9 @@
 def test_known_vectors():
     """google-crc32c provides hardware-accelerated CRC32C (Castagnoli).
     The C extension is the recipe's purpose — without it the package
-    falls back to a slow Python impl. Use known test vectors from RFC 3720
-    Appendix B."""
+    falls back to a slow Python impl. Use the standard CRC32C check values."""
     import google_crc32c
 
-    # RFC 3720 Annex B (iSCSI / SCTP CRC32C reference values)
     assert google_crc32c.value(b"") == 0
     assert google_crc32c.value(b"123456789") == 0xE3069283
     assert google_crc32c.value(b"a") == 0xC1D04330

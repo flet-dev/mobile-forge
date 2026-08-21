@@ -1,0 +1,16 @@
+[project]
+name = "lru-dict-tile-cache"
+version = "1.0.0"
+description = "Bounds a map-tile cache with lru-dict and times it against the stdlib alternatives."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "lru-dict==1.4.1",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
