@@ -1,9 +1,3 @@
-# No `about.license`, deliberately: this recipe ships different code per platform,
-# so no single expression is honest. Android copies LLVM's libomp.so
-# (Apache-2.0 WITH LLVM-exception); iOS compiles the serial stub below, which is
-# this repo's own code (BSD-3-Clause). AND would be wrong too -- no wheel contains
-# both. The correct notice ships on each platform: build.sh stages the NDK's on
-# Android, and the recipe's own LICENSE covers the stub on iOS.
 # libomp is the LLVM OpenMP runtime.
 #
 # ANDROID: the real, multi-threaded libomp.so is extracted from the NDK's clang
@@ -30,3 +24,14 @@ build:
 # No upstream archive: build.sh produces its own libomp — copied from the NDK on
 # Android, generated as a serial stub on iOS.
 source: null
+
+about:
+  # The two platforms ship different code, so the licence is per-SDK rather than one
+  # expression: Android carries LLVM's libomp.so out of the NDK, while iOS carries the
+  # serial stub build.sh generates, which is this repo's own code. `AND` would be wrong
+  # — no single wheel contains both.
+# {% if sdk == 'android' %}
+  license: Apache-2.0 WITH LLVM-exception
+# {% else %}
+  license: BSD-3-Clause
+# {% endif %}

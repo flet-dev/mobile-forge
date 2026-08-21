@@ -297,9 +297,25 @@ Three cases need a line in `meta.yaml`:
   cp "$toolchain/NOTICE" ./LICENSE     # flet-libcpp-shared, flet-libomp (android)
   ```
   Taking it from the same NDK the binary was copied from means the two cannot drift.
-  Where a recipe ships **different code per platform**, note that a source-dir file shadows
-  a recipe-dir file of the same name — `flet-libomp` uses exactly that to ship LLVM's notice
-  on Android and this repo's licence (for its own iOS stub) on iOS.
+
+**A recipe that ships different code per platform gets a different licence per platform.**
+`about` is inside the Jinja-rendered meta.yaml like everything else, so gate it on `sdk`
+rather than giving up and leaving it unset:
+
+```yaml
+about:
+# {% if sdk == 'android' %}
+  license: Apache-2.0 WITH LLVM-exception
+# {% else %}
+  license: BSD-3-Clause
+# {% endif %}
+```
+
+That is `flet-libomp`: Android carries LLVM's `libomp.so` from the NDK, iOS carries the
+serial stub build.sh generates, which is this repo's own code. `AND` would be wrong — no
+single wheel contains both. The *file* side splits the same way for free, because a
+source-dir file shadows a recipe-dir file of the same name: build.sh stages the NDK notice
+as `LICENSE` on Android, and on iOS the recipe's own `LICENSE` is what remains.
 
 **Watch the build log.** It prints `Bundling licence file: …`, or
 `WARNING: no licence file found …` — the warning means that wheel would ship no notice.
