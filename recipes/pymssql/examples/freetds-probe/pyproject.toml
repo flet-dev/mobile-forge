@@ -1,0 +1,16 @@
+[project]
+name = "pymssql-freetds-probe"
+version = "1.0.0"
+description = "Reports the FreeTDS build behind pymssql and what its login handshake puts on the wire."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "pymssql==2.3.13",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

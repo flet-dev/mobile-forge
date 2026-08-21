@@ -1,17 +1,18 @@
 """opaque is a ctypes wrapper around libopaque (the OPAQUE asymmetric
 PAKE protocol). The C lib is supplied as a host dep (`flet-libopaque`)
-in the mobile-forge recipe; the wheel needs pysodium too at runtime
-(handled via mobile.patch adding `install_requires=['pysodium']`)."""
+in the mobile-forge recipe; pysodium arrives as a Requires-Dist of the
+wheel and is imported at import time."""
 
 
 def test_import_opaque():
-    """`import opaque` requires pysodium at import time — opaque/__init__.py
-    does `import pysodium`. Upstream opaque-0.2.0's setup.py only declares
-    `requires=["libsodium"]` (metadata-only, not a real pip dep), so the
-    published wheel has no `Requires-Dist: pysodium`. Without the recipe's
-    mobile.patch (`install_requires=['pysodium']`), pip never installs
-    pysodium and import fails with
-    `ModuleNotFoundError: No module named 'pysodium'`."""
+    """`import opaque` exercises the recipe's loader patch and pysodium.
+
+    opaque/__init__.py opens libopaque through ctypes before anything else,
+    and find_library() returns None on both platforms — so reaching the
+    `import pysodium` below it already proves mobile.patch's soname fallback
+    worked. pysodium then supplies the constants that size every buffer.
+    A failure here is one of: `ValueError: Unable to find libopaque` (the
+    fallback missed) or `ModuleNotFoundError: No module named 'pysodium'`."""
     import opaque
 
     assert hasattr(opaque, "Ids")
@@ -20,9 +21,12 @@ def test_import_opaque():
 
 def test_registration_and_credential_roundtrip():
     """Run one full OPAQUE round: client → registration → server stores
-    user record; client → login → server verifies; both sides derive a
-    session key. The roundtrip touches every libopaque C entry point
-    pyopaque wraps.
+    user record; client → login → server derives a session key.
+
+    This reaches seven of the thirteen libopaque entry points the wrapper
+    calls. It does NOT reach opaque_UserAuth — the step that actually tells
+    the server the login succeeded — nor Register(), the threshold helpers,
+    or the _oprf/_ake split, so a pass here is not a full clean bill.
 
     Function-by-function this is the API per `opaque/__init__.py`:
       CreateRegistrationRequest(pwd)        → (sec, request)

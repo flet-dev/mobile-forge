@@ -1,0 +1,21 @@
+[project]
+name = "psycopg2-libpq-probe"
+version = "1.0.0"
+description = "Reads what the psycopg2 wheel's libpq contains and what a refused connection raises."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.android]
+dependencies = ["psycopg2==2.9.12"]
+
+[tool.flet.ios]
+dependencies = ["psycopg2==2.9.12"]
+
+[tool.flet.app]
+path = "src"
