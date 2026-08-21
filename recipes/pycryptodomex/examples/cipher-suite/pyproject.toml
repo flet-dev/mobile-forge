@@ -1,0 +1,16 @@
+[project]
+name = "pycryptodomex-cipher-suite"
+version = "1.0.0"
+description = "Seals a message with pycryptodomex, through a namespace resolved at import."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "pycryptodomex==3.23.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

@@ -1,0 +1,17 @@
+[project]
+name = "ormsgpack-pack-bench"
+version = "1.0.0"
+description = "Measures ormsgpack against msgpack on the same objects, and shows what a round trip returns."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "ormsgpack==1.12.2",
+    "msgpack==1.1.2",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

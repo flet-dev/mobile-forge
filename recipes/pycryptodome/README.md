@@ -38,7 +38,16 @@ library published twice, and mobile-forge has a recipe for each — the sibling
 [`pycryptodomex`](../pycryptodomex) recipe ships it under `Cryptodome.*` at the same
 version and build number, for the same six platform slices, and its wheel's file list is
 identical once the top-level directory name is normalised away. Depend on whichever your
-code already imports; installing both just carries the compiled extensions twice.
+code already imports. Installing both carries the compiled extensions twice and, worse,
+gives you two sets of classes that are not each other: a call that checks its argument with
+`isinstance` rejects a key made under the other namespace while a call that duck-types
+accepts it, so mixing fails in some places and not others. On desktop at 3.23.0, an
+`Ed25519` key from one namespace handed to the other's `Signature.eddsa` raises
+`ValueError: EdDSA can only be used with EdDSA keys`, and a P-256 key handed to
+`Signature.DSS` raises `ValueError: Unsupported key type`, while the RSA signature and
+cipher constructors take the foreign key without complaint. Bytes cross freely — a key
+exported to PEM under one namespace imports under the other — so exported material is the
+way through when both really are present.
 
 ## Storage
 

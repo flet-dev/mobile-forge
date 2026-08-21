@@ -1,0 +1,16 @@
+[project]
+name = "ifaddr-interface-list"
+version = "1.0.0"
+description = "Enumerates the device's network interfaces and their IP addresses with ifaddr."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "ifaddr==0.2.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

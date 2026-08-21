@@ -1,0 +1,16 @@
+[project]
+name = "cffi-ffi-probe"
+version = "1.0.0"
+description = "Binds libc through cffi's ABI mode and reports what the device answered."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "cffi==2.0.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

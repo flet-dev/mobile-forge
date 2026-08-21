@@ -1,0 +1,17 @@
+[project]
+name = "ruamel.yaml.clib-yaml-speed"
+version = "1.0.0"
+description = "Times the compiled ruamel.yaml parser against the pure-Python one."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "ruamel.yaml==0.19.1",
+    "ruamel.yaml.clib==0.2.15",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
