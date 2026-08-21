@@ -1,0 +1,16 @@
+[project]
+name = "tiktoken-token-budget"
+version = "1.0.0"
+description = "Counts the tokens in a chat payload with a vocabulary that never leaves the device."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "tiktoken==0.13.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

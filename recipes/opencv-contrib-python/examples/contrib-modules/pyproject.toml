@@ -1,0 +1,20 @@
+[project]
+name = "opencv-contrib-python-contrib-modules"
+version = "1.0.0"
+description = "Thresholds a badly lit page with a contrib-only OpenCV module."
+requires-python = ">=3.11"
+
+dependencies = [
+    "flet==0.86.5",
+    "opencv-contrib-python==5.0.0.93",
+    "numpy==2.4.6",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
+
+[tool.flet.android]
+extract_packages = ["cv2"]

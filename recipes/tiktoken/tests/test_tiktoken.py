@@ -1,6 +1,7 @@
 def test_basic_encoding():
     """tiktoken is OpenAI's tokenizer (PyO3 wrapper around a Rust BPE).
-    Use the simple gpt2 encoding which is bundled (no network)."""
+    gpt2 is the smallest encoding, but no vocabulary ships in the wheel: this
+    downloads vocab.bpe and encoder.json (1.5 MB) on first use."""
     import tiktoken
 
     enc = tiktoken.get_encoding("gpt2")
@@ -15,7 +16,7 @@ def test_encoding_name():
     shipping wheel that lost its encoding registry."""
     import tiktoken
 
-    # cl100k_base is GPT-4's tokenizer; if it's not registered the recipe
-    # didn't bundle the data files correctly.
+    # cl100k_base is GPT-4's tokenizer; if it's not registered, the
+    # tiktoken_ext namespace package did not survive packaging.
     enc = tiktoken.get_encoding("cl100k_base")
     assert enc.name == "cl100k_base"

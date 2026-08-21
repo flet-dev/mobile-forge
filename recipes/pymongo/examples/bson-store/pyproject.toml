@@ -1,0 +1,16 @@
+[project]
+name = "pymongo-bson-store"
+version = "1.0.0"
+description = "Keeps typed BSON documents in app storage and reads them back with bson."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "pymongo==4.17.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

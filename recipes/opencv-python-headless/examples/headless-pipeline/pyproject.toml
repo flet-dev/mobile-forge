@@ -1,0 +1,20 @@
+[project]
+name = "opencv-python-headless-headless-pipeline"
+version = "1.0.0"
+description = "Runs a small cv2 pipeline and shows the GUI backend the headless build reports."
+requires-python = ">=3.11"
+
+dependencies = [
+    "flet==0.86.5",
+    "opencv-python-headless==5.0.0.93",
+    "numpy==2.4.6",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
+
+[tool.flet.android]
+extract_packages = ["cv2"]

@@ -1,0 +1,35 @@
+[project]
+name = "zeroconf-service-browser"
+version = "1.0.0"
+description = "Discovers mDNS/DNS-SD services on the local network and advertises this device."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "ifaddr==0.2.0",
+    "zeroconf==0.150.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
+
+[tool.flet.android]
+dependencies = ["pyjnius==1.7.0"]
+
+[tool.flet.android.permission]
+"android.permission.CHANGE_WIFI_MULTICAST_STATE" = true
+
+[tool.flet.ios.info]
+NSLocalNetworkUsageDescription = "This app lists the printers, speakers and other services on your Wi-Fi network."
+NSBonjourServices = [
+    "_flet-demo._tcp",
+    "_ipp._tcp",
+    "_printer._tcp",
+    "_airplay._tcp",
+    "_raop._tcp",
+    "_googlecast._tcp",
+    "_http._tcp",
+]

@@ -25,9 +25,9 @@ in upstream's [installation guidance](https://github.com/opencv/opencv-python#in
 
 | Distribution | Choose it when | Android arm64 wheel |
 | --- | --- | ---: |
-| `opencv-python` | The default. It contains OpenCV's main modules, including `imgproc`, `imgcodecs`, `features`, `calib`, `objdetect`, `video`, `videoio` and `dnn`. | ~13.8 MB |
-| [`opencv-contrib-python`](../opencv-contrib-python) | You need a named contrib module such as `face`, `tracking`, `ximgproc`, `xphoto`, `optflow`, `wechat_qrcode`, `text`, `dnn_superres`, `gapi` or `ml`. OpenCV 5 moved `cv2.ml` into contrib, so it raises `AttributeError` with the base wheel. | ~20.5 MB |
-| [`opencv-python-headless`](../opencv-python-headless) | Another dependency requires this distribution name. On mobile it is the same build as `opencv-python`, because neither wheel has a GUI backend; choosing it does not reduce the payload. | ~13.8 MB |
+| `opencv-python` | The default. It contains OpenCV's main modules, including `imgproc`, `imgcodecs`, `features`, `calib`, `objdetect`, `video`, `videoio` and `dnn`. | ~14.4 MB |
+| [`opencv-contrib-python`](../opencv-contrib-python) | You need a named contrib module such as `face`, `legacy`, `ximgproc`, `xphoto`, `optflow`, `wechat_qrcode`, `text`, `dnn_superres`, `gapi` or `ml`. OpenCV 5 moved `cv2.ml` into contrib, so it raises `AttributeError` with the base wheel. | ~21.5 MB |
+| [`opencv-python-headless`](../opencv-python-headless) | Another dependency requires this distribution name. On mobile it is the same build as `opencv-python`, because neither wheel has a GUI backend; choosing it does not reduce the payload. | ~14.4 MB |
 
 The sizes are approximate compressed-wheel measurements for the current recipe and are shown
 only to make the distribution choice visible. Final application size depends on the selected
@@ -89,7 +89,7 @@ the setting was ignored.
 
 ### App size
 
-Depending on the architecture, the wheel is approximately 12–17 MB compressed and 24–43 MB
+Depending on the architecture, the wheel is approximately 12.8–18.1 MB compressed and 25–52 MB
 unpacked. Almost all of that is the single `cv2` extension, so there is no test suite or data
 directory worth removing with
 [`[tool.flet.cleanup]`](https://flet.dev/docs/publish/#compilation-and-cleanup).
@@ -141,7 +141,8 @@ packages = false
 
 ## Things to know
 
-- **There is no GUI, so `cv2.imshow` raises.** Both mobile builds report `GUI: NONE`, and the
+- **There is no GUI, so `cv2.imshow` raises.** Neither mobile build has a windowing backend —
+  Android reports `GUI: NONE` and iOS leaves that value empty — and the
   [highgui](https://docs.opencv.org/5.x/main_modules/highgui.html) window functions fail with
   `cv2.error: (-213:The function/feature is not implemented)`. Encode a still image for
   [`ft.Image.src`](https://flet.dev/docs/controls/image/#flet.Image.src):
@@ -168,9 +169,9 @@ packages = false
   iOS's AVFoundation may decode formats supported by the OS, but those paths are not exercised
   by this recipe. Still images are the supported path.
 
-- **Haar cascades are absent because OpenCV 5 removed them upstream.**
-  `cv2.CascadeClassifier` is also absent from the desktop wheel of the same OpenCV generation,
-  and no cascade XML files ship. For faces, use
+- **Haar cascades are absent because OpenCV 5 moved them out of the main modules.**
+  `cv2.CascadeClassifier` is also absent from the desktop wheel of the same OpenCV generation
+  — it is in `opencv-contrib-python` instead — and no cascade XML files ship. For faces, use
   [`cv2.FaceDetectorYN`](https://docs.opencv.org/5.x/main_modules/objdetect.html) with a YuNet
   ONNX model bundled as an app asset. `cv2.QRCodeDetector`, `cv2.barcode` and `cv2.aruco` remain
   available in the base wheel.
