@@ -340,8 +340,11 @@ API — it *is* a running state machine — and one of those belongs to one thre
   app ends up carrying a `libsodium` framework it never dlopens. flet_cli 0.86.5 does read a
   per-platform cleanup table (`tool.flet.<platform>.cleanup.package_files`, `build_base.py:2454`),
   so `[tool.flet.ios.cleanup]` is the place to drop it without touching Android — where the same
-  basename is load-bearing. **That glob has not been verified against a build here**; check the
-  result before relying on it, and note the same reasoning says the pure-Python `cffi` package
+  basename is load-bearing. **Only do this if PyNaCl is the only thing in your app that wants
+  libsodium.** [`pysodium`](../pysodium) binds the same library through `ctypes` and resolves
+  that very file on iOS, so an app carrying both would lose it and fail at import rather than
+  merely saving a few hundred kilobytes. **That glob has not been verified against a build
+  here** either; check the result before relying on it, and note the same reasoning says the pure-Python `cffi` package
   and `pycparser` are also dead weight (see [Things to know](#things-to-know)).
 - **This is cryptography, and App Store Connect asks.** Unlike a hash library, shipping PyNaCl
   puts encryption in your binary, so `ITSAppUsesNonExemptEncryption` in `Info.plist` is a

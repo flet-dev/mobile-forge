@@ -1,0 +1,16 @@
+[project]
+name = "pysodium-sodium-basics"
+version = "1.0.0"
+description = "Seals a note to a device key with libsodium and proves a forged one is refused."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "pysodium==0.7.18",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

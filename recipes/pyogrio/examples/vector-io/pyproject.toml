@@ -1,0 +1,17 @@
+[project]
+name = "pyogrio-vector-io"
+version = "1.0.0"
+description = "Writes a point layer with pyogrio and reads it straight back."
+requires-python = ">=3.11"
+
+dependencies = [
+    "flet==0.86.5",
+    "pyogrio==0.12.1",
+    "numpy==2.4.6",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

@@ -1,0 +1,10 @@
+.venv/
+.flet/
+build/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+uv.lock
+*.jsonl
+*.jsonl.gz
+*.msgpack

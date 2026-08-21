@@ -1,0 +1,17 @@
+[project]
+name = "srsly-serial-toolbox"
+version = "1.0.0"
+description = "Round-trips one record set through every serialiser srsly bundles."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "srsly==2.5.3",
+    "msgpack==1.1.2",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

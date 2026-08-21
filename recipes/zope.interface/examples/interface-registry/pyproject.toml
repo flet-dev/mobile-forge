@@ -1,0 +1,16 @@
+[project]
+name = "zope.interface-interface-registry"
+version = "1.0.0"
+description = "Verifies interface declarations at runtime and resolves adapters from a registry."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "zope.interface==8.5",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
