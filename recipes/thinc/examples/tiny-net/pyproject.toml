@@ -1,0 +1,20 @@
+[project]
+name = "thinc-tiny-net"
+version = "1.0.0"
+description = "Trains a thinc network on device and reports the ops backend it ran on."
+requires-python = ">=3.11"
+
+dependencies = [
+    "flet==0.86.5",
+    "thinc==8.3.13",
+    "numpy==2.4.6",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
+
+[tool.flet.android]
+extract_packages = ["thinc"]

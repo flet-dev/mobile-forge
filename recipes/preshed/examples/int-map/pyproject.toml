@@ -1,0 +1,16 @@
+[project]
+name = "preshed-int-map"
+version = "1.0.0"
+description = "Indexes tokens in a preshed PreshMap and prices it against a plain dict."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "preshed==3.0.13",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

@@ -1,0 +1,16 @@
+[project]
+name = "murmurhash-feature-hash"
+version = "1.0.0"
+description = "Maps unbounded text features into a fixed-width vector with murmurhash."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "murmurhash==1.0.15",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

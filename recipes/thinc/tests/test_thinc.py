@@ -1,12 +1,13 @@
 def test_import():
-    """thinc imports and its compiled C++ extensions load (numpy_ops, cblas,
-    sparselinear, premap_ids — which link cymem/preshed/murmurhash/blis)."""
+    """The package imports. This path is pure Python: a bare `import thinc` loads
+    none of the six extensions and does not read _custom_kernels.cu."""
     import thinc
 
 
 def test_numpy_ops_gemm():
-    """NumpyOps.gemm goes through the compiled numpy_ops backend (cimports
-    cymem/preshed/murmurhash/numpy) and the cblas backend (cimports blis.cy)."""
+    """Importing thinc.api loads five of the six extensions — numpy_ops, cblas,
+    linalg, premap_ids, sparselinear — and reads _custom_kernels.cu off disk. The
+    gemm itself lands in the blis wheel's own extension, via blis.py.gemm."""
     import numpy
     from thinc.api import NumpyOps
 
@@ -19,7 +20,9 @@ def test_numpy_ops_gemm():
 
 
 def test_linear_forward():
-    """A small Linear layer forward pass exercises the ML stack end to end."""
+    """A Linear forward pass adds thinc's Model machinery — parameter allocation,
+    init, __call__ — over the same NumpyOps.gemm path. Nothing in this file reaches
+    extra/search, the sixth extension."""
     import numpy
     from thinc.api import Linear
 

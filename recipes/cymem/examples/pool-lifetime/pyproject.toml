@@ -1,0 +1,16 @@
+[project]
+name = "cymem-pool-lifetime"
+version = "1.0.0"
+description = "Measures a cymem Pool against a list of bytearrays and shows when each is reclaimed."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "cymem==2.0.13",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

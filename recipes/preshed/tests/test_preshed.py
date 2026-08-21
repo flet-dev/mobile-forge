@@ -1,4 +1,9 @@
 def test_map():
+    """Set, get, len and `in` on a PreshMap.
+
+    Reaches the `preshed.maps` extension only — `counter` and `bloom` are separate
+    binaries and this says nothing about whether they load.
+    """
     from preshed.maps import PreshMap
 
     # NB: preshed reserves keys 0 and 1 as internal EMPTY/DELETED sentinels —

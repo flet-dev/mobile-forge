@@ -11,6 +11,9 @@ def test_import_blis():
 
 
 def test_einsum():
+    """One `ab,bc->ac` over float64, untransposed — the only path here that runs
+    BLIS code. `blis/py` dispatches through `blis/cy`'s `__pyx_capi__`, so the
+    multiply lands in the BLIS copy linked into `cy`, not the one in `py`."""
     import numpy as np
     from blis.py import einsum
 

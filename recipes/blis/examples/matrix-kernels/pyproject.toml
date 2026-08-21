@@ -1,0 +1,17 @@
+[project]
+name = "blis-matrix-kernels"
+version = "1.0.0"
+description = "Times the BLIS microkernel against numpy's matmul on the device."
+requires-python = ">=3.11"
+
+dependencies = [
+    "flet==0.86.5",
+    "blis==1.3.3",
+    "numpy==2.4.6",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
