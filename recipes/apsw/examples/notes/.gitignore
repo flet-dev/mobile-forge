@@ -3,6 +3,7 @@
 build/
 __pycache__/
 .pytest_cache/
+.ruff_cache/
 uv.lock
 *.db
 *.db-wal

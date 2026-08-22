@@ -15,10 +15,10 @@ What it demonstrates:
 - **The render-to-bytes workflow.** There is no window to draw into on a phone, so the
   figure is rendered by Agg into an in-memory PNG and handed to
   [`Image.src`](https://flet.dev/docs/controls/image/#flet.Image.src), which accepts raw
-  bytes directly — no base64, no temporary file. The whole plot is one 150 KB PNG per
+  bytes directly — no base64, no temporary file. The whole plot is about one 150 KB PNG per
   redraw; that is worth knowing if you plan to redraw continuously rather than on release.
-- **A writable config directory, set before the first import.** The first four statements
-  point [`MPLCONFIGDIR`](https://matplotlib.org/stable/install/environment_variables_faq.html#envvar-MPLCONFIGDIR)
+- **A writable config directory, set before the first import.** The block above the imports
+  in `main.py` points [`MPLCONFIGDIR`](https://matplotlib.org/stable/install/environment_variables_faq.html#envvar-MPLCONFIGDIR)
   at [`FLET_APP_STORAGE_DATA`](https://flet.dev/docs/reference/environment-variables/#flet_app_storage_data).
   matplotlib resolves that directory once, while it is being imported, so anything below
   the import line is too late.

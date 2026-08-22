@@ -25,28 +25,58 @@ extract_packages = ["matplotlib"]
 
 **The [`extract_packages`](https://flet.dev/docs/publish/android/#extract-packages) entry is
 not optional on Android** — without it `import matplotlib` fails outright, before you have
-drawn anything. See [Android notes](#android-notes) for the symptom. It does nothing on
-iOS, so it is safe to leave in place for a cross-platform build. There is no built-in
-default list, so nothing adds it for you.
-
-Everything matplotlib needs comes along on its own — 13 further wheels, none of which needs
-configuring. `numpy`, `pillow`, `contourpy` and `kiwisolver` resolve from this index;
-`fonttools`, `cycler`, `packaging`, `pyparsing` and `python-dateutil` (with its `six`) are
-pure-Python wheels from PyPI; `flet-libjpeg` and `flet-libfreetype` are Pillow's native
-dependencies, not matplotlib's; and on Android there is also `flet-libcpp-shared`, the NDK
-C++ runtime all 8 of matplotlib's extensions link against. Add `numpy` to your own
-dependency list only if your code imports it.
+drawn anything. See [Android](#android) for the symptom. It does nothing on iOS, so it is
+safe to leave in place for a cross-platform build. There is no built-in default list, so
+nothing adds it for you.
 
 You will also want to point
 [`MPLCONFIGDIR`](https://matplotlib.org/stable/install/environment_variables_faq.html#envvar-MPLCONFIGDIR)
 somewhere writable before the first import — see [Storage](#storage). Skipping that one
 breaks nothing; it just costs you a rebuilt font cache on every launch.
 
-Builds for all three Android ABIs Flet targets (arm64-v8a, armeabi-v7a, x86_64) and for iOS
-(device and both simulator architectures), on Python 3.12, 3.13 and 3.14 — the same
-matplotlib version on every one of them.
+## Examples
 
-## Storage
+See runnable Flet apps in [`examples/`](examples):
+
+- [`heatmap-image`](examples/heatmap-image) — renders a contoured heat map to PNG bytes and shows it in an `Image`.
+- [`zoomable-series`](examples/zoomable-series) — the same renderer behind a live `MatplotlibChart` you can pan and zoom.
+
+## Usage in a Flet app
+
+There is no window to draw into on a device, so the workflow is render, then display: build
+a figure, let Agg rasterise it into memory, and hand the bytes to a control.
+
+```python
+import io
+
+import flet as ft
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.figure import Figure
+
+figure = Figure(figsize=(4.4, 4.0), dpi=160, layout="constrained")
+FigureCanvasAgg(figure)  # attaches Agg to the figure; the canvas is never needed again
+
+axes = figure.add_subplot()
+axes.plot(xs, ys)
+
+buffer = io.BytesIO()
+figure.savefig(buffer, format="png")
+view = ft.Image(src=buffer.getvalue(), gapless_playback=True)
+```
+
+[`savefig`](https://matplotlib.org/stable/api/_as_gen/matplotlib.figure.Figure.savefig.html)
+writes to any binary file object and
+[`Image.src`](https://flet.dev/docs/controls/image/#flet.Image.src) accepts `bytes` as well
+as a path, so an `io.BytesIO` is the whole bridge between the two — no base64, no temporary
+file. Set
+[`gapless_playback=True`](https://flet.dev/docs/controls/image/#flet.Image.gapless_playback)
+when you replace those bytes repeatedly, or the control blanks between renders. The
+`MPLCONFIGDIR` lines from [Storage](#storage) belong above that first matplotlib import, and
+the reason this builds the figure directly instead of calling
+[`pyplot`](https://matplotlib.org/stable/api/pyplot_summary.html) is in
+[Threading](#threading).
+
+### Storage
 
 matplotlib wants a writable directory for its configuration and its font cache, and it
 picks one **while it is being imported**. Give it one, first thing in your entry point,
@@ -79,25 +109,17 @@ instead, and deletes it again at exit. Nothing breaks — you just rebuild the f
 every cold start, and you get a warning in `console.log` telling you to do what this section
 says.
 
-Figures you save are ordinary file writes, so
-[`savefig`](https://matplotlib.org/stable/api/_as_gen/matplotlib.figure.Figure.savefig.html)
-belongs in the same app-storage directories. From Flet 0.86.0 `FLET_APP_STORAGE_DATA` is
-also the process working directory on device, so a bare relative filename lands there
-anyway; spelling it out costs one line and behaves the same on desktop. If the figure is
-only going on screen, you do not need a file at all — render into a `BytesIO` and hand the
-bytes straight to [`Image.src`](https://flet.dev/docs/controls/image/#flet.Image.src).
+Figures you save are ordinary file writes, so `savefig` belongs in the same app-storage
+directories. From Flet 0.86.0 `FLET_APP_STORAGE_DATA` is also the process working directory
+on device, so a bare relative filename lands there anyway; spelling it out costs one line
+and behaves the same on desktop. If the figure is only going on screen, you do not need a
+file at all — render into a `BytesIO` as above.
 
-## Examples
+### Threading
 
-See runnable Flet apps in [`examples/`](examples):
-
-- [`heatmap-image`](examples/heatmap-image) — renders a contoured heat map to PNG bytes and shows it in an `Image`.
-- [`zoomable-series`](examples/zoomable-series) — the same renderer behind a live `MatplotlibChart` you can pan and zoom.
-
-## Threading
-
-matplotlib does not use threads here: none of the 8 extensions references `pthread_create`
-or OpenMP on either platform. One figure renders on one core, however many the phone has.
+matplotlib does not use threads here: no extension in these wheels references
+`pthread_create` or OpenMP on either platform. One figure renders on one core, however many
+the phone has.
 
 Which means rendering on the handler thread freezes the UI, and a full-page figure is not
 fast. Push the work to
@@ -108,15 +130,64 @@ not reach background threads.
 
 **Use [`Figure`](https://matplotlib.org/stable/api/_as_gen/matplotlib.figure.Figure.html)
 and [`FigureCanvasAgg`](https://matplotlib.org/stable/api/backend_agg_api.html#matplotlib.backends.backend_agg.FigureCanvasAgg)
-rather than pyplot when you do.** [`pyplot`](https://matplotlib.org/stable/api/pyplot_summary.html)
-keeps a process-global registry of open figures and a notion of "the current figure";
-neither is safe to touch from two threads, and upstream's own guidance is to avoid it for
-embedded and server use. Figures you build directly are independent objects that move
-between threads freely. The exception is
+rather than pyplot when you do.** `pyplot` keeps a process-global registry of open figures
+and a notion of "the current figure"; neither is safe to touch from two threads, and
+upstream's own guidance is to avoid it for embedded and server use. It is also a steady
+leak — every figure it creates stays alive until something closes it. Figures you build
+directly are independent objects that move between threads freely. The exception is
 [`MatplotlibChart`](https://flet.dev/docs/controls/charts/matplotlibchart/), which needs the
 canvas and manager that only pyplot attaches — see [Things to know](#things-to-know).
 
-## Android notes
+### Backends and display
+
+**`plt.show()` does nothing, and there is no window it could have opened.** matplotlib picks
+a backend the first time you use pyplot, by trying `macosx`, `qtagg`, `gtk4agg`, `gtk3agg`,
+`tkagg` and `wxagg` in turn and falling back to `agg`. On device every one of those fails —
+`matplotlib.backends._macosx` is the one extension deliberately absent from these wheels,
+and Flet's Python bundle contains no `tkinter` and no Qt, GTK or wx bindings — so
+[`matplotlib.get_backend()`](https://matplotlib.org/stable/api/matplotlib_configuration_api.html#matplotlib.get_backend)
+returns `agg`. Calling
+[`show()`](https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.show.html) then warns
+`FigureCanvasAgg is non-interactive, and thus cannot be shown` and returns immediately.
+
+Two things put a figure on screen: the bytes-into-an-`Image` route above, or
+`MatplotlibChart`, which is a real Flet control and gets you pan and zoom instead of a
+static picture — see [Things to know](#things-to-know).
+
+Setting
+[`MPLBACKEND=Agg`](https://matplotlib.org/stable/install/environment_variables_faq.html#envvar-MPLBACKEND)
+alongside `MPLCONFIGDIR` costs nothing and skips those failed imports; it does not change the
+outcome, and if you use `flet-charts` it is overridden anyway. `_tkagg` *does* ship, and it is
+the one extension in the wheel you cannot import: its initialiser pulls symbols out of
+`_tkinter`, so it raises `ImportError: initialization failed`. Nothing on device reaches it.
+
+### App size
+
+The wheels are 8.0–8.3 MB compressed and unpack to 19.7–20.9 MB depending on architecture
+(Android arm64-v8a: 8.2 MB and 20.2 MB; iOS arm64: 8.1 MB and 20.9 MB). Those are decimal
+MB, so re-measure with a byte count rather than `du -h`, which reports binary units and
+shows a smaller number for the same file. Nearly half of the payload is fonts: `mpl-data` is
+9.0 MB unpacked, 8.3 MB of it the bundled DejaVu, STIX and Computer Modern faces, and you
+cannot drop those without breaking text rendering.
+
+What you *can* drop is matplotlib's own test suite, 2.0 MB on every architecture, which
+Flet's default [package cleanup](https://flet.dev/docs/publish/#compilation-and-cleanup)
+leaves alone because it strips headers, static archives and `__pycache__`, not tests:
+
+```toml
+[tool.flet.cleanup]
+package_files = ["matplotlib/tests", "mpl_toolkits/*/tests"]
+```
+
+The 0.5 MB of `mpl-data/sample_data` goes the same way if you never call
+`cbook.get_sample_data`.
+
+On Android, use an app bundle, split APKs, or narrow
+[`target_arch`](https://flet.dev/docs/publish/android/#supported-target-architectures) when
+the app does not need every ABI. Wheel size is not the amount added to the final APK or IPA;
+packaging and compression decide that.
+
+### Android
 
 **Without `extract_packages`, matplotlib does not import at all.** Flet 0.86 ships
 site-packages inside a stored `sitepackages.zip` and imports from it with `zipimport`, but
@@ -131,11 +202,10 @@ NotADirectoryError: [Errno 20] Not a directory:
 ```
 
 (`FileNotFoundError` on the same path is the other form this takes.) It is not one unlucky
-file either — ten modules that actually run on mobile resolve something under `mpl-data`
-the same way: `matplotlibrc` at import, the bundled fonts, the style sheets, the AFM
-metrics for PDF output, `cmr10.ttf` for tick labels, `cmsy10.ttf` for mathtext, the sample
-data. The whole package has to be on disk, which is exactly what the `extract_packages`
-entry does.
+file either — `matplotlibrc` at import, the bundled fonts, the style sheets, the AFM metrics
+for PDF output, `cmr10.ttf` for tick labels, `cmsy10.ttf` for mathtext and the sample data
+all resolve the same way. The whole package has to be on disk, which is exactly what the
+`extract_packages` entry does.
 
 The other Android-specific detail is `HOME`: it points outside the app sandbox, which is
 what sends matplotlib's config directory to a temp directory it recreates every launch —
@@ -143,24 +213,20 @@ see [Storage](#storage). On iOS `HOME` is inside the app's sandbox, so the same 
 resolves somewhere the app can actually use. Neither is one of Flet's storage directories,
 so set `MPLCONFIGDIR` on both platforms and stop thinking about it.
 
+### Other considerations
+
+**A desktop `flet run` uses PyPI's matplotlib, and it has a GUI.** That wheel keeps
+`matplotlib.backends._macosx`, so on a Mac `get_backend()` can come back `macosx`,
+`plt.show()` opens a real window, and interactive code appears to work — the same code on
+device falls back to `agg` and `show()` is a warning that returns immediately. A desktop run
+also reads matplotlib out of an ordinary directory, so neither the Android
+`NotADirectoryError` nor an unset `MPLCONFIGDIR` can surface there. None of that is a build
+failure: each one is a working laptop run and a dead screen on the phone. Validate the
+display path on a device or emulator/simulator, and print `matplotlib.get_backend()` from
+inside the app rather than trusting the interpreter on your laptop.
+
 ## Things to know
 
-- **There is no GUI, and `plt.show()` does nothing.** matplotlib picks a backend the first
-  time you use pyplot, by trying `macosx`, `qtagg`, `gtk4agg`, `gtk3agg`, `tkagg` and
-  `wxagg` in turn and falling back to `agg`. On device every one of those fails —
-  `matplotlib.backends._macosx` is the one extension deliberately absent from these wheels,
-  and Flet's Python bundle contains no `tkinter` and no Qt, GTK or wx bindings — so
-  `matplotlib.get_backend()` returns `agg`. (`_tkagg` *does* ship, and is the one extension
-  in the wheel you cannot import: its initialiser pulls symbols out of `_tkinter`, so it
-  raises `ImportError: initialization failed`. Nothing on device reaches it.) Calling
-  [`show()`](https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.show.html) then
-  warns `FigureCanvasAgg is non-interactive, and thus cannot be shown` and returns
-  immediately. The workflow that does work is: render, then display. Either encode the
-  figure to bytes and put it in an
-  [`Image`](https://flet.dev/docs/controls/image/#flet.Image.src), or use
-  `MatplotlibChart` (next bullet). Setting `MPLBACKEND=Agg` alongside `MPLCONFIGDIR` costs
-  nothing and skips those six failed imports; it does not change the outcome, and if you
-  use `flet-charts` it is overridden anyway.
 - **`MatplotlibChart` works on device, and it is a real Flet control.** The
   [`flet-charts`](https://pypi.org/project/flet-charts/) package ships
   [`MatplotlibChart`](https://flet.dev/docs/controls/charts/matplotlibchart/) and
@@ -182,34 +248,16 @@ so set `MPLCONFIGDIR` on both platforms and stop thinking about it.
   `PATH`, which no phone has, and `matplotlib.animation.writers.list()` drops them from the
   list accordingly. `MatplotlibChart` is the better answer for animation on screen — it
   redraws a live figure rather than materialising frames.
-- **`text.usetex` and the `pgf` backend are unusable**, for the same reason: both shell out
-  to a LaTeX installation. Mathtext is the substitute and it is fully functional — the STIX
-  and Computer Modern fonts it needs are in `mpl-data/fonts`, so `$\sqrt{\alpha^2}$` in a
-  label renders on device with nothing extra installed.
-- **Everything else in matplotlib is here.** Compared file-by-file against the desktop PyPI
-  wheel of the same version, the Android and iOS wheels contain the same 594 files and the
-  desktop wheel has exactly one more: `matplotlib/backends/_macosx`, the macOS GUI backend.
-  All 288 Python files are byte-identical, and so is every file under `mpl-data`. Android
-  and iOS are identical to each other. `mpl_toolkits` — `mplot3d`, `axes_grid1` — is in the
-  wheel, and `savefig` supports png, svg, svgz, pdf, ps, eps, raw, rgba, and jpeg/tiff/webp
-  through Pillow.
-- **Size, and the 2 MB you can delete.** The wheels are 8.0–8.3 MB and unpack to 19.7–20.9
-  MB depending on architecture (Android arm64-v8a: 8.2 MB and 20.2 MB; iOS arm64: 8.1 MB
-  and 20.9 MB). Nearly half of that is fonts: `mpl-data` is 9.0 MB unpacked, 8.3 MB of it
-  the bundled DejaVu, STIX and Computer Modern faces, and you cannot drop those without
-  breaking text rendering. What you *can* drop is matplotlib's own test suite, 2.0 MB on
-  every architecture, which Flet's default
-  [package cleanup](https://flet.dev/docs/publish/#compilation-and-cleanup) leaves alone
-  because it strips headers, static archives and `__pycache__`, not tests:
-
-  ```toml
-  [tool.flet.cleanup]
-  package_files = ["matplotlib/tests", "mpl_toolkits/*/tests"]
-  ```
-
-  The 0.5 MB of `mpl-data/sample_data` goes the same way if you never call
-  `cbook.get_sample_data`.
-- **Style sheets and `rcParams` work normally**, including the 26 bundled styles
+- **`text.usetex` and the `pgf` backend are unusable**, because both shell out to a LaTeX
+  installation. Mathtext is the substitute and it is fully functional — the STIX and
+  Computer Modern fonts it needs are in `mpl-data/fonts`, so `$\sqrt{\alpha^2}$` in a label
+  renders on device with nothing extra installed.
+- **Everything else in matplotlib is here.** The only file missing against the desktop wheel
+  of the same version is `matplotlib/backends/_macosx`, the macOS GUI backend, and the
+  Android and iOS wheels are identical to each other. `mpl_toolkits` — `mplot3d`,
+  `axes_grid1` — is in the wheel, and `savefig` supports png, svg, svgz, pdf, ps, eps, raw,
+  rgba, and jpeg/tiff/webp through Pillow.
+- **Style sheets and `rcParams` work normally**, including every bundled style
   [`plt.style.available`](https://matplotlib.org/stable/api/style_api.html) lists, because
   `mpl-data/stylelib` is extracted along with the rest of the package. A `matplotlibrc` of
   your own is found through `MPLCONFIGDIR`, so put it in the directory you set in
@@ -217,9 +265,13 @@ so set `MPLCONFIGDIR` on both platforms and stop thinking about it.
 
 ## Build notes (maintainers)
 
-The recipe is upstream's meson-python build with nothing compiled out and nothing vendored,
-so `meta.yaml` is the standard cross-file handoff plus the settings its own comments
-justify, and the one patch explains itself in its preamble. What has no home in either file:
+### Recipe shape
+
+Upstream's meson-python build with nothing compiled out and nothing vendored, so `meta.yaml`
+is the standard cross-file handoff plus the settings its own comments justify, and the one
+patch explains itself in its preamble. FreeType is downloaded and statically linked by
+matplotlib's own build — nothing passes `system-freetype` — which is what the "identical to
+desktop" claim in the intro rests on.
 
 **The `extract_packages` entry in `meta.yaml` reaches the recipe-tester and nothing else.**
 Forge's build ignores it; the tester's `stage_recipe.sh` turns it into
@@ -229,40 +281,53 @@ wheel can add a `pyproject.toml` entry to somebody's app. That asymmetry is why
 going green on device is not evidence that an app which depends on it will even import
 matplotlib.
 
-**Verification here means launching an iOS app, not building one.** The failure the patch
-exists to prevent kills the app in dyld before `Py_Initialize()`, which means no Python runs,
+### Upgrade hazards
+
+**An iOS regression here is invisible to every static check.** The failure the patch exists
+to prevent kills the app in dyld before `Py_Initialize()`, which means no Python runs,
 `console.log` is 0 bytes, and the crash report never mentions matplotlib. Nothing in
-`unzip -l`, `otool`, the test suite or a green Android matrix can see it. Re-run a real iOS
-device-or-simulator launch after every bump.
+`unzip -l`, `otool`, the test suite or a green Android matrix can see it. Verification means
+launching a real iOS app, not building one.
 
-What to re-verify on a bump, in rough order of how quietly it can go wrong:
+**The patch target moves without warning.** Upstream vendors the pybind11 enum helper the
+patch edits, so the check that matters is not "did the patch apply" but "does the built iOS
+app launch". If upstream ever fixes the static initializer itself, the patch goes away and
+so does the hazard above.
 
-- **That the patch still applies to `src/_enums.h` and still does its job.** Upstream
-  vendors that pybind11 enum helper, so it moves without warning; the check that matters is
-  not "did the patch apply" but "does the built iOS app launch". If upstream ever fixes the
-  static initializer itself, the patch goes away and so does the paragraph above.
-- **The file-by-file comparison against the desktop wheel.** "594 files, one fewer than
-  desktop, 288 Python files byte-identical, `_macosx` the only omission" comes from diffing
-  the built wheels against the PyPI desktop wheel of the same version. It is what backs the
-  claim that nothing is compiled out and that Android and iOS are identical, and every
-  number in it moves on a bump. The extension count in [Threading](#threading) and the
-  `pthread_create`/OpenMP claim come from the same pass.
+**`flet-charts` pins `flet` to its own version exactly**, so it is really the Flet bump that
+constrains it, not this one. The `zoomable-series` example is the thing that catches a break
+— its pins are the record of a combination that ran, so bump them and rebuild it.
+
+### Re-verification checklist
+
+- **The file-by-file comparison against the desktop wheel.** The Android and iOS wheels
+  contain 594 files and the desktop wheel has exactly one more, `_macosx`; all 288 Python
+  files are byte-identical, and so is every file under `mpl-data`. That diff is what backs
+  the "nothing is compiled out" claim in [Things to know](#things-to-know), and every number
+  in it moves on a bump. The `pthread_create`/OpenMP claim in [Threading](#threading) comes
+  from the same pass over the wheels' eight extensions.
 - **`get_data_path()` still being `__file__`-relative, and still the reason for
-  `extract_packages`.** The whole [Install](#install) snippet rests on it. The count of ten
-  modules reading under `mpl-data` is a `grep` for `_get_data_path` outside `tests/`, minus
-  the GUI, TeX and sphinx modules that never load on a phone; upstream moving to
-  `importlib.resources` would retire the entry and rewrite
-  [Android notes](#android-notes).
+  `extract_packages`.** The whole [Install](#install) snippet rests on it. The list of
+  `mpl-data` readers is a `grep` for `_get_data_path` outside `tests/`, minus the GUI, TeX
+  and sphinx modules that never load on a phone — ten modules at the current version.
+  Upstream moving to `importlib.resources` would retire the entry and rewrite
+  [Android](#android).
 - **The backend fallback list.** `pyplot.switch_backend` hardcodes the candidates tried
   before `agg`; upstream reorders it occasionally, and a new candidate that *did* import on
   device would silently change what `get_backend()` returns. Re-assert `agg` on device
   rather than re-reading the list.
-- **`flet-charts` compatibility.** It pins `flet` to its own version exactly, so it is
-  really the Flet bump that constrains it, not this one. The `zoomable-series` example is
-  the thing that catches a break — its pins are the record of a combination that ran.
-- **The sizes, and FreeType.** Wheel and unpacked figures per architecture, the 9.0 MB
-  `mpl-data`, and the 2.0 MB of tests the cleanup snippet removes are measured, not
-  estimated. FreeType is downloaded and statically linked by matplotlib's own build (nothing
-  passes `system-freetype`), which is what the "identical to desktop" claim in the intro
-  rests on; a release that changes that pin changes the sizes and the text rendering
+- **The sizes.** Wheel and unpacked figures per architecture, the 9.0 MB `mpl-data`, the
+  8.3 MB of fonts inside it, and the 2.0 MB of tests the cleanup snippet removes are
+  measured, not estimated. They are decimal MB — measure bytes, not `du -h`. A release that
+  changes matplotlib's bundled FreeType pin changes the sizes and the text rendering
   together.
+### Coverage gaps
+
+The device test exercises exactly one path: pyplot to `savefig` to a PNG with the expected
+header and an approximate byte length. Every other on-device claim on this page is
+inspection- or example-backed — that `get_backend()` returns `agg`, that `_tkagg` raises
+`ImportError`, that `MatplotlibChart` draws, that mathtext renders, that only `PillowWriter`
+and `HTMLWriter` survive, and the `NotADirectoryError` symptom itself. That last one is the
+gap to keep in mind: the tester sets `extract_packages` for its own app, so a green run is
+evidence that matplotlib works *with* the entry, never that a consumer without it fails in
+the documented way. Nothing but a real iOS launch covers the patch.

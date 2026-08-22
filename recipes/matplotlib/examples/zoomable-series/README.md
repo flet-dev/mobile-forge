@@ -14,9 +14,9 @@ it carries is compiled into the app by `flet build`. Nothing extra to configure.
 
 What it demonstrates:
 
-- **A live figure instead of a snapshot.** The other example encodes a PNG and hands it to
-  an `Image`; this one keeps the figure interactive, which is what you want when the
-  interesting detail is only visible zoomed in.
+- **A live figure instead of a snapshot.** The chart keeps the figure interactive rather
+  than shipping a rendered picture of it, which is what you want when the interesting
+  detail is only visible zoomed in.
 - **Why the figure has to come from pyplot.** Importing `flet_charts` registers a
   matplotlib [backend](https://matplotlib.org/stable/users/explain/figure/backends.html),
   and the control streams through the canvas and manager that backend attaches. Only

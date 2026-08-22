@@ -166,7 +166,7 @@ The engine is not in this wheel. The default
 dialect drives the stdlib `sqlite3` module, and that module links a different SQLite on each
 platform: on Android the copy compiled into Flet's Python build, on iOS whatever
 `/usr/lib/libsqlite3.dylib` the OS release ships. Measured on 2026-08-17 with Python 3.14,
-**3.50.4 on Android** and **3.43.2 on the iPhone simulator**.
+**3.50.4 on Android** and **3.43.2 on the iPhone simulator** — both read off the [`expense-ledger`](examples/expense-ledger) header line on device, 2026-08-22.
 
 So the floor for any feature you depend on — a SQL function, a pragma, `RETURNING` — is whichever
 of the two is older, and it moves when Flet bumps its Python build or Apple ships an OS update,
@@ -409,7 +409,7 @@ asserting `sqlalchemy.util.has_compiled_ext()` plus the five `sqlalchemy.cyexten
 
 ### Coverage gaps
 
-**No on-device run backs the timings, the pool behaviour or the pragma defaults.** Everything above was read off the wheels or
+**No on-device run backs the timings, the pool behaviour or the pragma defaults.** The SQLite versions, the compiled-extension state, `journal=wal`, the pool class and the `Decimal`/`datetime` result types are the exception: those are read off the example's header on both platforms. Everything above was read off the wheels or
 measured on a desktop install of the same version, and there is no CI run for this recipe to point
 at — its last commit is a repo-wide normalisation, and the wheels on the index were built on
 2026-06-11. The two tests in `tests/` cover an in-memory CRUD round trip and a statement compile,

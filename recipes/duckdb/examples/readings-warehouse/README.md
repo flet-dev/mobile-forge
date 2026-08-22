@@ -40,7 +40,7 @@ What it demonstrates:
 
 `[tool.flet.android] target_arch` restricts the build to the two 64-bit ABIs. That is a
 choice, not a requirement — an `armeabi-v7a` wheel does exist — but each ABI carries its own
-47–62 MB copy of the engine, so a default three-ABI build triples the largest thing in the
+47–63 MB copy of the engine, so a default three-ABI build triples the largest thing in the
 artifact.
 
 ## Try it
@@ -54,6 +54,6 @@ uv run flet build apk
 `flet run` works too: the same pins resolve on desktop, where PyPI serves duckdb at that
 version, and the app makes no mobile-only assumptions.
 
-Read the recipe's [iOS notes](../../README.md#ios-notes) before trying `flet build ipa` or
-`flet build ios-simulator`: the iOS wheels currently on the index are expected to fail at
-link time, for a reason that has nothing to do with this app.
+`flet build ipa` and `flet build ios-simulator` are expected to fail at link time with
+`Unsupported mach-o filetype`. That is the iOS wheels currently on the index, not anything
+in this app; the recipe's [iOS](../../README.md#ios) section has the detail.
