@@ -9,7 +9,7 @@ package:
   # not worth diverging from the flet-lib* convention to skip it.
 
 build:
-  number: 1
+  number: 2
 
 source:
   # Apache Arrow C++ (curated source release; build dir = its cpp/). pyarrow

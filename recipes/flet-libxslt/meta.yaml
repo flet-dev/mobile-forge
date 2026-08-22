@@ -17,7 +17,7 @@ package:
   version: '{{ version }}'
 
 build:
-  number: 10
+  number: 11
 
 source:
   url: https://download.gnome.org/sources/libxslt/{{ version.rsplit('.', 1)[0] }}/libxslt-{{ version }}.tar.xz

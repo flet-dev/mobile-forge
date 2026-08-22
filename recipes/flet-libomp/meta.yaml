@@ -19,7 +19,7 @@ package:
   version: "27.3.13750724"
 
 build:
-  number: 2
+  number: 3
 
 # No upstream archive: build.sh produces its own libomp — copied from the NDK on
 # Android, generated as a serial stub on iOS.

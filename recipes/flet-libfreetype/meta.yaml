@@ -5,7 +5,7 @@ package:
   version: '{{ version }}'
 
 build:
-  number: 10
+  number: 11
 
 source:
   url: https://downloads.sourceforge.net/project/freetype/freetype2/{{ version }}/freetype-{{ version }}.tar.gz

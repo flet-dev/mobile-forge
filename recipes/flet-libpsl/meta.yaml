@@ -8,7 +8,7 @@ source:
   url: https://github.com/rockdaboot/libpsl/releases/download/{{ version }}/libpsl-{{ version }}.tar.gz
 
 build:
-  number: 10
+  number: 11
 
 patches:
   - config.patch

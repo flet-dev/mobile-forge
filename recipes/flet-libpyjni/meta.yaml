@@ -8,7 +8,7 @@ package:
   platforms: [android]
 
 build:
-  number: 10
+  number: 11
 
 source:
   url: https://github.com/flet-dev/libpyjni/releases/download/v{{ version }}/pyjni-{{ version }}.tar.gz

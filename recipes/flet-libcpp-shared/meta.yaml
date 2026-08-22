@@ -7,7 +7,7 @@ package:
   platforms: [android]
 
 build:
-  number: 10
+  number: 11
 
 # No upstream archive: build.sh copies libc++_shared.so out of the NDK toolchain.
 source: null

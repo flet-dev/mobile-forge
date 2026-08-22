@@ -5,7 +5,7 @@ package:
   version: '{{ version }}'
 
 build:
-  number: 10
+  number: 11
 
 source:
   url: https://github.com/pnggroup/libpng/archive/refs/tags/v{{ version }}.tar.gz
