@@ -89,16 +89,7 @@ uv run flet build ipa
 uv run flet build ios-simulator
 ```
 
-It also runs on the desktop with `uv run flet run`, which is the fastest way to try a query
-— just remember that the desktop resolves upstream's PyPI wheel, so the header says 226
-builtins there whatever a phone says.
-
-Its timings will not match the table either, and by more than the table's own spread: on the
-same M4 desktop the five queries take **6.2–62.4 ms** through upstream's PyPI wheel against
-1.97–13.68 ms through the replica, with the parse alone 5.49 ms against 1.89 ms (min of 15
-runs each). That gap is upstream's wheel build, not the language version — the jq 1.7.1 and
-1.8.1 *command-line* binaries parse this same 242,202-byte file in 2.28 ms and 2.12 ms, with
-process start-up subtracted. The cause is one line of jq.py's `setup.py`, which hands
-`./configure` a `CFLAGS` that replaces autoconf's `-g -O2`; the recipe never runs it, so
-treat that desktop jq column as a floor rather than a forecast. Which of the two the mobile
-wheel behaves like is one of the things running the app on a device settles.
+It also runs on the desktop with `uv run flet run`, which is the fastest way to try a query.
+Remember that the desktop resolves upstream's PyPI wheel — a newer jq and a different build
+of it — so the header says 226 builtins there whatever a phone says, and the timings it
+prints are a preview of the app rather than of the device.

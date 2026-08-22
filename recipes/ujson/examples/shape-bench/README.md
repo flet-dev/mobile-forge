@@ -5,21 +5,22 @@ standard library module that is *already written in C*: on the phone in your han
 faster, and does it change anything? Pick a document size and the app builds five payload
 shapes — API records, floats, booleans, URLs, accented text — serialises and parses each one
 with both libraries, and prints the per-call cost side by side. Underneath, eight drop-in
-questions — five of which come back different from the stdlib and three the same — every cell
-computed by a call made on the device rather than quoted.
+questions, every cell computed by a call made on the device rather than quoted.
+
+`src/main.py` is the Flet app: the picker, the tables and the background-thread plumbing.
+`src/shapes.py` is everything ujson touches — the five document builders, the timing harness,
+the audit — and it returns plain numbers and strings, so the two files can be read separately.
 
 What it demonstrates:
 
 - **That the answer depends on the shape of your data, which is why there are five of them.**
-  On desktop (CPython 3.12, arm64 Mac, 1,000 items per shape) the same code gives `dumps`
-  2.93× on `floats`, 1.47× on `records`, 1.05× on `text` and **0.62× on `flags`**, the
-  booleans —
-  ujson losing to the stdlib on the cheapest possible values. A benchmark that picked one
+  ujson wins by a wide margin on floats, loses to the stdlib on booleans — the cheapest
+  possible values — and lands somewhere between on the rest. A benchmark that picked one
   document could have told you either story. The verdict line under the table names the best
   and worst shape of the run, so the shape-dependence is the headline rather than a footnote.
 - **The size column, and the one thing that makes ujson's output bigger.** ujson escapes `/`
-  by default, so the `URLs` row comes out **+12.07%** against `json.dumps` compact on desktop
-  while the other four stay within 0.02% of it. The `json` side is called with
+  by default, so the `URLs` row comes out about 12% larger against `json.dumps` compact while
+  the other four stay within a rounding error of it. The `json` side is called with
   `separators=(",", ":")` precisely so that column means something: ujson has no spacing to
   remove, and against `json.dumps` defaults the difference would just be spaces.
 - **A cross-check, so a wrong answer is visible rather than merely plausible.** Every shape is
@@ -31,10 +32,10 @@ What it demonstrates:
   `"a/b"`, `float("nan")`, a 23-digit integer, a tuple dict key, a 25-digit `Decimal`, a
   `loads(..., object_hook=…)` call — and, last, what an existing `except json.JSONDecodeError`
   clause would do with ujson's decode error. That final row is the one to read first: it
-  prints *misses it*, because `ujson.JSONDecodeError` subclasses `ValueError` directly. Every
-  call sits inside a broad `except Exception`, because these raise plain `TypeError`,
-  `ValueError` and `OverflowError` rather than anything library-shaped, and an unhandled
-  exception in a Flet handler crashes the session.
+  prints *misses it*, because `ujson.JSONDecodeError` subclasses `ValueError` directly rather
+  than the stdlib's error. Every call sits inside a broad `except Exception`, because these
+  raise plain `TypeError`, `ValueError` and `OverflowError` rather than anything
+  library-shaped, and an unhandled exception in a Flet handler crashes the session.
 - **Where the native module came from, on this device.** The header carries
   `ujson.__version__`, the Python version, `page.platform.value` and the basename of the
   module's origin, read through `__file__` first and `__spec__.origin` second — because Flet
@@ -51,21 +52,18 @@ What it demonstrates:
   this run's error. The re-entry guard is tested and set in the handler rather than in the
   worker, where it would not have taken effect before Flet pushed the control states. Note
   that the thread buys nothing but a handler that returns immediately: ujson holds the GIL for
-  the whole call, as the [recipe README](../../README.md#threading) measures.
+  the whole call, so no second core is doing any of this work.
 - **Restraint about what an example should probe.** ujson's encoder gives up at 1,024 nested
   containers, but demonstrating that on device means 1,024 frames of C stack on a worker
-  thread — a worse thing to learn from an example than from a sentence, so it is documented in
-  the [recipe README](../../README.md) and not called here. Only one shape is in memory at a
-  time, too: each document is built inside the measurement and dropped on return. The
-  5,000-item records document is 4.1 MB of Python objects on its own, but the cross-check
-  holds five parsed trees and both serialised strings at once, which takes the peak for that
-  one measurement to 32 MB of tracked allocations, and grows the process RSS by about 30 MB —
-  all three desktop figures, CPython 3.14. Measure the RSS with `tracemalloc` off, by the way:
-  its own per-allocation bookkeeping roughly doubles the number. That is the largest thing
-  this app asks a phone for; the 1,000-item default peaks at 6.3 MB tracked and 6 MB of RSS.
-- **A missing wheel reads as a message, not a crash.** The import sits in `try/except
-  ImportError`, so an app built without the dependency shows what failed and what to add
-  instead of dying on the first line.
+  thread — a worse thing to learn from an example than from a sentence, so no row here goes
+  looking for it. Only one shape is in memory at a time, too: each document is built inside
+  the measurement and dropped on return. The 5,000-item records document is 4.1 MB of Python
+  objects on its own, but the cross-check holds five parsed trees and both serialised strings
+  at once, which takes the peak for that one measurement to 32 MB of tracked allocations, and
+  grows the process RSS by about 30 MB — all three desktop figures, CPython 3.14. Measure the
+  RSS with `tracemalloc` off, by the way: its own per-allocation bookkeeping roughly doubles
+  the number. That is the largest thing this app asks a phone for; the 1,000-item default
+  peaks at 6.3 MB tracked and 6 MB of RSS.
 
 Every document is generated from integer arithmetic with no randomness — no `random`, and no
 `math.sin`, whose last bits are not guaranteed to match across platforms — so the same size

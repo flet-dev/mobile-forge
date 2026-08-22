@@ -5,9 +5,8 @@ makes the answer uncomfortable. Four blocks under a self-describing header: what
 thinks its own zone is, asked three independent ways; one fixed instant rendered into six
 zones with every conversion checked against the standard library; a slider that walks a
 Paris noon across a DST transition and prints the hours that really elapsed; and a table of
-ISO-8601 strings run through `pendulum.parse` with the type each one came back as. Nothing
-is downloaded, nothing is written to disk, no asset is bundled — every input is a literal,
-so the only variable is the device.
+ISO-8601 strings run through `pendulum.parse` with the type each one came back as. Every
+input is a literal, so the only variable is the device.
 
 What it demonstrates:
 
@@ -17,8 +16,10 @@ What it demonstrates:
   next to `time.tzname`. Underneath it lists which of the five files pendulum's Unix branch
   looks for actually exist on this device, and which of `zoneinfo`'s four search directories
   do. On a desktop all three answers agree and the paths are there; on a phone they are
-  expected not to be, and the screen says so rather than the docs guessing — see the
-  [recipe README](../../README.md#things-to-know) for what the code does with each outcome.
+  expected not to be, and the screen says so rather than the docs guessing. When none of them
+  is found, `pendulum.now()` warns once on stderr — where a Flet app shows nothing — and
+  returns UTC, which is why every other call in this app names the zone it wants. The
+  [recipe README](../../README.md#things-to-know) has the rest of that story.
 - **How many named zones this device can resolve.** One bold number, `len(pendulum.tz
   .timezones())`, which is `zoneinfo.available_timezones()` under a `functools.cache`. It is
   the `tzdata` wheel's list plus whatever the OS keeps under `TZPATH`, so the two platforms

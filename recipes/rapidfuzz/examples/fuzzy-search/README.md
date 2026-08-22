@@ -61,8 +61,8 @@ dispatched from the field's `on_submit` and the Dropdown's
 the handler from blocking, not the interpreter: `process.extract` holds the GIL while it runs, so
 the thread buys responsiveness here only because one search over 4,000 names costs about 4 ms. On
 a corpus large enough to matter it would stall the UI from the worker thread just as surely as
-from the handler — the recipe README's [Threading](../../README.md#threading) section measures
-that, and names `process.cdist` as the one call that does release the GIL. Disabling the inputs
+from the handler. `process.cdist` is the one call in the package that releases the GIL, and it is
+also the only one that can use more than one core, through `workers=`. Disabling the inputs
 is not on its own enough of a guard — it only queues the new state for the client, and
 `run_thread` submits to a shared pool — so the handler reads `disabled` back before dispatching.
 
@@ -70,9 +70,11 @@ is not on its own enough of a guard — it only queues the new state for the cli
 this corpus size `process.extract` fits inside a frame budget, so searching per keystroke from
 `on_change` is fine provided the work still goes off the UI thread and the disable-the-inputs
 guard is replaced by a stale-run guard that discards a result whose query is no longer the one in
-the field. `extract_iter(..., score_cutoff=…)` is the cheaper per-keystroke call; the recipe
-README's [Things to know](../../README.md#things-to-know) has the figures. This example keeps the
-submit gesture so that one run means one comparable set of numbers on screen.
+the field. `extract_iter(..., score_cutoff=…)` is the cheaper per-keystroke call: on a desktop run
+over this same 4,000-name corpus with `fuzz.ratio`, `extract(limit=None)` took 0.76 ms,
+`list(extract_iter(...))` 0.49 ms and `extract_iter(..., score_cutoff=60)` 0.30 ms. This example
+keeps the submit gesture so that one run means one comparable set of numbers on screen.
+
 The worker body is wrapped in `try/except`, blanks every computed row before reporting a failure
 in the field's `error`, and ends in an explicit
 [`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update), because `run_thread`

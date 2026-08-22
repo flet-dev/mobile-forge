@@ -6,32 +6,25 @@ sorted, what instant does an id carry, and can a time window be selected by comp
 text alone.
 
 Nothing is bundled and nothing is fetched — every number comes from ids made on the device
-while you watch, so two phones can be compared with each other and with the desktop figures
-below.
+while you watch, so two phones can be compared with each other and with a desktop.
 
 What it demonstrates:
 
 - **What each version costs, against the standard library on the same runtime.** The top
   table times both implementations over 20,000 ids, best of three, and prints nanoseconds
-  per id and ids per second. On an Apple M4 desktop under CPython 3.14.6 (best of twenty
-  loops of 200,000 calls) uuid-utils needs 39 ns for a v4 against `uuid.uuid4`'s 1,052 —
-  **27×** — and 65 ns for a v7 against `uuid.uuid7`'s 1,230, **19×**. v3 and v5 are the
-  narrow ones at 4–6×, because the stdlib's MD5 and SHA-1 are already C.
+  per id and ids per second. The gap is widest on v4 and v7 and narrowest on v3 and v5,
+  where the standard library is already calling into C for MD5 and SHA-1.
 - **That v7 comes out sorted and v4 does not.** The ordering line counts adjacent pairs
   that are out of order when the batch is read as *text* — which is how a key column, a
-  file name and a document-store key range are all compared. On desktop a 20,000-id v4
-  batch has about 10,000 pairs out of order, half of them, and a v7 batch has zero. A
-  million v7 ids in one loop also gave zero, at up to 7,151 in a single millisecond.
-- **That "time-ordered" is not the same as "monotonic", and this is where v6 loses.** In
-  the same test uuid-utils' v6 and v1 batches come out *nearly* sorted — measured on
-  desktop, 4–7 inversions per 100,000 v6 ids and 3–7 per 100,000 v1 ids. Every one of them is
-  the same thing: two ids sharing a 100-nanosecond tick, where the order falls to the
-  14-bit clock sequence, which had just wrapped from 16383 to 0. v7's counter is wider and
-  never did. CPython 3.14's own `uuid.uuid6` has no inversions because it bumps its
-  timestamp forward instead of letting the sequence wrap. The rate depends entirely on how
-  many ids land in one tick, so a phone slow enough to spread 20,000 ids over tens of
-  milliseconds can legitimately show zero — verified by slowing the generators to 2 µs a
-  call on desktop, where the v6 and v1 lines both read `0 of 19,999`.
+  file name and a document-store key range are all compared. A v4 batch has about half its
+  pairs out of order; a v7 batch has none.
+- **That "time-ordered" is not the same as "monotonic", and this is where v6 loses.** The
+  v6 and v1 batches come out *nearly* sorted. Every inversion is the same event: two ids
+  sharing one 100-nanosecond tick, where the order falls to the 14-bit clock sequence,
+  which had just wrapped. v7's counter is wider and does not. How often it happens depends
+  entirely on how many ids land in one tick, so a phone slow enough to spread 20,000 ids
+  over tens of milliseconds can legitimately show none — which is exactly why a benchmark
+  loop is not evidence that v1 or v6 is safe to sort on.
 - **Why v1 must not be used as a sort key, proved by arithmetic rather than by waiting.**
   For v1 the bottom line builds — without generating anything — the two ids a generator
   *would* produce at two instants 20 ms apart that straddle the moment the low 32 bits of
@@ -44,16 +37,15 @@ What it demonstrates:
   millisecond's floor minus one), and counts the batch two ways: by comparing id strings
   against those bounds, and by decoding every timestamp. The two counts have to agree. That
   is a `WHERE id BETWEEN ? AND ?` over the key column, with no second column and no
-  secondary index. On a desktop the whole batch fits in one or two milliseconds, so the
-  window covers all of it and the line reads `middle 2 ms … 20,000 ids … 20,000` — the
-  layout is still being checked, but nothing is being excluded. Slow the generator to 2 µs a
-  call and the same code selected 7,422 of 20,000 across a 16 ms window; a phone spreads the
-  batch the same way.
+  secondary index. On a fast machine the whole batch lands inside a millisecond or two, so
+  the window covers all of it and nothing is excluded — the layout is still being checked.
+  A phone spreads the batch out and the window starts selecting a slice of it.
 - **Which node id each `getnode()` found, and what it cost.** The line prints both, in hex,
   labelled `MAC` or `random` from the multicast bit that RFC 9562 requires on an invented
   node. Only v1 and v6 consult it. The first call is the expensive one — the standard
   library may try to run `ip` and `ifconfig` before giving up — and both implementations
-  cache the answer for the life of the process.
+  cache the answer for the life of the process, so the milliseconds mean something only on
+  the first run.
 - **That the two `UUID` classes are not interchangeable.** The last line builds the same id
   under both and reports that they compare **unequal** while hashing **equal**, so a dict
   given both keeps two keys in one bucket; `sorted([...])` of a mixed list raises
@@ -70,10 +62,6 @@ What it demonstrates:
   so the screen still says something. On CPython 3.12 and 3.13, where the stdlib has no
   v6/v7/v8 at all, those two schemes then report that nothing on the runtime generates
   them.
-
-All the figures above are **desktop** measurements (Apple M4, macOS 26.6, CPython 3.14.6,
-uuid-utils 0.17.0 from PyPI). The point of running the app is to replace them with a
-phone's own.
 
 ## Try it
 
