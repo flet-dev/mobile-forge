@@ -11,10 +11,20 @@ requirements:
   host:
     - numpy 2.4.6
     - pybind11
-    - flet-libopenblas 0.3.33
 # {% if sdk == 'android' %}
+    # A real runtime dependency: libc++_shared.so must reach the device, so this
+    # belongs in Requires-Dist and must stay under `host`.
     - flet-libcpp-shared >=27.2.12479018
 # {% endif %}
+  host_build:
+    # OpenBLAS is built NO_SHARED=1 — libopenblas.a and nothing else — and meson
+    # links it into scipy's own extensions. host_build installs it for that link
+    # without promoting it to Requires-Dist; under `host` forge would add
+    # `flet-libopenblas (==0.3.33)` to the wheel, making every consuming build
+    # resolve and download ~70 MB of archive that no import can reach. The
+    # published build-1 wheels predate the entry and carry no such dependency, so
+    # this keeps a rebuild from introducing one.
+    - flet-libopenblas 0.3.33
 
 patches:
   - android-bionic-clog-cpow.patch
@@ -22,7 +32,10 @@ patches:
   - android-x86_64-boost-longdouble.patch
 
 build:
-  number: 1
+  # 2 keeps flet-libopenblas out of Requires-Dist (host -> host_build). The
+  # build-1 wheels on the index predate the entry and already carry no such
+  # dependency, so this is what stops a rebuild from adding one.
+  number: 2
   backend-args:
     # scipy 1.18 builds without a Fortran compiler — only the deprecated
     # scipy.odr is dropped. Removes the cross-Fortran blocker entirely.
