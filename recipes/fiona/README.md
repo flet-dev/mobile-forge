@@ -305,9 +305,18 @@ succeeds, with the four round trips unaffected. The
 still probes the import in its own `try/except`, so the failure stays visible if you drop
 the dependency.
 
-The recipe itself should arguably declare `flet-libcpp-shared` the way `gdal` and
-`rasterio` do, which would make the extra line unnecessary; until a wheel ships that way,
-add it yourself.
+**The recipe now declares it, the way `gdal` and `rasterio` do — but the published wheel
+does not yet.** `flet-libcpp-shared >=27.2.12479018` was added to the Android branch of
+`meta.yaml` and the build number raised to 12; a locally built
+`fiona-1.10.1-12-cp312-cp312-android_24_arm64_v8a.whl` carries
+`Requires-Dist: flet-libcpp-shared (>=27.2.12479018)`, and with that wheel the extra line
+above is unnecessary — verified on an arm64-v8a Android 14 emulator on 2026-08-22, five of
+five recipe tests green with no `[tool.flet.android]` entry of any kind, the APK pulling
+`libc++_shared.so` in on the wheel's own metadata.
+
+**Until build 12 is on the index, keep the line.** `pypi.flet.dev` still serves build 11,
+which does not declare the runtime, and pip takes the highest build tag — so what you
+install today is still the wheel that needs the workaround.
 
 **Plain `import fiona` is not exposed to that**, and this is worth spelling out because the
 opposite is easy to assume. `libgdal.so` leaves 215 C++ runtime symbols undefined — 200
