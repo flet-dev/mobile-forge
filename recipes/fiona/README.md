@@ -24,7 +24,7 @@ module cannot find, in the same process, at the same moment. Two extensions, two
 So: treat fiona as Android-only, and use [`gdal`](../gdal)'s `osgeo.ogr` for vector I/O
 on iOS.
 
-On Android everything imports, `fiona.transform` included — the wheel pulls the C++ runtime
+On Android everything imports, [`fiona.transform`](https://fiona.readthedocs.io/en/stable/fiona.html#module-fiona.transform) included — the wheel pulls the C++ runtime
 in through its own dependencies, so there is nothing to add to your `pyproject.toml`. The
 [`feature-roundtrip`](examples/feature-roundtrip) example exercises both platforms.
 

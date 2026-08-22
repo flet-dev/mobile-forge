@@ -42,7 +42,7 @@ What it demonstrates:
   [`CRS.from_epsg(4326)`](https://fiona.readthedocs.io/en/stable/fiona.html#fiona.crs.CRS.from_epsg),
   both run rather than described. No CRS is passed to any layer, which keeps the driver
   question separate from the database question.
-- **What `fiona.transform` costs to reach.** It is the one extension `import fiona` does not
+- **What [`fiona.transform`](https://fiona.readthedocs.io/en/stable/fiona.html#module-fiona.transform) costs to reach.** It is the one extension `import fiona` does not
   load, so importing it is a decision rather than a side effect — and on iOS it maps another
   statically linked copy of GDAL, tens of megabytes for that one line. The card also prints
   whatever `fiona._transform.__file__` resolves to on disk, which is a relocation probe
