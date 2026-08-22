@@ -31,7 +31,9 @@ What it demonstrates:
   [`demo_signal`](https://pywavelets.readthedocs.io/en/latest/ref/other-functions.html#pywt.data.demo_signal)
   (pure numpy, no file) and the image from `pywt.data.camera()`, which reads a `.npz` out of
   the installed package through `importlib.resources` — the path that has to work from
-  Android's zipped site-packages.
+  Android's zipped site-packages. It is read on first use rather than at import, because on
+  Android that read has to materialise the `.npz` out of the zip and startup is the wrong
+  place for it.
 - **The compute off the UI thread.** The slider fires on
   [`on_change_end`](https://flet.dev/docs/controls/slider/) into
   [`page.run_thread(...)`](https://flet.dev/docs/controls/page/#flet.Page.run_thread), behind
@@ -39,9 +41,14 @@ What it demonstrates:
   the explicit [`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update) that
   a background thread needs.
 - **Images without an image library.** Both panes are
-  [`ft.Image(src=<bytes>)`](https://flet.dev/docs/controls/image/) fed by a 25-line PNG writer
+  [`ft.Image(src=<bytes>)`](https://flet.dev/docs/controls/image/) fed by a small PNG writer
   built from `zlib` and `struct`, because the app depends on nothing past Flet, pywavelets and
-  numpy — there is no image library on device to do it.
+  numpy, so the example needs no image library beyond them ([`pillow`](../../../pillow) is
+  published for the same slices if an app wants one).
+
+The wavelet work is in [`src/denoise.py`](src/denoise.py), which takes a signal name, a wavelet
+and a noise level and returns plain numbers and PNG bytes. [`src/main.py`](src/main.py) is the
+Flet layer around it.
 
 ## Try it
 

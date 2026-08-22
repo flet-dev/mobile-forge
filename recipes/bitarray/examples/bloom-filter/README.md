@@ -3,7 +3,8 @@
 A 65,536-bit Bloom filter, drawn at one pixel per bit and priced against the two things
 you would otherwise reach for. A slider chooses how many members go in — 2,000, 5,000,
 10,000, 20,000 or 40,000 — and each release rebuilds the filter, probes it with 50,000
-keys that are not in it, and reports what came back.
+keys that are not in it, and reports what came back. `src/bloom.py` is the filter and
+everything that touches bitarray; `src/main.py` is the screen.
 
 What it demonstrates:
 
@@ -53,9 +54,6 @@ What it demonstrates:
   instead put the layout on the wire 1 ms after `main` returned, with the bitmap
   following ~1 s later. Same total work, but you watch it happen instead of watching
   nothing.
-- **Honest behaviour where the package is absent.** The import is guarded, so a run
-  without bitarray shows the exception and what to add to `pyproject.toml` instead of
-  failing to start.
 
 ## What it should print
 
@@ -70,11 +68,11 @@ numbers to compare a device against; only the timings should move.
 | 20,000 | 2 | 29,984 | 45.8% | 10,454 | 10,466.2 ± 178.3 |
 | 40,000 | 1 | 30,045 | 45.8% | 22,913 | 22,922.5 ± 218.4 |
 
-With that machine otherwise idle a pass cost 64 to 75 ms: 2 to 27 ms to insert, 40 to 64
-ms for the 50,000 probes, 0.2 to 0.3 ms for the bitmap and 0.3 to 8 ms to build the
-comparison `set`. Repeating the measurements while the machine was loaded gave two to
-three times those figures, so read them as a floor rather than a specification — and note
-that they are desktop numbers. No device timing is claimed here.
+An arm64-v8a Android 14 emulator and an iPhone 16 simulator, both CPython 3.14.6, both
+reproduced the 5,000-member row exactly: 29,947 bits set and 98 false positives out of
+50,000 probes, against 95.1 ± 19.1 expected. The memory comparison held at the same
+scale — an 8,192-byte filter against 749,504 bytes for a `set` of the same keys, 91×.
+The timings are the only figures that differ between platforms.
 
 ## Try it
 
