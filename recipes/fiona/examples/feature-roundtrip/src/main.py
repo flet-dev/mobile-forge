@@ -253,10 +253,9 @@ def main(page: ft.Page):
     def transform_section():
         """Import the one module `import fiona` leaves out.
 
-        `fiona/_transform` is the only extension that names a C++ runtime on Android, and
-        the wheel does not declare one, so this import is where a missing
-        libc++_shared.so would show up. On iOS it is instead another statically linked
-        copy of GDAL, tens of megabytes mapped for this line alone.
+        Reaching for `fiona.transform` is a decision, not a side effect: it is the only
+        extension a plain `import fiona` never loads, and on iOS it maps another
+        statically linked copy of GDAL — tens of megabytes for this line alone.
         """
         try:
             module = importlib.import_module("fiona.transform")

@@ -42,17 +42,13 @@ What it demonstrates:
   [`CRS.from_epsg(4326)`](https://fiona.readthedocs.io/en/stable/fiona.html#fiona.crs.CRS.from_epsg),
   both run rather than described. No CRS is passed to any layer, which keeps the driver
   question separate from the database question.
-- **Whether `import fiona.transform` works on Android.** It is the one extension naming
-  `libc++_shared.so`, and the wheel declares no `flet-libcpp-shared` — which is why this
-  example's `[tool.flet.android]` names it explicitly. Drop that line and this card turns
-  into `ImportError: dlopen failed: library "libc++_shared.so" not found`, measured on an
-  arm64-v8a emulator, while every other card still passes. It is also the one
-  extension `import fiona` does not load, which on iOS makes this line worth tens of
-  megabytes of mapped dylib. The card also prints whatever `fiona._transform.__file__`
-  resolves to on disk, which is a relocation probe rather than the extension's size: Flet
-  moves ABI-tagged extensions out of site-packages, so expect the size of a small `.fwork`
-  pointer file on iOS and `0` on Android, where a relocated module may report a bare
-  `jniLibs` name or no `__file__` at all.
+- **What `fiona.transform` costs to reach.** It is the one extension `import fiona` does not
+  load, so importing it is a decision rather than a side effect — and on iOS it maps another
+  statically linked copy of GDAL, tens of megabytes for that one line. The card also prints
+  whatever `fiona._transform.__file__` resolves to on disk, which is a relocation probe
+  rather than the extension's size: Flet moves ABI-tagged extensions out of site-packages,
+  so expect the size of a small `.fwork` pointer file on iOS and `0` on Android, where a
+  relocated module may report a bare `jniLibs` name or no `__file__` at all.
 - **The cost of a real dataset, measured.** A [`ft.Slider`](https://flet.dev/docs/controls/slider/)
   from 10 to 2000 features re-runs the four round trips from
   [`page.run_thread(...)`](https://flet.dev/docs/controls/page/#flet.Page.run_thread) and

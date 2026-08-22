@@ -24,14 +24,9 @@ module cannot find, in the same process, at the same moment. Two extensions, two
 So: treat fiona as Android-only, and use [`gdal`](../gdal)'s `osgeo.ogr` for vector I/O
 on iOS.
 
-Android's one defect is the mirror image, and it is fixable in your `pyproject.toml`:
-`import fiona.transform` fails there with
-`ImportError: dlopen failed: library "libc++_shared.so" not found`, because that one
-extension needs the Android C++ runtime and nothing in fiona's chain declares it. Add
-`flet-libcpp-shared` beside `fiona` and it works; see [Android notes](#android-notes).
-On iOS `fiona.transform` imports fine — libc++ is linked statically there — so each
-platform breaks in exactly one place, and in a different place. The
-[`feature-roundtrip`](examples/feature-roundtrip) example is the instrument for both.
+On Android everything imports, `fiona.transform` included — the wheel pulls the C++ runtime
+in through its own dependencies, so there is nothing to add to your `pyproject.toml`. The
+[`feature-roundtrip`](examples/feature-roundtrip) example exercises both platforms.
 
 Beyond that, these wheels are a deliberately small GDAL: **six vector drivers registered,
 five of them reachable through fiona and three of those writable**, no `proj.db`, no
@@ -48,7 +43,6 @@ dependencies = [
 [tool.flet.android]
 dependencies = [
     "fiona",
-    "flet-libcpp-shared",
 ]
 
 [tool.flet.ios]
@@ -56,11 +50,6 @@ dependencies = [
     "fiona",
 ]
 ```
-
-`flet-libcpp-shared` is on the Android side only, and only `fiona.transform` needs it —
-without it that one import raises `ImportError: dlopen failed: library "libc++_shared.so"
-not found` while everything else works. iOS links libc++ statically and needs nothing.
-See [Android notes](#android-notes) for the measurement.
 
 **Why the platform tables rather than `[project] dependencies`.** fiona publishes desktop
 wheels, but only through CPython 3.13: PyPI carries 25 files for 1.10.1 — 24 wheels tagged
@@ -274,49 +263,15 @@ Behind those 2.1 MB sits the shared native chain, which on arm64-v8a is `libgdal
 744,048, `libcurl.so` 723,712, `libjpeg.so` 589,784 and `libpsl.so` 67,488 — 21,511,192
 bytes of shared library.
 
-**`import fiona.transform` may fail, and only that import.** `_transform` is the one
-extension whose `DT_NEEDED` names `libc++_shared.so`, and fiona's Android `METADATA`
-declares only `flet-libgdal`, where the Android wheels of [`gdal`](../gdal) 3.13.1 and
-[`rasterio`](../rasterio) 1.5.0 both additionally declare
-`flet-libcpp-shared (>=27.2.12479018)`. Nothing else in fiona's chain declares it either,
-and Flet does not supply one: of the `serious_python_android` releases 4.2.1 through 4.5.1
-in this machine's pub cache, none ships a `libc++_shared.so`.
-
-**Measured on 2026-08-19, and it does fail.** On an arm64-v8a Android 14 emulator, with
-`fiona` as the only Android dependency, `import fiona.transform` raises:
-
-```
-ImportError: dlopen failed: library "libc++_shared.so" not found:
-needed by /data/app/~~…/lib/arm64-v8a/libfiona-_transform.so in namespace clns-6
-```
-
-**The fix is one line, and it was verified on the same emulator.** Name the runtime beside
-fiona:
-
-```toml
-[tool.flet.android]
-dependencies = ["fiona==1.10.1", "flet-libcpp-shared"]
-```
-
-That puts `libc++_shared.so` into all three ABI slices of the APK — 1,292,904 bytes on
-arm64-v8a, 872,872 on armeabi-v7a, 1,252,080 on x86_64 — and `import fiona.transform` then
-succeeds, with the four round trips unaffected. The
-[`feature-roundtrip`](examples/feature-roundtrip) example declares it for that reason and
-still probes the import in its own `try/except`, so the failure stays visible if you drop
-the dependency.
-
-**The recipe now declares it, the way `gdal` and `rasterio` do — but the published wheel
-does not yet.** `flet-libcpp-shared >=27.2.12479018` was added to the Android branch of
-`meta.yaml` and the build number raised to 12; a locally built
-`fiona-1.10.1-12-cp312-cp312-android_24_arm64_v8a.whl` carries
-`Requires-Dist: flet-libcpp-shared (>=27.2.12479018)`, and with that wheel the extra line
-above is unnecessary — verified on an arm64-v8a Android 14 emulator on 2026-08-22, five of
-five recipe tests green with no `[tool.flet.android]` entry of any kind, the APK pulling
-`libc++_shared.so` in on the wheel's own metadata.
-
-**Until build 12 is on the index, keep the line.** `pypi.flet.dev` still serves build 11,
-which does not declare the runtime, and pip takes the highest build tag — so what you
-install today is still the wheel that needs the workaround.
+**`fiona.transform` needs the Android C++ runtime, and the wheel asks for it.**
+`_transform` is the one extension of the eight whose `DT_NEEDED` names `libc++_shared.so`,
+and Flet supplies none of its own — no `serious_python_android` release ships one. So the
+Android wheel declares `flet-libcpp-shared (>=27.2.12479018)` beside `flet-libgdal`, the way
+[`gdal`](../gdal) and [`rasterio`](../rasterio) do, and the runtime lands in every ABI slice
+of your APK: 1,292,904 bytes on arm64-v8a, 872,872 on armeabi-v7a, 1,252,080 on x86_64. You
+declare nothing for it. Verified on an arm64-v8a Android 14 emulator with `fiona` as the only
+dependency and no `[tool.flet.android]` entry of any kind: `fiona.transform` imports and
+reprojects, and the recipe's five tests pass.
 
 **Plain `import fiona` is not exposed to that**, and this is worth spelling out because the
 opposite is easy to assume. `libgdal.so` leaves 215 C++ runtime symbols undefined — 200
@@ -565,13 +520,14 @@ this recipe.
 What to re-verify on a bump — a green build establishes almost none of what this page
 claims:
 
-- **The Android `flet-libcpp-shared` gap.** `recipes/gdal/meta.yaml` and
-  `recipes/rasterio/meta.yaml` both add `flet-libcpp-shared >=27.2.12479018` under
-  `{% if sdk == 'android' %}` and this recipe does not, yet `_transform.so` carries
-  `DT_NEEDED libc++_shared.so`. Note that `libgdal.so` itself does **not** need it — its 215
-  undefined C++ symbols are covered by `libproj.so`'s statically linked libc++ (212) and
-  bionic `libc.so` (3) — so the gap costs exactly `import fiona.transform` and nothing else.
-  Add the host requirement, or establish on a device that it is genuinely unnecessary.
+- **That the Android wheel still declares `flet-libcpp-shared`.** `_transform.so` carries
+  `DT_NEEDED libc++_shared.so` and is the only extension that does; `libgdal.so` itself does
+  **not** need it, since its 215 undefined C++ symbols are covered by `libproj.so`'s
+  statically linked libc++ (212) and bionic `libc.so` (3). So the declaration buys exactly
+  `import fiona.transform` and nothing else, and losing it costs exactly that one import —
+  silently, because every other test still passes. Check `Requires-Dist` in the built Android
+  wheel, and keep `test_transform_loads_and_reprojects`, which is the only test that would
+  go red.
 - **`tests/test_fiona.py` records the wrong cause for its iOS skip.**
   `test_write_read_geojson` skips iOS on the grounds that OGR's GeoJSON writer calls PROJ to
   stamp WGS84 and fails with *Cannot find proj.db*. Two things refute that: `ogrext.pyx`

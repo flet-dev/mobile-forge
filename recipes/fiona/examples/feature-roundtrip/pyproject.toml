@@ -12,7 +12,7 @@ dependencies = [
 dev = ["flet-cli", "flet-desktop", "flet-web"]
 
 [tool.flet.android]
-dependencies = ["fiona==1.10.1", "flet-libcpp-shared"]
+dependencies = ["fiona==1.10.1"]
 
 [tool.flet.ios]
 dependencies = ["fiona==1.10.1"]
