@@ -3,7 +3,10 @@ package:
   version: "2.3.13"
 
 build:
-  number: 1
+  # 2 drops flet-libfreetds from Requires-Dist (host -> host_build); the wheel's
+  # code is unchanged but its dependency set is not, so consumers need a build
+  # tag they can resolve to.
+  number: 2
   script_env:
     # pymssql's setup.py locates FreeTDS + OpenSSL via these env vars, and links
     # FreeTDS statically into the _mssql extension. Both flet-libfreetds and the
@@ -18,5 +21,15 @@ build:
 
 requirements:
   host:
-    - flet-libfreetds 1.4.27
+    # openssl lives in the base flet runtime, so it is not promoted to
+    # Requires-Dist and costs a consuming app nothing.
     - openssl ^3.0.12
+  host_build:
+    # FreeTDS is folded STATICALLY into _mssql.so (LINK_FREETDS_STATICALLY above),
+    # so it is only needed to link. Under `host` it became a runtime
+    # Requires-Dist and every consuming app installed the flet-libfreetds wheel —
+    # 6.2 MB of libsybdb.a and libct.a on arm64-v8a that are already inside
+    # _mssql.so and can never be loaded. host_build extracts it for the link
+    # without putting it in the wheel's metadata, the way psycopg2 does with
+    # flet-libpq.
+    - flet-libfreetds 1.4.27

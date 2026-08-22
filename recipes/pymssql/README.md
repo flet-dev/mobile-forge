@@ -171,14 +171,14 @@ compressed; every other slice links OpenSSL in and runs 1.9–2.5 MB. The two ex
 the smallest slice and 97% of the largest, `_mssql` alone accounting for 59% and 93% of those, so
 there is nothing worth taking out of this wheel.
 
-The lever is next door. `pymssql` names `flet-libfreetds` as a runtime dependency, and that
-wheel is FreeTDS's *static* archives — 6.10 MB of `opt/lib/libsybdb.a` and `opt/lib/libct.a`
-plus 0.13 MB of headers on `arm64_v8a`, measured 2026-08-21 — already folded into `_mssql` and
-never opened at runtime. On the CPython 3.12 and 3.13 slices that is roughly five times the
-driver itself, and it is the one thing
-[`[tool.flet.cleanup]`](https://flet.dev/docs/publish/#compilation-and-cleanup) can usefully
-take here. It unpacks into an `opt` directory in site-packages that other packages write into
-too, so check the built app still launches; no APK here was built from it.
+Leave the default cleanup on and there is nothing else to do. `flet-libfreetds`, which
+pymssql's wheel requires, holds nothing your app runs: 6.10 MB of `opt/lib/libsybdb.a` and
+`opt/lib/libct.a` plus 0.13 MB of headers on `arm64_v8a`, already folded into `_mssql` at link
+time and never opened afterwards. Flet's
+[package cleanup](https://flet.dev/docs/publish/#compilation-and-cleanup) deletes `**.a` from
+site-packages by default, so those archives do not reach the device — you pay the download and
+the build-time disk rather than app size. Turn cleanup off and all 6.1 MB ships. There is no
+`[tool.flet.cleanup]` glob worth adding for it: the default already covers `.a`.
 
 On Android, use an app bundle, split APKs, or narrow
 [`target_arch`](https://flet.dev/docs/publish/android/#supported-target-architectures) when the
@@ -247,11 +247,12 @@ recipe needs no patches at all. Folding `libsybdb` and `libtds` into `_mssql` ke
 two extension modules — an `_mssql` carrying the whole of FreeTDS and a thin `_pymssql` carrying
 none of it — with no shared library to stage and no loader work on either platform.
 
-That host requirement is `requirements.host`, not `requirements.host_build`, so
-`flet-libfreetds` is a `Requires-Dist`: its archives ride into every consuming app after the
-link has already absorbed them, which is the payload **App size** tells consumers to strip.
-`host_build` is the entry that keeps a build-time-only archive out of the metadata; whether this
-recipe can move to it has not been tried here.
+That host requirement is `requirements.host_build`, not `requirements.host`, so
+`flet-libfreetds` never reaches the wheel's `Requires-Dist`: the link absorbs the archives and
+consuming apps neither resolve nor download them. It sat under `host` until build 2, which cost
+every consumer a 6.2 MB install that the default cleanup then deleted again —
+[`psycopg2`](../psycopg2) has always done it the right way with `flet-libpq`, and the two
+sibling recipes disagreeing is what made the mistake visible.
 
 ### Upgrade hazards
 
