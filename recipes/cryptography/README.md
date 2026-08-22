@@ -174,15 +174,20 @@ beyond AES, RSA, EC and Fernet on a device or emulator/simulator.
 
 ## Things to know
 
-- **OpenSSL 3.0.x is baked into the wheel, and it is old.** The extension links OpenSSL
-  statically — no `libssl.so`, no `libcrypto.dylib`, nothing borrowed from the OS — so your
-  app carries exactly one OpenSSL and it changes only when the wheel is rebuilt. Which
-  3.0.x depends on the Python version *and* the platform: today's wheels span 3.0.15 to
-  3.0.20. Print `backend.openssl_version_text()` on the device you care about rather than
-  guessing.
+- **One OpenSSL is baked into the wheel, and which one is not yours to choose.** The
+  extension links it statically — no `libssl.so`, no `libcrypto.dylib`, nothing borrowed
+  from the OS — so your app carries exactly one OpenSSL and it changes only when the wheel
+  is rebuilt. The version comes from the Python support tree, not from cryptography, and it
+  moves independently of the version you pinned: wheels published up to 2026-08-22 carry
+  3.0.15 to 3.0.20 depending on Python version and platform, while the support tree now in
+  use builds 3.5.7. **A republish can therefore change your app's crypto without changing
+  any version you wrote down.** Print `backend.openssl_version_text()` on the device you
+  care about rather than trusting this paragraph — the next bullet is the reason it
+  matters.
 
-- **Nothing needing OpenSSL 3.2 or newer works.** On 48.0.0 the APIs are importable and
-  fail at the call: Argon2 raises
+- **On today's published wheels, nothing needing OpenSSL 3.2 or newer works — and that is
+  the half most likely to change under you.** These APIs are importable and fail at the
+  call: Argon2 raises
   `UnsupportedAlgorithm: This version of OpenSSL does not support argon2`, ML-KEM and
   ML-DSA (OpenSSL 3.5+) raise `... is not supported by this backend`, and HPKE and
   `ecdsa_deterministic=True` on the X.509 builders are rejected the same way. On 43.0.1
@@ -276,6 +281,13 @@ and the page has to say which leg. Three specific traps:
 - **The release table and everything downstream of it.** The security list is written
   against two specific releases and grows on upstream's schedule; re-read the changelog and
   the security advisories rather than the diff between the two versions.
+- **The OpenSSL version, before anything else.** The test pins it deliberately so a
+  support-tree bump goes red. It has already fired once: published wheels carry 3.0.20 and
+  the tree at `PYTHON_BUILD_RELEASE=20260730` builds 3.5.7 under the *same* version and
+  build number, so a republish moves consumers between them with nothing in the filename to
+  show it. 3.5 satisfies `CRYPTOGRAPHY_OPENSSL_320_OR_GREATER`, which turns Argon2 and
+  ML-KEM from raising to working — so the unavailable-algorithm list above is only true for
+  wheels built against a 3.0 tree, and must be re-run, not re-read, after any bump.
 - **The unavailable-algorithm list.** `tests/test_cryptography.py` pins OpenSSL at 3.0.x
   precisely so it goes red the day the support tree moves. When it does, Argon2 becomes
   available at 3.2 and ML-KEM/ML-DSA at 3.5, and every claim on this page about an

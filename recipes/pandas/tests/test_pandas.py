@@ -29,9 +29,35 @@ def test_no_extension_is_missing_from_the_wheel():
     reaches for must all import on device."""
     import importlib
 
-    for name in (
-        "pandas.io.formats.style",
-        "pandas._libs.tslibs",
-        "pandas.core.groupby",
-    ):
+    for name in ("pandas._libs.tslibs", "pandas.core.groupby", "pandas.io.formats"):
         importlib.import_module(name)
+
+
+def test_styler_templates_track_how_the_package_was_installed():
+    """Styler reads its templates off disk, so zipped site-packages breaks it.
+
+    pandas resolves `pandas/io/formats/templates/` from that module's own `__file__`
+    through a jinja2 `FileSystemLoader`, and touching `.style` loads `html.tpl` at class
+    definition time. Android ships site-packages as a zip unless the app sets
+    `extract_packages = ["pandas"]` — and a zip member is not a directory, so the import
+    raises `TemplateNotFound` there while iOS, which installs unzipped, imports fine.
+
+    This asserts against the *packaging* rather than the platform on purpose: on Python
+    3.12 `sys.platform` is "linux" on Android, so a platform gate would silently skip
+    both branches and pass without checking anything.
+    """
+    import importlib
+    import os
+
+    import jinja2
+    import pytest
+
+    import pandas.io.formats as formats
+
+    templates = os.path.join(os.path.dirname(formats.__file__), "templates")
+
+    if os.path.isdir(templates):
+        importlib.import_module("pandas.io.formats.style")
+    else:
+        with pytest.raises(jinja2.TemplateNotFound):
+            importlib.import_module("pandas.io.formats.style")

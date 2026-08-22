@@ -25,6 +25,10 @@ What it demonstrates:
   rather than linking one of its own.
 - **The Android `extract_packages` entry** — `pyproject.toml` carries
   `extract_packages = ["sklearn"]`, without which `import sklearn` fails on device.
+- **Deleting what the app never imports** — the same `pyproject.toml` names scikit-learn's
+  `tests` packages and its shipped Cython sources under
+  [`[tool.flet.cleanup]`](https://flet.dev/docs/publish/#compilation-and-cleanup), about
+  6 MB of unpacked payload that no import reaches.
 
 ## Try it
 

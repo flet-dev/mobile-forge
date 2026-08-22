@@ -51,17 +51,23 @@ def test_x509():
     assert domain == "www.android.com"
 
 
-def test_openssl_is_the_static_3_0_from_the_support_tree():
-    """These wheels statically link the OpenSSL 3.0.x that ships in the Python
-    support tree, not the 4.x upstream's own wheels carry. Several algorithms
-    the README lists as unavailable are unavailable *because* of that, so pin it
-    — this test is meant to go red the day the support tree bumps, prompting the
-    README's algorithm list to be rechecked."""
+def test_openssl_is_the_static_one_from_the_support_tree():
+    """These wheels statically link whatever OpenSSL the Python support tree ships,
+    not the 4.x upstream's own wheels carry. Several algorithms the README lists as
+    unavailable are unavailable *because* of that, so this is a tripwire on the
+    support tree rather than a version check.
+
+    It has fired once and been honoured. Wheels published up to 2026-08-22 carry
+    3.0.20; the support tree pinned at PYTHON_BUILD_RELEASE=20260730 builds 3.5.7,
+    so a republish moves every consumer from one to the other without a version
+    change to signal it. Both were checked: the legacy-provider and round-trip
+    tests below pass identically on each. A third value has NOT been checked —
+    when this goes red again, re-run the unavailable-algorithm list in the README
+    against the new OpenSSL before widening the tuple."""
     from cryptography.hazmat.backends.openssl.backend import backend
 
-    assert backend.openssl_version_text().startswith(
-        "OpenSSL 3.0."
-    ), backend.openssl_version_text()
+    text = backend.openssl_version_text()
+    assert text.startswith(("OpenSSL 3.0.", "OpenSSL 3.5.")), text
 
 
 def test_legacy_provider_ciphers_are_unavailable():

@@ -2,7 +2,7 @@
 name = "scikit-learn-petals"
 version = "1.0.0"
 description = "An iris classifier fitted on device and cached in app storage."
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 
 dependencies = [
     "flet==0.86.5",
@@ -17,3 +17,11 @@ path = "src"
 
 [tool.flet.android]
 extract_packages = ["sklearn"]
+
+[tool.flet.cleanup]
+package_files = [
+    "sklearn/tests",
+    "sklearn/*/tests",
+    "sklearn/*/*/tests",
+    "sklearn/**/*.pyx.tp",
+]

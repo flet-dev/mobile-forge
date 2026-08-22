@@ -8,6 +8,9 @@ snippet you can break, parsed by both loaders side by side.
 The point is that the recipe README's two central claims get checked on the phone instead of
 quoted at you: that the C accelerator is worth switching to, and that switching is safe.
 
+`src/settings.py` holds every line that touches PyYAML and returns plain strings and tuples;
+`src/main.py` is the screen and its background-thread wiring.
+
 What it demonstrates:
 
 - **The gap the whole recipe exists to close.** The same bytes are read twice — once with
@@ -43,9 +46,10 @@ What it demonstrates:
 - **How the extension got loaded, on this device.** The header line carries `yaml.__version__`,
   `yaml._yaml.get_version_string()` (the libyaml actually compiled in), `yaml.__with_libyaml__`,
   the Python version, `page.platform.value`, and the basename of `yaml._yaml.__file__`. That last
-  field is the one that differs between the platforms — `libyaml-_yaml.so` on Android, `_yaml.fwork`
-  on iOS, both measured on 2026-08-17 — because Flet moves native extensions out of site-packages.
-  See the platform notes in the [recipe README](../../README.md).
+  field is the one that differs between the platforms, because Flet moves native extensions out of
+  site-packages: run the app on each and read the two values off the screen. The
+  [recipe README](../../README.md) explains what they mean and why code should not build paths
+  from them.
 - **Compute off the UI thread** — the run happens in
   [`page.run_thread(...)`](https://flet.dev/docs/controls/page/#flet.Page.run_thread) with a
   spinner up, started from the slider's
@@ -54,15 +58,15 @@ What it demonstrates:
   [`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update) a background thread
   needs. The body is wrapped in `try/except` because `run_thread` discards anything a worker
   raises, and it empties the table on the way out so last run's timings cannot sit under this
-  run's error. One writer on the file is the handler's job, not the coroutine's: it tests and
-  sets the slider's `disabled` itself, where that is synchronous, and disables the parse button
-  alongside it so nothing else rewrites the same column from another thread.
+  run's error. Keeping one writer on the file is the click handler's job, not the worker's: it
+  tests and sets the slider's `disabled` itself, where that is synchronous, and disables the
+  parse button alongside it so nothing else rewrites the same column from another thread.
 
 The document is generated in code from the slider position with no randomness, so the same
 position produces the same bytes on every install and two devices can be compared directly. The
-`from yaml import CSafeDumper, CSafeLoader` at the top of `src/main.py` is deliberate too: it is
-the recommended shape, because a wheel without the accelerator would fail there instead of
-running eight times slower in silence.
+`from yaml import CSafeDumper, CSafeLoader` at the top of `src/settings.py` is deliberate too: it
+is the recommended shape, because a wheel without the accelerator would fail there instead of
+running several times slower in silence.
 
 ## Try it
 
