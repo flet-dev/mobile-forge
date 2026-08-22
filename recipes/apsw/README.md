@@ -143,9 +143,11 @@ package_files = ["**apsw/tests"]
 
 The missing slash after the leading wildcard is not a typo: serious_python matches each glob
 with Dart's `Glob` against the absolute entry path, so `**/apsw/tests` would insist on a
-separator there and miss a top-level `apsw/`. **That glob has not been verified against a build
-here** — check it by opening the artifact, and note that the globs run *after* serious_python
-has compiled the package and deleted the `.py` files, so what is left to match is bytecode:
+separator there and miss a top-level `apsw/`. Verified against a build on 2026-08-22: with that
+glob declared, the packaged `sitepackages.zip` contains no `apsw/tests` entry at all. Note that
+the globs run *after* serious_python has compiled the package and deleted the `.py` files, so
+what is left to match is bytecode — which is why the pattern names the directory rather than
+`*.py`:
 
 ```bash
 unzip -p build/apk/<app>.apk assets/sitepackages.zip > /tmp/sp.zip && unzip -l /tmp/sp.zip | grep apsw
