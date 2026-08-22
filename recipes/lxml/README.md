@@ -227,7 +227,7 @@ all three answers are in it.
   platforms ship, byte-identical — stops the parse with
   `XMLSyntaxError: Resource limit exceeded: Text node too long, try XML_PARSE_HUGE`, which
   reads like malformed input rather than a cap. A base64 payload or an embedded document is the
-  usual way to trip it. `etree.XMLParser(huge_tree=True)` raises the ceiling a thousandfold but
+  usual way to trip it. `etree.XMLParser(huge_tree=True)` raises the ceiling to `XML_MAX_HUGE_LENGTH`, a hundredfold (10 MB to 1 GB) but
   lifts the depth and entity-expansion guards with it, so keep it for documents you produced
   yourself. Entity expansion is otherwise safe by default: every parser here defaults to
   `resolve_entities='internal'`, so a document declaring an external entity gets

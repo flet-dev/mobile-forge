@@ -28,7 +28,7 @@ version you get is whichever one your pydantic release names. A bare `pydantic` 
 spelling: it resolves to the newest release whose core pin this index carries. Writing the core
 pin out yourself is the one thing on this page that can fail your build, or quietly leave you
 on pydantic 1.x — see the first entry in [Things to know](#things-to-know) for the four ways it
-goes wrong. `pydantic[email]` is a valid spelling here as well.
+goes wrong. `pydantic[email]` is a valid spelling here as well: the extra adds `email-validator`, `dnspython` and `idna`, all pure Python.
 
 ## Examples
 

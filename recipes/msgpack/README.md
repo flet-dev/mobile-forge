@@ -194,7 +194,7 @@ is roughly a quarter of the unpacked payload — see the `compile.packages` bull
 index has not built yet, so a bare `msgpack` requirement can resolve one version for `flet run`
 on your laptop and an older one for `flet build`. The differences are not always cosmetic: 1.2.0
 raised the packer's recursion limit from 511 to 1024 and annotated the packer's methods with
-`@cython.critical_section`. Pin both sides — as the [`pack-compare`](examples/pack-compare)
+`@cython.critical_section`. Pin both sides — an unpinned `msgpack` can resolve from this index even when PyPI is listed first, and the failure when it cannot is `ERROR: No matching distribution found for msgpack` at build time — as the [`pack-compare`](examples/pack-compare)
 example does — if either matters to you.
 
 **Identify the implementation by `msgpack.Packer.__module__`, never by a file path.** With

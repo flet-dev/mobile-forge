@@ -273,7 +273,7 @@ components.
   `utf8_capitalize`, `utf8_swapcase`), `utf8_normalize`, the `utf8_*trim_whitespace` family and
   `utf8_split_whitespace`. Every `ascii_*` equivalent survives, as do the literal-match kernels
   (`match_substring`, `starts_with`, `replace_substring`, `split_pattern`, `count_substring`) and
-  the `utf8_*` kernels that do not case-fold (`utf8_length`, `utf8_slice_codeunits`,
+  the `utf8_*` kernels that do not case-fold (`utf8_length`, `utf8_slice_codeunits`, `utf8_reverse`, `utf8_trim`, `utf8_lpad`), plus `ends_with` (`utf8_length`, `utf8_slice_codeunits`,
   `utf8_reverse`, `utf8_trim`). For anything genuinely Unicode, pull the column out with
   `to_pylist()` and use Python's `re` and `str` methods; you lose the kernel speed, not the
   answer.

@@ -143,7 +143,8 @@ expression to use instead; on a phone that warning is worth treating as an error
 ### App size
 
 Expect approximately 37–44 MB compressed and 130–185 MB unpacked per architecture, iOS being
-the largest slice. Roughly 97% of that is the single compiled extension, so the
+the largest slice — its dylib still ships with its symbol table, which Build notes gives as
+the largest available win. Roughly 97% of that is the single compiled extension, so the
 [`[tool.flet.cleanup]`](https://flet.dev/docs/publish/#compilation-and-cleanup) trick that
 shrinks pandas or scipy — both of which carry megabytes of test suites — has nothing to remove
 here. The desktop PyPI wheel of the same version unpacks to about 108 MB, so mobile is not
