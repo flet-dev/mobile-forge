@@ -10,7 +10,7 @@
 #
 # Examples:
 #   ./stage_recipe.sh numpy 2.2.2
-#   ./stage_recipe.sh pillow            # no version pin
+#   ./stage_recipe.sh pillow            # version taken from the built wheel
 #
 # Effects (idempotent):
 #   - (re)creates ./recipe_tests/ with the recipe's pytest files
@@ -48,6 +48,45 @@ fi
 # 2. Generate pyproject.toml from the template (gitignored): pin the recipe
 #    under test (__RECIPE_DEP__) and expand test-only deps (__TEST_DEPS__)
 #    from the recipe's meta.yaml `test.requires`.
+# Pin the recipe under test. An UNPINNED dep is not a harmless default: the app
+# resolves against PyPI as well as pypi.flet.dev, so a bare name takes whatever
+# version is newest anywhere — and upstreams now publish their own mobile wheels.
+# That is not hypothetical: pillow's iOS legs on 3.13/3.14 silently tested PyPI's
+# pillow 12.3.0 (which ships official iOS wheels and carries jpg_2000 + libtiff)
+# instead of the 12.2.0 this repo had just built, and reported a codec set no
+# forge wheel has ever had. The dist-test/ build-tag bump to 9999 does not help:
+# a build tag only breaks ties at the SAME version.
+#
+# So when no version is given, take it from the wheel actually staged for this
+# test rather than from meta.yaml — meta.yaml can be Jinja-conditional (e.g.
+# cryptography builds a different version per Python), while the wheel on disk is
+# what the device will run.
+if [ -z "$VERSION" ]; then
+    # Wheel names normalise the project name (Pillow -> pillow, ruamel.yaml.clib
+    # -> ruamel_yaml_clib), so compare normalised forms. `|| true` throughout:
+    # under `set -e` a non-matching grep would abort the script.
+    _rx="$(printf '%s' "$RECIPE" | tr 'A-Z.-' 'a-z__')"
+    for _d in "$REPO_ROOT/dist-test" "$REPO_ROOT/dist"; do
+        [ -d "$_d" ] || continue
+        _w=""
+        for _f in "$_d"/*.whl; do
+            [ -e "$_f" ] || continue
+            _b="$(basename "$_f")"
+            _n="$(printf '%s' "${_b%%-*}" | tr 'A-Z.-' 'a-z__')"
+            if [ "$_n" = "$_rx" ]; then _w="$_b"; break; fi
+        done
+        if [ -n "$_w" ]; then
+            # <name>-<version>-[<build>-]<pytag>-...  -> field 2 is the version
+            VERSION="$(printf '%s' "$_w" | cut -d- -f2)"
+            echo "  no version given; pinned to $VERSION from $(basename "$_d")/$_w"
+            break
+        fi
+    done
+    if [ -z "$VERSION" ]; then
+        echo "::warning::no built wheel found for '$RECIPE' in dist-test/ or dist/; the app will resolve it UNPINNED and may install a different version than the one under test" >&2
+    fi
+fi
+
 DEP="$RECIPE"
 [ -n "$VERSION" ] && DEP="$RECIPE==$VERSION"
 
