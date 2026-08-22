@@ -104,18 +104,31 @@ def test_transform_loads_and_reprojects():
 def test_epsg_codes_need_proj_db():
     """EPSG codes do not resolve: the chain ships no `proj.db`.
 
-    `flet-libproj` carries no PROJ database, so any CRS naming an authority
-    fails inside PROJ before fiona sees it. Measured on an arm64-v8a Android 14
-    emulator: `CRSError: The WKT could not be parsed. PROJ:
-    proj_create_from_database: Cannot find proj.db`. Spell the CRS as a
-    proj-string instead — the test above does, and round trips to 1e-6.
+    `flet-libproj` carries no PROJ database, so any CRS naming an authority fails
+    before fiona sees it. The two platforms report it differently, which is the
+    reason this asserts on the type and not on one message:
 
-    This is the same gap `pyproj` has, from the same library. Pinning it here
-    means a chain that later gains the database turns this test red, which is
-    the prompt to tell consumers the restriction has lifted.
+    * Android says `CRSError: The WKT could not be parsed. PROJ:
+      proj_create_from_database: Cannot find proj.db` — PROJ's own text, naming
+      the missing file.
+    * iOS says `CRSError: The WKT could not be parsed. OGR Error code 6` — the
+      generic OGR code, with nothing pointing at the database at all.
+
+    So an app that greps the message to tell "no database" from "bad CRS" gets it
+    right on one platform and wrong on the other. Spell the CRS as a proj-string
+    instead; the test above does, and round trips to 1e-6 on both.
+
+    Pinning it here means a chain that later gains the database turns this test
+    red, which is the prompt to tell consumers the restriction has lifted.
     """
+    import pytest
+
+    from fiona.crs import CRS
+    from fiona.errors import CRSError
     from fiona.transform import transform
 
-    with pytest.raises(Exception) as excinfo:
+    with pytest.raises(CRSError):
+        CRS.from_epsg(4326)
+
+    with pytest.raises(CRSError):
         transform("EPSG:4326", "EPSG:3857", [4.3517], [50.8503])
-    assert "proj.db" in str(excinfo.value), excinfo.value
