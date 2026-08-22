@@ -1,6 +1,6 @@
 package:
   name: pyzmq
-  version: "27.1.0"
+  version: "27.2.0"
 
 requirements:
   build:
@@ -16,6 +16,13 @@ requirements:
 # {% endif %}
 
 build:
+  # 27.1.0 no longer compiles: it asks for `cython>=3.0.0` unbounded, and Cython
+  # 3.3.0 rejects the re-annotations in zmq/backend/cython/_zmq.py
+  # (`'hint' redeclared`, `'c_addr' redeclared`). 27.2.0 restructures both sites,
+  # so the fix is upstream's rather than pinning Cython back to keep a stale
+  # toolchain alive. The published 27.1.0 iOS wheels are also MH_BUNDLE, which
+  # forge has converted to MH_DYLIB since 2026-07-14 — so this rebuild fixes the
+  # iOS link failure at the same time.
   number: 1
   script_env:
 # {% if sdk == 'android' %}
