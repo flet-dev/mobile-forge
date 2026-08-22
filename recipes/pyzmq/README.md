@@ -23,15 +23,6 @@ dependencies = [
 ]
 ```
 
-**Android only for now — an iOS build fails at link time.** The published iOS wheels carry a
-`_zmq` extension built as `MH_BUNDLE` where a linkable extension must be `MH_DYLIB`, so
-`flet build ipa` and `flet build ios-simulator` both stop with `Error (Xcode): Unsupported
-mach-o filetype (only MH_OBJECT and MH_DYLIB are supported)`. Confirmed against the published
-`cp312` device wheel and reproduced with a real build on 2026-08-21. The Android side is
-unaffected and was verified on an arm64-v8a emulator. This needs a rebuild and republish of the
-iOS slices, not a change in your app; until then, guard the import or keep pyzmq off your iOS
-dependency list.
-
 ## Examples
 
 See runnable Flet apps in [`examples/`](examples):
@@ -248,12 +239,16 @@ this recipe at or ahead of PyPI's version, and re-read that wheel list at every 
 - **Android 16 KB alignment:** inspect every `PT_LOAD` segment of `_zmq`, since the max-page-size
   linker flags are set per-build and are easy to lose in a CMake argument reshuffle. Build 1
   aligns all three segments at `0x4000` on all ten Android wheels.
-- **iOS file type:** the extension must be `MH_DYLIB`, and build 1 is not. All nine published
-  iOS wheels carry an `MH_BUNDLE` `_zmq`; they predate forge's bundle-to-dylib conversion.
-  serious_python makes each extension an xcframework that SwiftPM *links*, and linking one of
-  these is rejected — `ld: unsupported mach-o filetype (only MH_OBJECT and MH_DYLIB can be
-  linked)`, reproduced against the published wheel. The iOS slices need a rebuild before they
-  can be packaged.
+- **iOS file type:** `_zmq` must be `MH_DYLIB` on every iOS slice. serious_python makes each
+  extension an xcframework that SwiftPM *links*, and `ld` rejects a Mach-O bundle —
+  `unsupported mach-o filetype (only MH_OBJECT and MH_DYLIB can be linked)` — so a slice that
+  regressed to a bundle would fail at app build time, not at import. forge converts bundles on
+  the way out, which is what keeps this true; check it rather than assume it.
+- **Cython:** upstream asks for `cython>=3.0.0` with no ceiling, so the build takes whatever is
+  current. Cython 3.3 rejects re-annotating an already-declared name, which older releases of
+  `zmq/backend/cython/_zmq.py` do — the failure is `'hint' redeclared` / `'c_addr' redeclared`
+  at Cython time, on every slice at once. If a bump ever reintroduces that pattern, take the
+  upstream fix rather than pinning Cython back.
 - **Size:** re-measure the compressed and unpacked ranges from the resulting wheels rather than
   scaling old figures.
 

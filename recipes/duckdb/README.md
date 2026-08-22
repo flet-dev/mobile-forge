@@ -24,10 +24,6 @@ dependencies = [
 ]
 ```
 
-**Do not plan an iOS release on the wheels currently on the index.** `flet build ipa` and
-`flet build ios-simulator` stop at `Error (Xcode): Unsupported mach-o filetype (only
-MH_OBJECT and MH_DYLIB can be linked)`. Android builds and runs; [iOS](#ios) has the detail.
-
 ## Examples
 
 See runnable Flet apps in [`examples/`](examples):
@@ -213,18 +209,15 @@ of an out-of-memory kill. If you ship it, set `memory_limit` low.
 
 ### iOS
 
-**`flet build ipa` and `flet build ios-simulator` fail at link time with the iOS wheels
-currently on the index.** Observed, not predicted: building this recipe's own example on
-2026-08-17 ended in `Error (Xcode): Unsupported mach-o filetype (only MH_OBJECT and MH_DYLIB
-can be linked)` and `Linker command failed with exit code 1`. The published extension is a
-Mach-O **bundle** on all three slices, and Flet 0.86's iOS packaging turns every site-packages
-`.so` into a framework binary that SwiftPM *links*, where `ld` rejects a bundle. `dlopen`
-accepts either filetype, which is why this surfaces in the build rather than at
-`import duckdb`. No app-side setting works around it, and the recipe itself needs no change:
-the fix is a rebuild and republish of the iOS slices, which is a maintainer task. Until that
-happens, treat iOS as unsupported here.
+**The extension ships as `MH_DYLIB` on all three slices, which is what iOS needs.** Flet 0.86's
+iOS packaging turns every site-packages `.so` into a framework binary that SwiftPM *links*, and
+`ld` accepts a dylib where it rejects a Mach-O bundle — so the filetype is the difference
+between an app that builds and one that stops at
+`Error (Xcode): Unsupported mach-o filetype`. `dlopen` accepts either, which is why anything
+wrong here surfaces at build time rather than at `import duckdb`. Nothing to configure; it is a
+property of the wheel.
 
-Android is unaffected, because nothing there *links* the extension — `lib_duckdb.so` goes into
+Android is unaffected either way, because nothing there *links* the extension — `lib_duckdb.so` goes into
 `jniLibs` and is `dlopen`ed. The example runs there: verified on an arm64 emulator on
 2026-08-17, 1,000,000 rows stored and all three queries answered. Everything else on this page
 is about the engine rather than the packaging, and survives the rebuild.
