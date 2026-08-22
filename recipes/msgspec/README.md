@@ -159,7 +159,7 @@ over many small messages.
 
 ### App size
 
-Approximately 180–200 KB compressed and 370–490 KB unpacked per architecture. Three quarters to
+Approximately 180–200 KB compressed and 365–495 KB unpacked per architecture. Three quarters to
 four fifths of that is the single `msgspec._core` extension; the rest is the Python layer, whose
 two largest files are `inspect.py` at 29 KB and `_json_schema.py` at 17 KB. Flet's default
 [package cleanup](https://flet.dev/docs/publish/#compilation-and-cleanup) removes the five

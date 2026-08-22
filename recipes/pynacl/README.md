@@ -113,10 +113,12 @@ sandbox and by device encryption and by nothing else. If the threat model needs
 hardware-backed storage, the key has to be held on the platform side.
 
 One surprise worth knowing: **`nacl.utils.random()` is a one-line wrapper around
-`os.urandom`**, not around libsodium's `randombytes`. Every key and nonce PyNaCl generates for
-you goes through CPython — `SigningKey.generate()`, `PrivateKey.generate()` and the automatic
-nonce in `SecretBox.encrypt()`. `nacl.bindings.randombytes()` reaches libsodium's own
-generator if you want it.
+`os.urandom`**, not around libsodium's `randombytes`. Almost every key and nonce PyNaCl
+generates for you goes through CPython — `SigningKey.generate()`, `PrivateKey.generate()` and
+the automatic nonce in `SecretBox.encrypt()`. The exception is `SealedBox`, whose ephemeral key
+pair comes from libsodium's own generator: importing `nacl.bindings` calls `sodium_init()`, and
+that generator is what produces it. `nacl.bindings.randombytes()` reaches the same one directly
+if you want it.
 
 ### Threading
 
@@ -194,7 +196,9 @@ smallest of them; on iOS it is one self-contained extension of roughly 570–680
 therefore never the reason to reach for an app bundle, split APKs or a
 narrowed [`target_arch`](https://flet.dev/docs/publish/android/#supported-target-architectures)
 — every Android ABI and every iOS slice is published, so those levers stay available for
-whatever else the app carries.
+whatever else the app carries. The wheel is not the whole cost, though: `compile.packages`
+turns PyNaCl's 233 KB of source into roughly 302 KB of bytecode, and cffi's Python half plus
+`pycparser` add around 500 KB more that nothing imports at runtime.
 
 ### Other considerations
 
