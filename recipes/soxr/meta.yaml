@@ -1,0 +1,58 @@
+package:
+  name: soxr
+  version: "1.1.0"
+
+build:
+  number: 1
+  script_env:
+# {% if sdk == 'android' %}
+    # nanobind_add_module builds a MODULE library, and the NDK links those with
+    # -Wl,--no-undefined -- so the usual leave-Python-symbols-unresolved convention
+    # fails and libpython must be named explicitly. scikit-build-core shlex-splits
+    # CMAKE_ARGS, so the -L/-l pair can't be separate tokens; comma-joining them
+    # into the one -Wl argument gets them past the split (the linker re-splits).
+    CMAKE_ARGS: >-
+      -DCMAKE_TOOLCHAIN_FILE={NDK_ROOT}/build/cmake/android.toolchain.cmake
+      -DANDROID_ABI={ANDROID_ABI}
+      -DANDROID_NATIVE_API_LEVEL={ANDROID_API_LEVEL}
+      -DANDROID_STL=c++_shared
+      -DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DCMAKE_MODULE_LINKER_FLAGS=-Wl,-z,max-page-size=16384,-L{HOST_PYTHON_HOME}/lib,-lpython{py_version_short}
+      -DPython_EXECUTABLE={CROSS_VENV_PYTHON}
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.so
+# {% else %}
+    # The `ninja` pip package crashes importing on the iOS crossenv python
+    # (sysconfig.get_preferred_scheme('user') -> 'posix_user' invalid on iOS),
+    # so use the Makefiles generator on iOS; scikit-build-core then never imports
+    # ninja. (Android keeps Ninja, which works there.)
+    CMAKE_GENERATOR: Unix Makefiles
+    # CMAKE_SYSTEM_PROCESSOR is empty on iOS (only the NDK toolchain sets it), and
+    # the vendored libsoxr's fallback probe knows only __arm__/__i386__/__x86_64__,
+    # so arm64 falls into FindSIMD32's SSE branch, fails, and silently drops
+    # cr32s/pffft32s/util32s -- a green wheel with only the scalar resampler.
+    # `arm64` satisfies FindSIMD32's `^arm` match; Android must not see this flag.
+    CMAKE_ARGS: >-
+      -DCMAKE_SYSTEM_NAME=iOS
+      -DCMAKE_SYSTEM_PROCESSOR={{ arch }}
+      -DCMAKE_OSX_SYSROOT={{ sdk }}
+      -DCMAKE_OSX_DEPLOYMENT_TARGET={{ sdk_version }}
+      -DCMAKE_OSX_ARCHITECTURES={{ arch }}
+      -DPython_EXECUTABLE={CROSS_VENV_PYTHON}
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.dylib
+# {% endif %}
+
+requirements:
+  build:
+    # soxr builds via scikit-build-core + CMake; with forge's `--no-isolation`
+    # these must live in the build venv. scikit-build-core, nanobind and
+    # setuptools_scm come from the package's own build-system.requires.
+    - cmake
+    - ninja
+# {% if sdk == 'android' %}
+  host:
+    # soxr_ext is a nanobind C++17 extension; on Android it links libc++_shared.so,
+    # which the device runtime doesn't provide unless bundled.
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
