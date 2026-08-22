@@ -1,53 +1,5 @@
-"""Recover a damped sinusoid buried in noise with scipy.signal, scipy.fft and scipy.optimize."""
-
 import flet as ft
-import numpy as np
-import scipy
-from scipy import fft, optimize, signal
-
-SAMPLE_RATE = 500.0
-DURATION = 4.0
-CUTOFF = 8.0
-TRUE = {"amplitude": 2.5, "decay": 0.4, "frequency": 3.0, "phase": 0.6}
-
-t = np.arange(0.0, DURATION, 1.0 / SAMPLE_RATE)
-
-_blas = scipy.show_config(mode="dicts")["Build Dependencies"]["blas"]
-BLAS = f"{_blas.get('name', 'unknown')} {_blas.get('version', '')}".strip()
-
-
-def model(t, amplitude, decay, frequency, phase):
-    """The damped sinusoid, used both to generate the signal and to fit it back."""
-    return amplitude * np.exp(-decay * t) * np.sin(2.0 * np.pi * frequency * t + phase)
-
-
-def analyse(noise):
-    """Bury the true waveform in noise, filter it, and fit its parameters back out.
-
-    Three stages of compiled scipy in one call — a Butterworth low-pass, an FFT to
-    find the dominant frequency, and a least-squares fit seeded from that peak.
-    Returns the peak, the fitted parameters keyed by the same names as TRUE, and
-    the RMS error against the noise-free signal, which is what says whether the
-    recovery actually worked.
-    """
-    clean = model(t, **TRUE)
-    noisy = clean + np.random.default_rng().normal(scale=noise, size=t.size)
-
-    # sosfiltfilt runs the filter forwards and then backwards, so the waveform the
-    # fit chases is not shifted in time the way a single pass would shift it.
-    sos = signal.butter(4, CUTOFF, btype="low", fs=SAMPLE_RATE, output="sos")
-    filtered = signal.sosfiltfilt(sos, noisy)
-
-    spectrum = np.abs(fft.rfft(filtered))
-    peak = float(fft.rfftfreq(t.size, 1.0 / SAMPLE_RATE)[np.argmax(spectrum)])
-
-    # curve_fit is a local optimiser: started more than about half a cycle from the
-    # true frequency it settles on a harmonic, so seed it from the spectrum.
-    guess = [np.abs(filtered).max(), 1.0, peak, 0.0]
-    fitted, _ = optimize.curve_fit(model, t, filtered, p0=guess)
-
-    error = float(np.sqrt(np.mean((model(t, *fitted) - clean) ** 2)))
-    return peak, dict(zip(TRUE, fitted)), error
+from waveform import TRUE, VERSION, analyse
 
 
 def row(label, *cells):
@@ -61,8 +13,7 @@ def main(page: ft.Page):
     """Show a noise slider, a Fit button, and a table of true against fitted values.
 
     The header line reports the scipy build the app is running on, including the
-    BLAS it is linked against — OpenBLAS on both mobile platforms, where a desktop
-    Mac would say Accelerate.
+    BLAS it is linked against.
     """
 
     def show_noise():
@@ -108,11 +59,9 @@ def main(page: ft.Page):
         ft.SafeArea(
             expand=True,
             content=ft.Column(
+                scroll=ft.ScrollMode.AUTO,
                 controls=[
-                    ft.Text(
-                        f"scipy {scipy.__version__} — {t.size} samples, BLAS {BLAS}",
-                        size=12,
-                    ),
+                    ft.Text(VERSION, size=12),
                     caption := ft.Text(),
                     noise := ft.Slider(
                         min=0.0,
@@ -134,7 +83,7 @@ def main(page: ft.Page):
                         ]
                     ),
                     results := ft.Column(spacing=4),
-                ]
+                ],
             ),
         )
     )

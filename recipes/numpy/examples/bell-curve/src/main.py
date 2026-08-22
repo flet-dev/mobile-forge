@@ -1,36 +1,9 @@
 """Watch a bell curve appear as numpy averages more and more uniform draws."""
 
-import time
-
 import flet as ft
-import numpy as np
+from distribution import BUILD, SAMPLES, sample
 
-SAMPLES = 100_000
-BINS = 25
 BAR_HEIGHT = 160
-
-BLAS = np.show_config(mode="dicts")["Build Dependencies"]["blas"]["name"]
-LONGDOUBLE = np.dtype(np.longdouble).itemsize * 8
-
-rng = np.random.default_rng()
-
-
-def sample(draws):
-    """Average `draws` uniform values 100,000 times, and bin the means.
-
-    Returns the bin counts, the mean and standard deviation of those means, and
-    how long the work took — the elapsed time is reported on screen because how
-    cheap this is on a phone is half of what the app is demonstrating.
-    """
-    start = time.perf_counter()
-
-    # One 2-D draw averaged along its second axis, rather than a loop over samples:
-    # the whole batch stays inside compiled code, which is what makes this cheap.
-    means = rng.random((SAMPLES, draws)).mean(axis=1)
-    counts, _ = np.histogram(means, bins=BINS, range=(0.0, 1.0))
-
-    elapsed = time.perf_counter() - start
-    return counts, float(means.mean()), float(means.std()), elapsed
 
 
 def bars(counts):
@@ -39,11 +12,10 @@ def bars(counts):
     Plain Container heights rather than a chart, which keeps the app's
     dependencies down to Flet and numpy.
     """
-    # Cast out of numpy scalars here: what crosses into a Flet control is plain Python.
-    scale = BAR_HEIGHT / float(counts.max())
+    scale = BAR_HEIGHT / max(counts)
     return [
         ft.Container(
-            height=max(2.0, scale * float(count)),
+            height=max(2.0, scale * count),
             bgcolor=ft.Colors.PRIMARY,
             border_radius=2,
             expand=True,
@@ -64,8 +36,8 @@ def main(page: ft.Page):
 
     The table sets the measured mean and standard deviation against what theory
     predicts. The header line reports what the wheel actually is: which BLAS sits
-    behind it (`none` on device) and how wide `long double` is, the one thing
-    that differs between the Android and iOS wheels.
+    behind it (`none` on device) and how wide `long double` is, which is where
+    the Android and iOS wheels' arithmetic parts company.
     """
 
     def show_draws():
@@ -84,22 +56,21 @@ def main(page: ft.Page):
     def compute():
         """Sample at the slider's setting, then refill the histogram and table.
 
-        The body of the thread resample() starts. The predicted column is the
-        central limit theorem's own answer for k uniform draws: a mean of 0.5 and
-        a standard deviation of 1/sqrt(12k), which the measured pair tracks to
-        within a fraction of a percent.
+        The body of the thread resample() starts. Everything on screen here is a
+        plain Python number: the casting happens in distribution.py, so the UI
+        never has to defend itself against a numpy scalar.
         """
         k = int(draws.value)
-        counts, mean, std, elapsed = sample(k)
-        histogram.controls = bars(counts)
+        run = sample(k)
+        histogram.controls = bars(run["counts"])
         results.controls = [
             row("", "measured", "predicted"),
             ft.Divider(height=1),
-            row("mean", f"{mean:.4f}", "0.5000"),
-            row("std dev", f"{std:.4f}", f"{1.0 / np.sqrt(12.0 * k):.4f}"),
+            row("mean", f"{run['mean']:.4f}", "0.5000"),
+            row("std dev", f"{run['std']:.4f}", f"{run['predicted']:.4f}"),
             ft.Divider(height=1),
-            row("array", f"{SAMPLES:,} × {k}"),
-            row("sampled and binned in", f"{elapsed * 1e3:.1f} ms"),
+            row("array", f"{SAMPLES:,} × {k}", f"{run['megabytes']:.1f} MB"),
+            row("sampled and binned in", f"{run['milliseconds']:.1f} ms"),
         ]
         spinner.visible = False
         page.update()  # auto-update does not reach background threads
@@ -109,12 +80,9 @@ def main(page: ft.Page):
         ft.SafeArea(
             expand=True,
             content=ft.Column(
+                scroll=ft.ScrollMode.AUTO,
                 controls=[
-                    ft.Text(
-                        f"numpy {np.__version__} — BLAS {BLAS} — "
-                        f"long double {LONGDOUBLE}-bit",
-                        size=12,
-                    ),
+                    ft.Text(BUILD, size=12),
                     histogram := ft.Row(
                         spacing=2,
                         height=BAR_HEIGHT,

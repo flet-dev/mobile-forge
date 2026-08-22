@@ -1,121 +1,69 @@
-"""A note encrypted under a passphrase — scrypt derives the key, Fernet seals it."""
-
-import base64
-import os
-import threading
-
-import cryptography
 import flet as ft
-from cryptography.fernet import Fernet, InvalidToken
-from cryptography.hazmat.backends.openssl.backend import backend
-from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
-
-# FLET_APP_STORAGE_DATA is durable, app-private storage. Flet also makes it the
-# working directory on device, so a bare "note.vault" would land there too —
-# this spells it out.
-VAULT = os.path.join(os.getenv("FLET_APP_STORAGE_DATA", "."), "note.vault")
-
-SALT_BYTES = 16
-# scrypt's "interactive" cost: 16 MB of memory and a visible fraction of a second
-# on a phone. Raise n if your threat model wants a slower guess.
-SCRYPT_N, SCRYPT_R, SCRYPT_P = 2**14, 8, 1
-
-# One derivation at a time: each costs 16 MB, and two overlapping taps would race
-# to write the same file.
-vault_lock = threading.Lock()
-
-
-def derive_key(passphrase: str, salt: bytes) -> bytes:
-    """Turn a passphrase into a Fernet key. Slow on purpose.
-
-    The salt comes from the caller and is stored beside the ciphertext, because the
-    same passphrase has to derive the same key again on the next launch.
-    """
-    kdf = Scrypt(salt=salt, length=32, n=SCRYPT_N, r=SCRYPT_R, p=SCRYPT_P)
-    return base64.urlsafe_b64encode(kdf.derive(passphrase.encode()))
+from vault import VERSIONS, WrongPassphrase, is_sealed, seal, unseal
 
 
 def main(page: ft.Page):
-    """A passphrase field, the note itself, Lock and Unlock, and a status line.
+    """A passphrase field, the note, Lock and Unlock, and a status line.
 
-    The header names the cryptography build and the OpenSSL it links, both of which
-    change with the Python version the app is built for.
+    Every handler that derives a key runs on a background thread, so each one ends
+    by calling finish() rather than returning a value.
     """
 
-    def lock(passphrase: str, text: str):
-        """Seal the note into the vault file, salt first, ciphertext after.
+    def start(handler):
+        """Check the passphrase, then hand the derivation to the thread pool.
 
-        A fresh salt each time means the same passphrase and the same note still
-        produce a different file. Runs in the thread pool, since the derivation is
-        the slow part.
+        Both buttons come through here so the empty-passphrase case and the interim
+        status are written once. scrypt is slow by design and never belongs on the
+        UI thread.
         """
-        salt = os.urandom(SALT_BYTES)
-        with vault_lock:
-            token = Fernet(derive_key(passphrase, salt)).encrypt(text.encode())
-            with open(VAULT, "wb") as f:
-                f.write(salt + token)
+        if not (passphrase.value or "").strip():
+            passphrase.error = "Enter a passphrase"
+            page.update()
+            return
+        passphrase.error = None
+        status.value = "Deriving key…"
+        page.update()
+        page.run_thread(handler)
+
+    def lock():
+        """Seal the note and take the plaintext off the screen."""
+        written, ms = seal(passphrase.value.strip(), note.value or "")
         note.value = ""
         note.read_only = True
-        finish(f"Sealed {len(token)} bytes of ciphertext.")
+        unlock_button.disabled = False
+        finish(f"Sealed {written} bytes of ciphertext · {ms:.0f} ms")
 
-    def unlock(passphrase: str):
-        """Re-derive the key from the stored salt and bring the note back.
+    def unlock():
+        """Reopen the sealed note, or report that the passphrase was wrong.
 
-        A wrong passphrase is an ordinary outcome here, not a failure: Fernet raises
-        InvalidToken, which is caught and shown on the field. Left uncaught in a
-        worker thread it would surface nowhere at all.
+        A wrong passphrase is an ordinary outcome, not a failure. Left uncaught in
+        a worker thread it would surface nowhere at all: page.run_thread never
+        retrieves the future.
         """
-        with vault_lock:
-            with open(VAULT, "rb") as f:
-                blob = f.read()
-            salt, token = blob[:SALT_BYTES], blob[SALT_BYTES:]
-            try:
-                plaintext = Fernet(derive_key(passphrase, salt)).decrypt(token)
-            except InvalidToken:
-                passphrase_field.error = "Wrong passphrase"
-                finish("")
-                return
-        note.value = plaintext.decode()
+        try:
+            text, ms = unseal(passphrase.value.strip())
+        except WrongPassphrase:
+            passphrase.error = "Wrong passphrase"
+            finish("")
+            return
+        note.value = text
         note.read_only = False
-        finish(f"Opened {len(plaintext)} bytes of plaintext.")
+        finish(f"Opened {len(text)} characters · {ms:.0f} ms")
 
-    def finish(message: str):
+    def finish(message):
         """Land a background handler's outcome on the screen."""
         status.value = message
         page.update()  # auto-update does not reach background threads
 
-    def start(handler, *args):
-        """Check the passphrase, then hand the derivation to the thread pool.
-
-        Both buttons come through here so that the empty-passphrase case and the
-        interim status are written once rather than twice.
-        """
-        passphrase = (passphrase_field.value or "").strip()
-        if not passphrase:
-            passphrase_field.error = "Enter a passphrase"
-            page.update()
-            return
-        passphrase_field.error = None
-        status.value = "Deriving key…"
-        page.update()
-        page.run_thread(handler, passphrase, *args)
-
-    def on_lock():
-        """Seal whatever is in the note field."""
-        start(lock, note.value or "")
-
-    def on_unlock():
-        """Reopen the sealed note."""
-        start(unlock)
-
     def refresh():
-        """Show whether a vault already exists, which is all the app knows at startup.
+        """Show whether a vault already exists, which is all the app knows at start.
 
         The note stays read-only while it is sealed: the field is empty then, and
         typing into it would look like editing the note rather than replacing it.
         """
-        sealed = os.path.exists(VAULT)
+        sealed = is_sealed()
         note.read_only = sealed
+        unlock_button.disabled = not sealed
         status.value = "Sealed — unlock it." if sealed else "Nothing sealed yet."
         page.update()
 
@@ -124,22 +72,31 @@ def main(page: ft.Page):
         ft.SafeArea(
             expand=True,
             content=ft.Column(
+                scroll=ft.ScrollMode.AUTO,
                 controls=[
-                    ft.Text(
-                        f"cryptography {cryptography.__version__} — "
-                        f"{backend.openssl_version_text()}",
-                        size=12,
+                    ft.Text(VERSIONS, size=12),
+                    passphrase := ft.TextField(
+                        label="Passphrase",
+                        password=True,
+                        can_reveal_password=True,
                     ),
-                    passphrase_field := ft.TextField(label="Passphrase", password=True),
                     note := ft.TextField(label="Note", multiline=True, min_lines=3),
                     ft.Row(
                         controls=[
-                            ft.Button("Lock", icon=ft.Icons.LOCK, on_click=on_lock),
-                            ft.Button("Unlock", icon=ft.Icons.KEY, on_click=on_unlock),
+                            ft.Button(
+                                "Lock",
+                                icon=ft.Icons.LOCK,
+                                on_click=lambda: start(lock),
+                            ),
+                            unlock_button := ft.Button(
+                                "Unlock",
+                                icon=ft.Icons.KEY,
+                                on_click=lambda: start(unlock),
+                            ),
                         ]
                     ),
                     status := ft.Text(size=12),
-                ]
+                ],
             ),
         )
     )

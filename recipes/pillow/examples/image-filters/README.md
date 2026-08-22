@@ -11,8 +11,9 @@ What it demonstrates:
   `io.BytesIO` and the raw PNG bytes are assigned to
   [`ft.Image.src`](https://flet.dev/docs/controls/image/#flet.Image.src), which accepts
   `bytes` as well as a path. No temporary file, no base64, no assets entry. The caption
-  reports how many kilobytes the encoder produced, which changes a lot between effects —
-  posterizing a gradient makes it six times smaller, blurring it makes it twice as big.
+  reports how many kilobytes the encoder produced and how long the filter and the encode
+  took together — PNG is lossless, so the size moves with how compressible each effect
+  leaves the picture, and switching effects at the same slider position is enough to see it.
 - **Which codecs this build actually has** — the header line prints
   [`features.get_supported_codecs()`](https://pillow.readthedocs.io/en/stable/reference/features.html#PIL.features.get_supported_codecs).
   On a phone it reads `jpg, zlib`; run the same code on your laptop and it also lists

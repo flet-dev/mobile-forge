@@ -1,67 +1,9 @@
-"""Draw an image with Pillow, filter it, and hand the encoded bytes straight to ft.Image."""
-
-import io
-
 import flet as ft
-from PIL import (
-    Image,
-    ImageDraw,
-    ImageEnhance,
-    ImageFilter,
-    ImageFont,
-    ImageOps,
-    __version__,
-    features,
-)
-
-SIZE = 384
-
-# Every effect is the identity at strength 0, so the slider always runs from the
-# untouched source picture to the strongest version of the same transform.
-EFFECTS = {
-    "Gaussian blur": lambda img, k: img.filter(ImageFilter.GaussianBlur(radius=k)),
-    "Posterize": lambda img, k: ImageOps.posterize(img, 8 - int(k)),
-    "Solarize": lambda img, k: ImageOps.solarize(img, threshold=255 - int(k) * 36),
-    "Contrast": lambda img, k: ImageEnhance.Contrast(img).enhance(1 + k / 2),
-    "Desaturate": lambda img, k: ImageEnhance.Color(img).enhance(1 - k / 7),
-}
-
-
-def source_image():
-    """Compose a test picture out of Pillow's own generators, with no bundled asset."""
-    # linear_gradient/radial_gradient are native 256x256 builders, so the colour
-    # field costs three C calls rather than a per-pixel Python loop.
-    horizontal = Image.linear_gradient("L")
-    vertical = horizontal.transpose(Image.Transpose.ROTATE_90)
-    radial = Image.radial_gradient("L")
-    img = Image.merge("RGB", (horizontal, vertical, ImageOps.invert(radial)))
-    img = img.resize((SIZE, SIZE), Image.Resampling.BICUBIC)
-
-    draw = ImageDraw.Draw(img)
-    for i, colour in enumerate(("white", "black", "white")):
-        inset = 40 + i * 46
-        draw.ellipse(
-            (inset, inset, SIZE - inset, SIZE - inset), outline=colour, width=6
-        )
-    draw.line((0, SIZE // 2, SIZE, SIZE // 2), fill="black", width=3)
-    # load_default(size=...) scales a TrueType face embedded in ImageFont.py, so
-    # text renders without shipping a font file.
-    draw.text((16, 14), "PILLOW", fill="white", font=ImageFont.load_default(size=34))
-    return img
-
-
-def encode(img):
-    """Encode to PNG bytes, which ft.Image.src takes directly — no temp file, no base64."""
-    buffer = io.BytesIO()
-    img.save(buffer, "PNG")
-    return buffer.getvalue()
-
-
-SOURCE = source_image()
+from filters import EFFECTS, SIZE, VERSION, apply_effect
 
 
 def main(page: ft.Page):
-    """Show the filtered picture, the codecs this build has, and the two controls."""
+    """Show a Pillow-drawn picture, a filter picker, and the strength slider."""
 
     def render():
         """Raise the spinner and hand the filtering to a background thread."""
@@ -70,17 +12,20 @@ def main(page: ft.Page):
         page.run_thread(compute)
 
     def compute():
-        """Apply the chosen effect at the chosen strength and swap in the new bytes.
-
-        Filtering and PNG encoding are the compiled loops this app keeps off the UI
-        thread. Every effect returns a new image and leaves the source alone, so each
-        render starts from the same untouched picture rather than compounding.
-        """
-        name = effect.value
-        amount = strength.value
-        data = encode(EFFECTS[name](SOURCE, amount))
-        preview.src = data
-        caption.value = f"{name} at {amount:.0f} — PNG, {len(data) / 1024:.1f} kB"
+        """Filter at the current settings and swap the new PNG bytes into the preview."""
+        name, amount = effect.value, strength.value
+        try:
+            data, elapsed = apply_effect(name, amount)
+        except Exception as exc:
+            # run_thread swallows whatever the worker raises, so show it here or
+            # a failed render is indistinguishable from a slow one.
+            caption.value = f"{type(exc).__name__}: {exc}"
+        else:
+            preview.src = data
+            caption.value = (
+                f"{name} at {amount:.0f} — PNG, {len(data) / 1000:.1f} KB, "
+                f"{elapsed:.0f} ms"
+            )
         spinner.visible = False
         page.update()  # auto-update does not reach background threads
 
@@ -90,13 +35,12 @@ def main(page: ft.Page):
             expand=True,
             content=ft.Column(
                 controls=[
-                    ft.Text(
-                        f"Pillow {__version__} — codecs: "
-                        f"{', '.join(features.get_supported_codecs())}",
-                        size=12,
-                    ),
+                    ft.Text(VERSION, size=12),
+                    # src is required; the first background render fills it in.
+                    # gapless_playback keeps the control from blanking between
+                    # renders, since every encode is a different byte string.
                     preview := ft.Image(
-                        src=encode(SOURCE),
+                        src=b"",
                         width=SIZE,
                         height=SIZE,
                         border_radius=8,

@@ -6,7 +6,7 @@ phase — and prints them next to the true values it was given.
 
 What it demonstrates:
 
-- **A three-stage numerical pipeline in one handler** —
+- **A three-stage numerical pipeline in one call** —
   [`signal.butter`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.butter.html)
   plus [`signal.sosfiltfilt`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.sosfiltfilt.html)
   to low-pass the noise away,
