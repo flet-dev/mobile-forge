@@ -233,7 +233,6 @@ properties:
           - type: array
             items:
               type: string
-            minItems: 1
         default: ""
         description: >-
           Path, or list of paths, relative to the source directory (or to
@@ -246,9 +245,13 @@ properties:
           it cannot get right: excluding a notice covering something the
           wheel doesn't contain (libiconv's top-level COPYING is the GPL for
           the `iconv` program, not the LGPL library we build), and including
-          one below the top level (a bundled library's own notice). Applies
-          to build.sh recipes: a Python package's build backend already
-          carries its licence through.
+          one below the top level (a bundled library's own notice).
+          Finding no licence at all is a BUILD ERROR, since the wheel would
+          otherwise ship object code with no notice; an EMPTY LIST is the
+          deliberate opt-out for a recipe that genuinely has nothing to ship,
+          and belongs next to a comment saying why. Applies to build.sh
+          recipes: a Python package's build backend already carries its
+          licence through.
 
       license:
         type: string

@@ -317,8 +317,22 @@ single wheel contains both. The *file* side splits the same way for free, becaus
 source-dir file shadows a recipe-dir file of the same name: build.sh stages the NDK notice
 as `LICENSE` on Android, and on iOS the recipe's own `LICENSE` is what remains.
 
-**Watch the build log.** It prints `Bundling licence file: …`, or
-`WARNING: no licence file found …` — the warning means that wheel would ship no notice.
+**Finding no licence is a hard build error**, not a warning — a warning would sit unread in
+a thousand-line log on a job that exits 0, which is exactly how every `flet-lib*` wheel came
+to ship with no notice while CI stayed green. The error names the directories searched, the
+name patterns tried, and the two fixes. You will most likely meet it on a **version bump**
+where upstream renamed or relocated its notice; that is the moment you want stopping, and
+the fix is one line. A recipe that genuinely has nothing to ship opts out explicitly, next
+to a comment saying why:
+
+```yaml
+about:
+  license_file: []      # deliberately none -- <reason>
+```
+
+Note an unset `license_file` still means "discover for me" — only an **empty list** is the
+opt-out. On success the log prints `Bundling licence file: …`.
+
 Scope the expression to what the wheel *contains*: libiconv ships `COPYING` (GPL, for the
 `iconv` program) beside `COPYING.LIB` (LGPL, for the library we actually build).
 

@@ -1154,6 +1154,16 @@ class SimplePackageBuilder(Builder):
         that covers something the wheel does not contain, and including one that lives
         below the top level.
 
+        Finding nothing is an ERROR, not a warning. A warning here would be invisible:
+        it lands in a build log thousands of lines long, on a job that still exits 0 —
+        which is precisely how every flet-lib* wheel came to ship with no licence at all
+        while CI stayed green. An upstream that renames or relocates its notice during a
+        version bump is exactly when someone needs stopping, and the fix is one line.
+        The deliberate exception is written in the recipe, where a reviewer sees it:
+
+            about:
+              license_file: []      # deliberately none -- <reason>
+
         The relative path is preserved rather than flattened to a basename, both
         because PEP 639 records License-File that way and because flattening would
         silently drop one of two same-named notices (jq ships a COPYING for itself and
@@ -1163,6 +1173,18 @@ class SimplePackageBuilder(Builder):
         search_dirs = [self.build_path, self.package.recipe_path]
 
         explicit = about.get("license_file")
+
+        # An explicit empty list is the opt-out; an unset field is the empty string the
+        # schema defaults to, meaning "discover for me". Both are falsy, so the list
+        # check has to come first.
+        if isinstance(explicit, list) and not explicit:
+            log(
+                self.log_file,
+                "about.license_file is empty: shipping no licence file, as the recipe "
+                "explicitly declares.",
+            )
+            return []
+
         if explicit:
             wanted = [explicit] if isinstance(explicit, str) else list(explicit)
             resolved = []
@@ -1173,10 +1195,12 @@ class SimplePackageBuilder(Builder):
                         resolved.append((candidate, name))
                         break
                 else:
-                    log(
-                        self.log_file,
-                        f"WARNING: about.license_file '{name}' not found in the source "
-                        "or recipe directory.",
+                    raise RuntimeError(
+                        f"{self.package.name}: about.license_file names {name!r}, which "
+                        f"is not in the source directory ({self.build_path}) or the "
+                        f"recipe directory ({self.package.recipe_path}). Point it at the "
+                        f"licence file this version ships, or drop the setting to let it "
+                        f"be discovered."
                     )
             return resolved
 
@@ -1187,6 +1211,25 @@ class SimplePackageBuilder(Builder):
             for candidate in sorted(directory.iterdir()):
                 if candidate.is_file() and LICENSE_FILE_RE.match(candidate.name):
                     found.setdefault(candidate.name, candidate)
+
+        if not found:
+            raise RuntimeError(
+                f"{self.package.name}: no licence file found, so this wheel would ship "
+                f"the library's object code with no notice.\n"
+                f"  searched (top level only):\n"
+                f"    {self.build_path}\n"
+                f"    {self.package.recipe_path}\n"
+                f"  for names starting with: LICENSE / LICENCE / COPYING / COPYRIGHT / "
+                f"NOTICE (any case)\n"
+                f"  Fix by pointing at the real file, which is what an upstream that "
+                f"moved or renamed its notice needs:\n"
+                f"    about:\n"
+                f"      license_file: path/to/LICENSE      # or a list of paths\n"
+                f"  A recipe with genuinely nothing to ship says so explicitly instead:\n"
+                f"    about:\n"
+                f"      license_file: []                   # deliberately none -- <reason>"
+            )
+
         return [(path, name) for name, path in found.items()]
 
     def make_wheel(self):
@@ -1213,12 +1256,8 @@ class SimplePackageBuilder(Builder):
                 + ("files: " if len(license_files) > 1 else "file: ")
                 + ", ".join(relative for _, relative in license_files),
             )
-        else:
-            log(
-                self.log_file,
-                "WARNING: no licence file found in the source or recipe directory. "
-                "Set about.license_file, or add the notice to the recipe directory.",
-            )
+        # The only way to reach an empty list is the explicit `license_file: []`
+        # opt-out — anything else has already raised in collect_license_files().
 
         # Write the packaging metadata
         self.write_message_file(
@@ -1231,10 +1270,9 @@ class SimplePackageBuilder(Builder):
                 "Tag": self.wheel_tag,
             },
         )
-        # Metadata-Version 2.4 is the floor for PEP 639's License-Expression and
-        # License-File; below it, a consumer or licence scanner has no way to see
-        # what the wheel wraps short of unpacking it.
         metadata = {
+            # 2.4 is the floor for PEP 639's License-Expression and License-File; below it,
+            # a consumer/licence-scanner has no way to see what the wheel wraps short of unpacking it.
             "Metadata-Version": "2.4",
             "Name": self.package.name,
             "Version": self.package.version,
