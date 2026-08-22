@@ -16,7 +16,9 @@ What it demonstrates:
   on the pipeline to watch it happen.
 - **How many cores you actually get** — the header line reports
   [`thread_pool_size()`](https://docs.pola.rs/api/python/stable/reference/api/polars.thread_pool_size.html),
-  the size of the rayon pool the aggregation runs on. On a phone it is the core count, not 1.
+  the size of the worker pool the aggregation runs on, which is more than one. Read it on real
+  hardware if the number matters: an emulator or simulator reports the pool it built for the
+  host machine's cores, not the phone's.
 - **Compute off the UI thread** — the run happens in
   [`page.run_thread(...)`](https://flet.dev/docs/controls/page/#flet.Page.run_thread) with the
   slider disabled and a spinner up, and ends with the explicit

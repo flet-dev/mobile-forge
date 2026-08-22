@@ -146,7 +146,7 @@ share since *this thread's* last call, because the previous reading is stored in
 keyed on `threading.current_thread().ident`.
 [`page.run_thread(...)`](https://flet.dev/docs/controls/page/#flet.Page.run_thread) submits
 to a `ThreadPoolExecutor`, and a pool makes that baseline *unpredictable* rather than simply
-absent — which is worse, because the reading looks plausible. Measured on the stock pool:
+absent — which is worse, because the reading looks plausible. Measured on the stock `ThreadPoolExecutor` that Flet 0.86.5 creates in `flet/app.py`:
 six jobs submitted one at a time all ran on the **same** worker, so five of them silently
 measured since the *previous* job rather than returning the meaningless `0.0` the docstring
 warns about; six submitted at once got six workers and mostly returned `0.0`. Idents are
@@ -172,7 +172,7 @@ permission denial into a screen that quietly stopped updating.
 
 ### App size
 
-Around 115 KB compressed and 390–400 KB unpacked per architecture, of which the compiled
+Around 115 KB compressed and 388–400 KB unpacked per architecture, of which the compiled
 extension is 18–29 KB. psutil is therefore never the reason to reach for an app bundle,
 split APKs or a narrower
 [`target_arch`](https://flet.dev/docs/publish/android/#supported-target-architectures);

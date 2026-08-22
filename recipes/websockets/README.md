@@ -182,7 +182,9 @@ with the check above, not with a stopwatch on your traffic.
 a socket needs no `pyproject.toml` entry. This is the only platform where the question exists.
 
 **The accelerator is not where the wheel put it.** Flet relocates every native module into the
-APK's `jniLibs/<abi>/`, flattening the dotted module name into `lib<name-with-dashes>.so` and
+APK's `jniLibs/<abi>/`, flattening the dotted module name into `lib<name-with-dashes>.so` (read
+out of a built APK while documenting [`aiohttp`](../aiohttp), not re-verified for websockets
+here) and
 leaving a `.soref` marker behind for its import hook to follow, so `websockets.speedups`
 becomes `libwebsockets-speedups.so`. The import works; what changes is that a relocated
 extension's `__file__` is not a path you can open. `speedups` is a *submodule*, so it cannot hit
@@ -201,7 +203,7 @@ in the package opens a file and it reads no data file at import, so there is no
 `MH_BUNDLE` load failure other recipes on this index have run into. iOS lifts it into a signed
 framework and leaves a `.fwork` stub at the path the wheel used — the counterpart of Android's
 relocation, with the same consequence for `__file__`. The stub imports through
-`AppleFrameworkLoader`, a subclass of `ExtensionFileLoader`, so one `isinstance` test covers
+`AppleFrameworkLoader` (established from a built simulator bundle while documenting [`aiohttp`](../aiohttp), not re-verified here), a subclass of `ExtensionFileLoader`, so one `isinstance` test covers
 both platforms.
 
 **The iOS binary is about ten times the Android one on disk, and it is not extra code.** Roughly
@@ -222,8 +224,7 @@ nothing to trim by hand — [`[tool.flet.cleanup]`](https://flet.dev/docs/publis
 has nothing worth adding here either. It is a figure to know when sizing a payload rather than
 one to act on.
 
-Wheels are published for all three Android ABIs Flet targets and for the iOS device plus both
-simulator slices, on Python 3.12, 3.13 and 3.14, so narrowing
+Narrowing
 [`target_arch`](https://flet.dev/docs/publish/android/#supported-target-architectures) is a size
 decision rather than a necessity — and armeabi-v7a is a genuine 32-bit build rather than a stub.
 On Android an app bundle, split APKs or a narrowed `target_arch` are the levers; at well under a

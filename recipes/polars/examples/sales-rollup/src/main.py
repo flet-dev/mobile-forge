@@ -1,85 +1,11 @@
-"""Join a synthetic order book to a product catalogue and total it with the polars lazy API."""
-
-import time
+"""Total a synthetic order book with polars, sized by a slider and run off the UI thread."""
 
 import flet as ft
-import polars as pl
-
-CATALOGUE = {
-    "product_id": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
-    "product": [
-        "espresso",
-        "flat white",
-        "croissant",
-        "sourdough",
-        "orange juice",
-        "granola",
-        "dish soap",
-        "kitchen roll",
-        "peas",
-        "ice cream",
-    ],
-    "category": [
-        "drinks",
-        "drinks",
-        "bakery",
-        "bakery",
-        "drinks",
-        "grocery",
-        "household",
-        "household",
-        "frozen",
-        "frozen",
-    ],
-    "unit_price": [2.40, 3.60, 2.80, 4.10, 3.20, 5.50, 1.90, 2.60, 1.40, 4.80],
-}
-
-PRODUCTS = pl.DataFrame(CATALOGUE)
-OPENING_HOURS = (7, 19)
-COLUMNS = ("category", "orders", "units", "revenue")
+from orders import COLUMNS, VERSION, summarise
 
 
-def synthesise(rows):
-    """Build the order book with polars expressions rather than Python lists.
-
-    Every column is derived from the row index by a multiply-and-modulo, so the
-    same slider position always produces the same table and a million rows cost
-    milliseconds. Filling Python lists instead would dominate the timing this app
-    exists to show.
-    """
-    return pl.DataFrame({"order_id": pl.int_range(rows, eager=True)}).with_columns(
-        product_id=pl.col("order_id") * 2654435761 % PRODUCTS.height,
-        quantity=pl.col("order_id") * 40503 % 4 + 1,
-        hour=pl.col("order_id") * 7919 % 24,
-    )
-
-
-def rollup(orders):
-    """Join the orders to the catalogue and total revenue per category.
-
-    Nothing between `lazy()` and `collect()` runs when it is written: polars
-    optimises the whole plan first, which is why the opening-hours filter is
-    allowed to sit after the join here — it is pushed underneath it, and the
-    columns the aggregation never reads are dropped before either step.
-    """
-    return (
-        orders.lazy()
-        .join(PRODUCTS.lazy(), on="product_id")
-        .filter(pl.col("hour").is_between(*OPENING_HOURS))
-        .with_columns(revenue=pl.col("quantity") * pl.col("unit_price"))
-        .group_by("category")
-        .agg(
-            orders=pl.len(),
-            units=pl.col("quantity").sum(),
-            revenue=pl.col("revenue").sum(),
-        )
-        .sort("revenue", descending=True)
-        .collect()
-    )
-
-
-def summary_table(summary):
-    """Turn the collected DataFrame into a DataTable, one row per category."""
+def summary_table(totals):
+    """Turn the rolled-up rows into a DataTable, one row per category."""
     return ft.DataTable(
         column_spacing=18,
         columns=[ft.DataColumn(name, numeric=name != "category") for name in COLUMNS],
@@ -92,7 +18,7 @@ def summary_table(summary):
                     ft.DataCell(f"{row['revenue']:,.0f}"),
                 ]
             )
-            for row in summary.to_dicts()
+            for row in totals
         ],
     )
 
@@ -121,18 +47,16 @@ def main(page: ft.Page):
         page.run_thread(compute)
 
     def compute():
-        """Generate, join and aggregate at the current slider value, then draw the table.
+        """Roll up at the current slider value, then draw the table.
 
         Runs on a background thread: polars parallelises inside `collect()`, but
         that call still blocks whichever thread makes it, and on the UI thread it
         would freeze the app for the whole pipeline.
         """
         rows = int(slider.value)
-        started = time.perf_counter()
-        summary = rollup(synthesise(rows))
-        elapsed = (time.perf_counter() - started) * 1000.0
+        totals, elapsed = summarise(rows)
 
-        results.controls = [summary_table(summary)]
+        results.controls = [summary_table(totals)]
         footer.value = f"joined and grouped {rows:,} orders in {elapsed:.0f} ms"
         slider.disabled = False
         spinner.visible = False
@@ -144,10 +68,7 @@ def main(page: ft.Page):
             expand=True,
             content=ft.Column(
                 controls=[
-                    ft.Text(
-                        f"polars {pl.__version__} — {pl.thread_pool_size()} worker threads",
-                        size=12,
-                    ),
+                    ft.Text(VERSION, size=12),
                     ft.Row(
                         controls=[
                             caption := ft.Text(expand=True),

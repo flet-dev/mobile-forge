@@ -1,55 +1,5 @@
-"""Round-trip a CSV through Arrow's own reader and group it up without Acero."""
-
-import os
-import random
-import time
-
 import flet as ft
-import pyarrow as pa
-import pyarrow.compute as pc
-from pyarrow import csv
-
-# Flet makes FLET_APP_STORAGE_DATA the working directory on device, so a bare
-# "orders.csv" would land here anyway; naming it behaves the same on desktop.
-CSV_PATH = os.path.join(os.getenv("FLET_APP_STORAGE_DATA", "."), "orders.csv")
-
-CITIES = ["Lagos", "Nairobi", "Cairo", "Accra", "Kigali", "Dakar"]
-
-
-def write_orders(rows):
-    """Invent `rows` orders and write them out with Arrow's CSV writer.
-
-    The seed is fixed, so every install produces the same totals and two devices
-    can be compared against each other directly.
-    """
-    rng = random.Random(20260817)
-    table = pa.table(
-        {
-            "city": [rng.choice(CITIES) for _ in range(rows)],
-            "amount": [round(rng.uniform(5.0, 500.0), 2) for _ in range(rows)],
-        }
-    )
-    csv.write_csv(table, CSV_PATH)
-
-
-def roll_up(table):
-    """Count, total and average `amount` per city, largest total first.
-
-    `table.group_by(...).aggregate(...)` is the call you would reach for, and it
-    raises here: grouped aggregation runs on Acero, which these wheels are not
-    built with. The kernels themselves are all present, so the grouping is done
-    by hand — `pc.unique` for the distinct keys, then one boolean mask per key
-    and the scalar aggregates over the rows it selects. Passing a mask is also
-    why the filter is spelled `pc.equal(...)` and not `pc.field("city") == city`:
-    an expression would send `Table.filter` through Acero as well.
-    """
-    rows = []
-    for city in pc.unique(table["city"]).to_pylist():
-        amounts = table.filter(pc.equal(table["city"], city))["amount"]
-        rows.append(
-            (city, len(amounts), pc.sum(amounts).as_py(), pc.mean(amounts).as_py())
-        )
-    return sorted(rows, key=lambda entry: entry[2], reverse=True)
+from orders import BUILD, round_trip
 
 
 def line(label, *cells):
@@ -60,12 +10,7 @@ def line(label, *cells):
 
 
 def main(page: ft.Page):
-    """Show a row-count slider driving the round trip, and the per-city totals.
-
-    The header line is the build describing itself: how many compute functions
-    this Arrow registers, and whether it carries the gzip codec — the one
-    functional difference between the two mobile platforms.
-    """
+    """Show a row-count slider driving the round trip, and the per-city totals."""
 
     def show_rows():
         """Report the row count the next run will write, as the slider moves."""
@@ -75,9 +20,9 @@ def main(page: ft.Page):
         """Hand the round trip to a background thread and show that it is running.
 
         Driven by the slider's on_change_end, which fires once on release —
-        on_change would start a fresh run for every pixel of the drag. The
-        slider is disabled until compute() re-enables it, so two runs can never
-        be writing the same CSV at the same time.
+        on_change would start a fresh run for every pixel of the drag. The slider
+        is disabled until compute() re-enables it, so two runs can never be writing
+        the same CSV at the same time.
         """
         count.disabled = True
         spinner.visible = True
@@ -85,40 +30,22 @@ def main(page: ft.Page):
         page.run_thread(compute)
 
     def compute():
-        """Write the CSV, parse it back, group it, and fill in the totals.
-
-        Writing is mostly Python inventing random numbers and is not timed. The
-        two figures in the footer are Arrow's own: the native CSV parse, and the
-        hand-rolled group-by that stands in for the missing query engine.
-        """
-        write_orders(int(count.value))
-
-        started = time.perf_counter()
-        table = csv.read_csv(CSV_PATH)
-        parsed = (time.perf_counter() - started) * 1000.0
-
-        started = time.perf_counter()
-        totals = roll_up(table)
-        grouped = (time.perf_counter() - started) * 1000.0
-
+        """Run the round trip off the UI thread and fill in the totals and footer."""
+        result = round_trip(int(count.value))
         results.controls = [
             line("", "orders", "total", "mean"),
             ft.Divider(height=1),
             *(
                 line(city, f"{orders:,}", f"{total:,.0f}", f"{mean:.2f}")
-                for city, orders, total, mean in totals
+                for city, orders, total, mean in result["totals"]
             ),
             ft.Divider(height=1),
-            line(
-                "all cities",
-                f"{table.num_rows:,}",
-                f"{pc.sum(table['amount']).as_py():,.0f}",
-                "",
-            ),
+            line("all cities", f"{result['rows']:,}", f"{result['total']:,.0f}", ""),
         ]
         footer.value = (
-            f"{os.path.getsize(CSV_PATH) / 1e6:.2f} MB of CSV parsed in {parsed:.0f} ms "
-            f"into {table.nbytes / 1e6:.2f} MB of Arrow, grouped in {grouped:.0f} ms"
+            f"{result['csv_mb']:.2f} MB of CSV parsed in {result['parse_ms']:.0f} ms "
+            f"into {result['arrow_mb']:.2f} MB of Arrow, "
+            f"grouped in {result['group_ms']:.0f} ms"
         )
         count.disabled = False
         spinner.visible = False
@@ -131,12 +58,7 @@ def main(page: ft.Page):
             content=ft.Column(
                 scroll=ft.ScrollMode.AUTO,
                 controls=[
-                    ft.Text(
-                        f"pyarrow {pa.__version__} — {len(pc.list_functions())} compute "
-                        f"functions, gzip codec "
-                        f"{'yes' if pa.Codec.is_available('gzip') else 'no'}",
-                        size=12,
-                    ),
+                    ft.Text(BUILD, size=12),
                     ft.Row(
                         controls=[
                             caption := ft.Text(expand=True),

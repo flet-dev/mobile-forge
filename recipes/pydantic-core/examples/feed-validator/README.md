@@ -62,6 +62,9 @@ The generator is seeded, so the records, the six rejections and the totals come 
 every install and two devices can be compared directly. It builds plain dicts and dumps them to
 bytes rather than starting from models, because the point is a feed the app did not write.
 
+`src/feed.py` owns the models, the generator, the salvage pass and the timing harness, and
+hands back plain values; `src/main.py` is the screen and its wiring.
+
 ## Try it
 
 [Build](https://flet.dev/docs/publish/) the app, then install it on a device or emulator/simulator:

@@ -94,7 +94,9 @@ wrong: one run of 1,200 fetches produced 73 empty `fetchone()`s and 24 answers b
 another thread (`SELECT 42` returning `(200000,)`); a repeat of 6,000 fetches produced 5 empty
 ones and none crossed. That spread is the point — the same code is wrong at a rate that
 changes run to run, which is exactly the bug that survives testing. The identical queries
-routed through a `con.cursor()` per thread were clean every time, so the engine underneath
+routed through a `con.cursor()` per thread were clean every time. Note the failure mode: an
+overlap here does not raise, it hands you another thread's rows — a missing or wrong number
+on screen rather than a traceback, which is what makes it easy to ship. So the engine underneath
 parallelises fine; only the Python-side result slot is shared.
 
 A query blocks the calling thread, so on the UI thread it freezes the UI. Push it to
@@ -172,7 +174,8 @@ Error: Table Function with name "read_xlsx" is not in the catalog, but it exists
 extension.` Left on, the message you get instead blames the wrong thing entirely, because the
 install directory is `~/.duckdb/extensions/…` and `~` comes from the `home_directory` setting
 or `$HOME`: with neither set, the attempt dies before the download starts with `Can't find the
-home directory at ''`.
+home directory at ''`. Set it yourself with `SET home_directory='<a writable dir>'` if you need
+the attempt to get further — whether Flet exports `HOME` on device was not checked here.
 
 Neither platform can serve a usable download anyway, for opposite reasons:
 
@@ -188,7 +191,7 @@ Neither platform can serve a usable download anyway, for opposite reasons:
 
 ### App size
 
-Expect roughly 16–20 MB of compressed wheel and 47–63 MB unpacked per architecture, and the
+Expect roughly 15.5–20 MB of compressed wheel and 47–63 MB unpacked per architecture, and the
 engine is essentially all of it. Cleanup buys nothing: the largest removable item in the whole
 wheel is `duckdb/experimental`, about 400 KB.
 
