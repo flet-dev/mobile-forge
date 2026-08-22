@@ -71,10 +71,10 @@ Above the checks it reports what a phone answers differently from a laptop:
 
 Two shapes in the source are there because getting them wrong fails quietly:
 
-- **The server is parked in a module-level dict, not left in `main`'s locals.**
+- **The server is parked in a module-level dict, not left in `start`'s locals.**
   `grpc._server._Server.__del__` sets a `server_deallocated` flag that the serving thread
   acts on, so a server whose last reference was a local variable stops serving shortly after
-  `main` returns — and every later call comes back `UNAVAILABLE … failed to connect to all
+  `start` returns — and every later call comes back `UNAVAILABLE … failed to connect to all
   addresses`, naming the address rather than the mistake. Measured: without the reference the
   initial render is green and every run after it collapses to `UNAVAILABLE`.
 - **The work runs in
@@ -116,4 +116,4 @@ on Android — `flet build` grants `android.permission.INTERNET` by default.
 
 What this app deliberately does **not** settle is whether hostname resolution works: a
 `127.0.0.1` literal skips DNS entirely. See the DNS bullet in the
-[recipe README](../../README.md#android-notes).
+[recipe README](../../README.md#android).

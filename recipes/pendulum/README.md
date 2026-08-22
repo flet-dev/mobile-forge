@@ -76,7 +76,9 @@ Android takes**, on a Darwin ABI.
 
 So write the zone into the call. Where what you want is the device's own offset rather than
 a named zone, take it from libc with `datetime.datetime.now().astimezone()`, which does not
-go through `zoneinfo` at all and cannot be defeated by a missing `/etc/localtime`. Keep
+go through `zoneinfo` at all. (On Android that also makes it immune to a missing
+`/etc/localtime`; whether the same holds inside an iPhone sandbox is untested — see Coverage
+gaps.) Keep
 stored instants in UTC and convert for display; a stored wall clock means nothing without
 the zone it was written in.
 
@@ -108,20 +110,20 @@ past a narrow catch, and [Things to know](#things-to-know) says why.
 
 ### App size
 
-**313–354 KB to download and 887–932 KB unpacked** across the six slices a Flet app can
+**320–362 KB to download and 905–952 KB unpacked** across the six slices a Flet app can
 actually use, and half of it is the extension. (The legacy 3.12-only `android_24_x86` slice
-is the outlier at 367 KB / 942 KB.) The rest is 400 KB of Python — 192 KB of it the 29 locale
-packages — and a 40 KB `dist-info`.
+is the outlier at 376 KB / 964 KB.) The rest is 409 KB of Python — 197 KB of it the 31 locale
+packages — and a 41 KB `dist-info`.
 
 Then add the dependencies, which are the larger half of the bill: unpacked, `tzdata` is
-502 KB (627 files — 598 `TZif` zone binaries, seven text indexes such as `zones` and
-`zone.tab`, and 22 `.py`), `dateutil` 418 KB and `six.py` 34 KB. Staged the way Android
+516 KB (627 files — 598 `TZif` zone binaries, seven text indexes such as `zones` and
+`zone.tab`, and 22 `.py`), `dateutil` 428 KB and `six.py` 35 KB. Staged the way Android
 packages them — byte-compiled to `.pyc` with the sources stripped — pendulum and its three
-dependencies together came to **1.9 MB** in a stored zip. Flet's default
+dependencies together came to about **2.0 MB** in a stored zip. Flet's default
 [package cleanup](https://flet.dev/docs/publish/#compilation-and-cleanup) removes
 `_pendulum.pyi` and `py.typed`, which nothing reads at runtime.
 
-At under two megabytes the Android levers — an app bundle, split APKs, or a narrowed
+At around two megabytes the Android levers — an app bundle, split APKs, or a narrowed
 [`target_arch`](https://flet.dev/docs/publish/android/#supported-target-architectures) — are
 worth reaching for because of what else is in the app, not because of this.
 
@@ -229,7 +231,7 @@ side by side, and the [`dst-clock`](examples/dst-clock) example does.
   `PreciseDiff(years=0, months=3, days=8, …)` and its pure-Python twin prints
   `0 years 3 months 8 days …`. Put a `precise_diff` result straight into an f-string and
   `armeabi-v7a` renders a different string from `arm64-v8a`; read the fields instead. It also
-  means `armeabi-v7a` carries 475 KB of extension — more than `arm64-v8a`'s 459 KB — and uses
+  means `armeabi-v7a` carries 485 KB of extension — more than `arm64-v8a`'s 468 KB — and uses
   less of it than any 64-bit slice does.
 
 - **ISO-8601 and RFC-3339 output are not the same string.** For a UTC value,
@@ -239,7 +241,7 @@ side by side, and the [`dst-clock`](examples/dst-clock) example does.
 
 - **Localisation is fully offline.** 29 locale packages ship in the wheel — `bg cs da de en
   en_gb en_us es fa fo fr he hi id it ja ko lt nb nl nn pl pt_br ru sk sv tr ua zh` — and they
-  cost 192 KB of the 900 KB unpacked payload. `dt.format("dddd D MMMM YYYY", locale="fr")`
+  cost 197 KB of the 919 KB unpacked payload. `dt.format("dddd D MMMM YYYY", locale="fr")`
   gives `dimanche 29 mars 2026`, and
   `pendulum.now().subtract(minutes=95).diff_for_humans(locale="es")` gives `hace 1 hora`. An
   unrecognised name does **not** fall back to English — it raises
@@ -314,12 +316,12 @@ README promises is invisible to a green build.
 
   | slice | wheel | unpacked | the `.so` alone |
   | --- | --- | --- | --- |
-  | Android arm64-v8a | 335 KB | 900 KB | 459 KB |
-  | Android armeabi-v7a | 354 KB | 917 KB | 475 KB |
-  | Android x86_64 | 346 KB | 932 KB | 492 KB |
-  | iOS arm64 (device) | 313 KB | 900 KB | 459 KB |
-  | iOS arm64 (simulator) | 316 KB | 887 KB | 446 KB |
-  | iOS x86_64 (simulator) | 328 KB | 888 KB | 447 KB |
+  | Android arm64-v8a | 342 KB | 919 KB | 468 KB |
+  | Android armeabi-v7a | 362 KB | 937 KB | 485 KB |
+  | Android x86_64 | 353 KB | 952 KB | 501 KB |
+  | iOS arm64 (device) | 320 KB | 905 KB | 453 KB |
+  | iOS arm64 (simulator) | 323 KB | 908 KB | 457 KB |
+  | iOS x86_64 (simulator) | 335 KB | 909 KB | 458 KB |
 
   Every slice checked is 127 files. Of the 40 KB `dist-info`, 22 KB is a CycloneDX SBOM naming
   the 19 Rust crates the extension was built from. The locale list, the crate count and the

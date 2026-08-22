@@ -26,10 +26,11 @@ dependencies = [
 or `cpdist`.** Those two `import numpy` inside their own function bodies, so an app without it
 installs, imports and searches — and then raises `ModuleNotFoundError: No module named 'numpy'`
 from a handler the first time someone touches that code path. Every other API works without it.
-Adding numpy also raises the floor of your `requires-python` to `>=3.11`, which is numpy's own
-floor: leave it at the `>=3.10` that `flet create` writes and `flet build` stops with *No solution
-found when resolving dependencies for split*. The [example](examples/fuzzy-search) does exactly
-this.
+If you pin numpy with `==`, raise your `requires-python` to `>=3.11` to match numpy's own
+floor: uv resolves every version in the range, so an `==` pin against a `>=3.10` floor makes the
+lowest split unsatisfiable and `flet build` stops with *No solution found when resolving
+dependencies for split*. A bare `numpy`, as above, resolves per split and needs no change. The
+[example](examples/fuzzy-search) pins, and raises its floor accordingly.
 
 ## Examples
 
@@ -172,7 +173,7 @@ two workers landing on the same rows; read the flag back before dispatching.
 Approximately 1.2–2.0 MB compressed and 4.5–4.9 MB unpacked per ARM slice, about 94% of it the
 five compiled extensions — so [`[tool.flet.cleanup]`](https://flet.dev/docs/publish/#compilation-and-cleanup)
 has nothing here worth removing. Android carries one more thing, the C++ runtime those extensions
-link, which is another 0.9–1.3 MB depending on ABI. The x86_64 emulator slice is more than twice
+link, which is another 0.8–1.3 MB depending on ABI. The x86_64 emulator slice is more than twice
 the size of an ARM one (see [Android](#android)), but it never ships to a user.
 
 On Android, use an app bundle, split APKs, or narrow

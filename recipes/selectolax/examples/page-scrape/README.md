@@ -1,6 +1,6 @@
 # selectolax page scrape
 
-One screen that parses a 1,186-byte HTML page bundled inside `main.py` — no network, no
+One screen that parses a 1,186-byte HTML page bundled in `markup.py` — no network, no
 assets — turns it into records, and reports what the parser had to repair to get there.
 A text field runs any CSS selector you type against the tree, six preset chips fill it in,
 and a segmented button switches between the two engines the wheel ships, `lexbor` and

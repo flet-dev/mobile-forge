@@ -75,7 +75,7 @@ What it demonstrates:
 All the figures above are **desktop** measurements (Apple M4, macOS 26.6, CPython 3.14.6,
 greenlet 3.5.1 from PyPI). The point of running the app is to replace them with the device's
 own. Read the iOS numbers with the caveat in the recipe's
-[iOS notes](../../README.md#ios-notes): the published iOS slices are compiled without
+[iOS notes](../../README.md#ios): the published iOS slices are compiled without
 optimisation, and the same flags reproduced on this desktop moved the switch pair from
 228 ns to 1,601 ns and the depth-1,000 row from 6,768 ns to 16,940.
 

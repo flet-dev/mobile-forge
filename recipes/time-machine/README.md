@@ -151,8 +151,9 @@ both reach the clock through the `time` module.
 
 **`time.ctime()` and `time.asctime()` do not follow, and they sit one line away from things
 that do.** Frozen at 2001-09-09, `time.strftime("%Y")` returned `2001` while `time.ctime()`
-returned the real `Thu Aug 20 10:30:13 2026` in the same block. CPython's `ctime()` reads the
-clock without going through the `time` module at all, so there is no method pointer to swap.
+returned the real `Thu Aug 20 10:30:13 2026` in the same block. `ctime` sits in the same module method table as the
+nine functions that *are* patched, so a pointer to swap does exist — upstream simply does not
+assign it, and `ctime` goes on reading the system clock.
 Anything logging or rendering through `ctime` is quietly telling the truth while the rest of
 your app is not — and neither name appears in upstream's
 [unmocked time sources](https://time-machine.readthedocs.io/en/latest/usage.html#unmocked-time-sources)
