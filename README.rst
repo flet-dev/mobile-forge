@@ -283,6 +283,45 @@ is reviewed in the same pull request and bumped in the same commit as the recipe
        mobile one, and what to validate on a device because of it.
     #. ``## Things to know`` — bulleted gotchas and recommendations; the last consumer-facing
        section. State what breaks and the symptom it produces, not just the rule.
+
+       This is also where a **licence note** goes, when one is warranted. Every wheel already
+       carries its licence text at ``<dist-info>/licenses/`` and names it in the metadata, so
+       a reader can always check for themselves::
+
+           unzip -p <wheel> '*.dist-info/METADATA' | grep -i license
+
+       Label it ``- **Licensing:** …`` rather than opening with a claim the way the bullets
+       around it do. A licence is something a reader goes *looking* for, unlike a gotcha they
+       discover, so it wants to be findable in the same place and under the same word in every
+       recipe.
+
+       A note earns its place when the answer is not what the package's own badge suggests.
+       Two cases: the package is copyleft (``pymupdf`` is AGPL-3.0; ``zeroconf``, ``pymssql``
+       and ``psycopg2`` are LGPL), or — the one a reader cannot possibly discover — the
+       package is permissive but the wheel carries a copyleft library behind it. ``pyzbar``
+       is MIT and ships LGPL zbar and libiconv; ``pillow`` is MIT-CMU and ships FreeType,
+       whose FTL arm asks for an acknowledgement in the final product. Neither appears in the
+       package's own metadata, because the dependency is an artifact of how we build it.
+       Say what it is, say what the app author has to do (often nothing), and say plainly
+       that it is a flag rather than legal advice. Skip it where the obligation is inert —
+       file-level copyleft such as MPL-2.0 asks nothing of someone who does not modify the
+       package, and a note there is noise.
+
+       Link the identifier to its canonical SPDX page
+       (``https://spdx.org/licenses/<identifier>.html``), the sibling ``flet-lib*`` recipe when
+       one is named — that is where its expression is declared, reasoning and all — and, where
+       there is an actionable next step, the thing to act on: PyMuPDF's note links Artifex's
+       commercial licensing page, which is what a closed-source shipper actually needs.
+
+       **Do not link the upstream project's own LICENSE file.** For a good share of these it is
+       not the licence of our wheel: libiconv's repository ``COPYING`` is GPL-3.0, covering the
+       ``iconv`` program the build deletes; GitHub's licence API reports GPL-2.0 for FreeTDS
+       because it picks the first ``COPYING*``; libtiff 4.7.0's ``LICENSE.md`` omits a grant that
+       is compiled in. A link that is wrong a third of the time is worse than none, and it rots
+       on the next bump. The authoritative text for what we ship is inside the wheel, at
+       ``<dist-info>/licenses/``, which the note already names. Third-party summary sites
+       (choosealicense, tldrlegal) are not authoritative and disclaim as much — they do not
+       belong on a page that has just said it is not giving legal advice.
     #. ``## Build notes (maintainers)`` — the only maintainer-facing section, and the reason
        it is explicitly labelled: everything above it addresses the app author. Give it
        ``###`` subsections: ``Recipe shape`` (why it is built this way, and what was tried
@@ -329,6 +368,16 @@ is reviewed in the same pull request and bumped in the same commit as the recipe
     a range ("approximately 40–41 MB compressed") to false precision, and spend the words on
     what the reader should *do*. A recipe page that runs much past two hundred lines is
     usually a report wearing a manual's headings.
+
+    **The test for whether something belongs at all: does being on a phone, in a Flet app,
+    change the answer?** If it does not, it is the upstream project's documentation and
+    belongs behind the link you already gave — not on a page a maintainer has to keep in sync
+    forever. An array's expected shape, the list of valid enum values, what a keyword argument
+    means: all true identically on a desktop, all already documented upstream. What earns its
+    place is what upstream cannot tell the reader — that one quality setting drops to a scalar
+    code path because no ARM device has AVX, that a file lands somewhere different under
+    Flet's app storage, that a call which is safe at a desk is not safe on a background
+    thread here. When a section starts reading like an API reference, that is the signal.
 
     Do not restate the recipe version — ``meta.yaml`` is the source of truth and prose goes
     stale on the first bump. Claims about the wheel should be checked against the wheel, and

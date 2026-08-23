@@ -410,6 +410,30 @@ never pad): H1 + a short pitch → `## Install` → `## Storage` → `## Example
 everything above it addresses the consumer). The full spec lives in README.rst §
 "Documenting a recipe" — that one is checked in and contributor-facing; keep them in sync.
 
+Two rules from that spec are worth repeating because they are the ones most often got wrong:
+
+- **Does being on a phone, in a Flet app, change the answer?** If not, it is the upstream
+  project's documentation and belongs behind the link you already gave. An array's expected
+  shape, the valid enum values, what a keyword argument means — all identically true on a
+  desktop, all already written upstream, and all a maintenance liability here. What earns its
+  place is what upstream cannot say: that a quality setting drops to a scalar path because no
+  ARM device has AVX, that a file lands elsewhere under Flet's app storage, that a call safe
+  at a desk is unsafe on a background thread. When a section starts reading like an API
+  reference, cut it.
+- **A licence note when the answer is not what the package's badge says.** Either the package
+  is copyleft, or — the case a reader cannot discover — it is permissive but the wheel carries
+  a copyleft library behind it: `pyzbar` is MIT and ships LGPL zbar, `pillow` is MIT-CMU and
+  ships FreeType. That dependency is an artifact of how *we* build it, so we are the only ones
+  who can say so. Label it `- **Licensing:** …` rather than opening with a claim like the
+  bullets around it — a licence is looked *for*, not stumbled on, so it should sit under the
+  same word in every recipe. Skip it where the obligation is inert (MPL-2.0 asks nothing of
+  someone who does not modify the package). Link the identifier to
+  `https://spdx.org/licenses/<id>.html`, the sibling `flet-lib*` recipe when one is named, and
+  the actionable thing where one exists (pymupdf links Artifex's commercial licensing page).
+  **Never link upstream's own LICENSE file** — for libiconv, FreeTDS and libtiff 4.7.0 it is
+  the wrong licence for our wheel, and it rots on the next bump. What we ship is in the wheel
+  at `dist-info/licenses/`.
+
 **`recipes/<name>/examples/<example>/`** — a runnable Flet app: `src/main.py` with
 `[tool.flet.app] path = "src"`, its own `pyproject.toml`, a short `README.md`, a
 `.gitignore`. Always `src/`, even for one file — with `path = "."` the whole directory is
