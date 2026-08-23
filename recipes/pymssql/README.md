@@ -235,6 +235,16 @@ machine's path.) Validate against the server on a device.
 - **A `with` block rolls back.** `connect()` defaults to `autocommit=False` and leaving the block
   closes the connection, which discards every uncommitted transaction — so a write not followed
   by `connection.commit()` is silently lost, the opposite of what that shape does with `sqlite3`.
+- **Licensing:** both halves are LGPL. pymssql itself is
+  [LGPL-2.1-or-later](https://spdx.org/licenses/LGPL-2.1-or-later.html), and the FreeTDS that
+  [`flet-libfreetds`](../flet-libfreetds) statically links into its extension is
+  **[LGPL-2.0-or-later](https://spdx.org/licenses/LGPL-2.0-or-later.html)** — the 1991 *Library*
+  GPL, not 2.1, which is easy to misread. FreeTDS also ships plain-GPL code under `src/pool` and
+  `src/apps`; this build excludes both, so none of it is in the wheel. Because FreeTDS is linked
+  statically there is no separate library file to replace, which is what LGPL section 6 asks for
+  in a closed-source app; section 6a (shipping your object files) is the usual answer where it
+  matters. Both licence texts ship in the wheel under `dist-info/licenses/`. Flagging it, not
+  advising you — we are not lawyers.
 
 ## Build notes (maintainers)
 

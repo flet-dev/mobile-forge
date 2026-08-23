@@ -244,6 +244,16 @@ TLS or reads a version on a device or emulator/simulator before believing it.
   `register_hstore` is not local — it reads an OID out of the server's catalog, so it *requires*
   a connection argument, and `register_hstore(None)` raises `ProgrammingError: no connection or
   cursor provided`.
+- **Licensing:** [LGPL-3.0-or-later](https://spdx.org/licenses/LGPL-3.0-or-later.html) *with
+  exceptions*, and the exceptions are the point. Upstream adds explicit permission to link against
+  OpenSSL and other libraries whose licences would otherwise conflict — so the awkward combination
+  this driver is usually in is already resolved by its own licence. The `libpq` folded into
+  `_psycopg.so` — built by [`flet-libpq`](../flet-libpq) — is under the permissive
+  [PostgreSQL licence](https://spdx.org/licenses/PostgreSQL.html) and asks nothing further. What
+  remains is the ordinary LGPL section 6 relinking question for a closed-source app; section 6a
+  (shipping your object files) is the usual answer where it matters. Read the exceptions before
+  assuming the general LGPL advice applies unchanged. Flagging it, not advising you — we are not
+  lawyers.
 
 ## Build notes (maintainers)
 

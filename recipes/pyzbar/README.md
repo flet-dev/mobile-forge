@@ -235,6 +235,17 @@ entirely the statically folded-in libiconv.
   thing these wheels drop that PyPI's ships, which is most of why they are half the size.)
   Nothing to do about it — mentioned so a payload audit does not look wrong, and so nobody
   tries `import pyzbar.tests`.
+- **Licensing:** pyzbar is MIT, but the payload is not. [`flet-libzbar`](../flet-libzbar), the
+  library it actually decodes with, is
+  **[LGPL-2.1-or-later](https://spdx.org/licenses/LGPL-2.1-or-later.html)**, and on Android the
+  [`flet-libiconv`](../flet-libiconv) behind it is **LGPL-2.1-or-later** too. They arrive
+  differently: zbar is a separate `.so` the wrapper `dlopen`s, while libiconv is folded statically
+  into it. Neither is visible from pyzbar's own metadata, which is why it is stated here. Each
+  wheel carries its licence text under `dist-info/licenses/`. For an open-source app there is
+  nothing to do. For a closed-source one, LGPL section 6 asks that a user be able to relink your
+  app against their own build of the library; a `.so` sealed inside a signed APK or IPA does not
+  offer that on its own, and section 6a (shipping your object files) is the usual answer where it
+  matters. Flagging it, not advising you — we are not lawyers.
 
 ## Build notes (maintainers)
 

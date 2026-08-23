@@ -195,10 +195,10 @@ wall one library earlier.
   different OPAQUE library has to match both the suite and the password-hashing function;
   interoperability is not automatic.
 
-- **The licence is LGPL-3.0-or-later, and the metadata disagrees with itself.** The SPDX header in
-  `opaque/__init__.py` says `LGPL-3.0-or-later` and the repository's `LICENSE` carries the LGPLv3
-  text; the PyPI metadata's `License` field says `GPLv3` and its classifier LGPLv3+. Read the
-  header.
+- **Licensing:** [LGPL-3.0-or-later](https://spdx.org/licenses/LGPL-3.0-or-later.html), and the
+  metadata disagrees with itself. The SPDX header in `opaque/__init__.py` says `LGPL-3.0-or-later`
+  and the repository's `LICENSE` carries the LGPLv3 text; the PyPI metadata's `License` field says
+  `GPLv3` and its classifier LGPLv3+. Read the header.
 
 ## Build notes (maintainers)
 

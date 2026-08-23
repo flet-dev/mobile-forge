@@ -159,6 +159,13 @@ behavior on a device or emulator/simulator.
   [`insert_htmlbox`](https://pymupdf.readthedocs.io/en/latest/page.html#Page.insert_htmlbox),
   which selects a font containing the glyph, or embed one explicitly with
   [`insert_font`](https://pymupdf.readthedocs.io/en/latest/page.html#Page.insert_font).
+- **Licensing:** [AGPL-3.0](https://spdx.org/licenses/AGPL-3.0.html). That is upstream's deliberate choice, not an accident:
+  [Artifex](https://artifex.com/licensing/) sells a commercial PyMuPDF licence precisely so
+  closed-source products can use it, and the AGPL is the other half of that business model.
+  Shipping it in an app you do not publish the source of is the case the commercial licence exists
+  for — take it up with Artifex before release rather than after. For an open-source app under a
+  compatible licence, nothing to do. The licence text ships in the wheel under
+  `dist-info/licenses/`. Flagging it, not advising you — we are not lawyers.
 
 ## Build notes (maintainers)
 

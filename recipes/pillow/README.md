@@ -278,6 +278,16 @@ way in your own code: derive font and image paths from `FLET_ASSETS_DIR`, not fr
   people leave in from a desktop script. `ImageTk` needs tkinter, `ImageQt` needs Qt and
   `ImageWin` is Windows-only. `EpsImagePlugin` can *write* EPS, but rendering one back needs
   a Ghostscript binary that is not on the device.
+- **Licensing:** Pillow is [MIT-CMU](https://spdx.org/licenses/MIT-CMU.html), but FreeType comes
+  with a small attribution obligation. The text rendering comes from
+  [`flet-libfreetype`](../flet-libfreetype), which is dual-licensed
+  **[FTL](https://spdx.org/licenses/FTL.html) or
+  [GPL-2.0-or-later](https://spdx.org/licenses/GPL-2.0-or-later.html)** — you take the FTL arm, as
+  essentially every product does, and the GPL arm never applies. The FTL is permissive with one
+  active condition: credit FreeType in the documentation of the final product. An
+  "Acknowledgements" line in an about screen or store listing satisfies it.
+  [`flet-libjpeg`](../flet-libjpeg), the other native dependency, is permissive with nothing to
+  do. Both ship their licence text under `dist-info/licenses/`.
 
 ## Build notes (maintainers)
 

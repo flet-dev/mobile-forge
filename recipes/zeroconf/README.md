@@ -203,6 +203,15 @@ discovery that works perfectly there tells you nothing about either phone.
   service until its TTL expires. A suspended app runs no code and refreshes no announcements,
   so tie discovery to
   [`page.on_app_lifecycle_state_change`](https://flet.dev/docs/controls/page/#flet.Page.on_app_lifecycle_state_change).
+- **Licensing:** [LGPL-2.1-or-later](https://spdx.org/licenses/LGPL-2.1-or-later.html), including
+  the compiled accelerators. Unlike most native recipes here it links no separate C library — the
+  extension modules are Cython-compiled from zeroconf's own LGPL sources, so the licence covers
+  the whole package rather than a dependency hiding behind it. For an open-source app that is the
+  end of it. For a closed-source one, LGPL section 6 asks that a user be able to relink your app
+  against their own build; compiled modules inside a signed APK or IPA do not offer that on their
+  own, and section 6a (shipping your object files) is the usual answer where it matters. The
+  licence text ships in the wheel under `dist-info/licenses/`. Flagging it, not advising you — we
+  are not lawyers.
 
 ## Build notes (maintainers)
 
