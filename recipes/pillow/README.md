@@ -203,6 +203,27 @@ way in your own code: derive font and image paths from `FLET_ASSETS_DIR`, not fr
 
 ## Things to know
 
+- **Pillow publishes its own iOS wheels, and an unpinned dependency can give your app a
+  different Pillow on each platform.** PyPI carries official
+  [`ios_13_0_*` wheels](https://pypi.org/project/pillow/#files) for CPython 3.13 and newer,
+  and **no Android wheels at all**. A bare `"pillow"` therefore resolves upstream's build on
+  an iOS leg — where it is newer, so it wins on version — and this index's build on Android.
+  Upstream's is the fuller one: it statically links JPEG 2000, libtiff, WebP, AVIF and
+  LittleCMS, ships eight extension modules against this wheel's five, and is roughly 4.2 MB
+  where this one is 1.3 MB. The failure mode is a phone-only bug that never reproduces on the
+  other phone — `Image.open("photo.webp")` succeeding on iOS and raising on Android, from one
+  codebase and one dependency line.
+
+  Pin the version if you want one Pillow everywhere:
+
+  ```toml
+  dependencies = ["flet", "pillow==<the version in this recipe's meta.yaml>"]
+  ```
+
+  At an equal version this index wins: its wheels carry a build tag and PyPI's do not, and a
+  build tag outranks its absence. Verified on 2026-08-23 — with the pin, an iOS 3.14 app
+  bundles this wheel even though PyPI offers the same version for that slice.
+
 - **Two codecs, and that is the whole list.**
   [`PIL.features.get_supported_codecs()`](https://pillow.readthedocs.io/en/stable/reference/features.html#PIL.features.get_supported_codecs)
   returns `['jpg', 'zlib']` on device, where the desktop PyPI wheel of the same version

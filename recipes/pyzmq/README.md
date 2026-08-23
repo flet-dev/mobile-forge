@@ -151,6 +151,28 @@ instead of blocking it. That path is verified here on desktop only.
 
 ## Things to know
 
+- **pyzmq publishes its own Android wheels, and an unpinned dependency can give your app a
+  different pyzmq on each platform.** PyPI carries official
+  [`android_24_*` wheels](https://pypi.org/project/pyzmq/#files) for CPython 3.13 and newer —
+  arm64-v8a and x86_64 only, **no armeabi-v7a and no iOS at all**. So a bare `"pyzmq"` can
+  resolve upstream's build on Android and this index's on iOS, and drop your 32-bit Android
+  devices in the process.
+
+  The two are built differently in a way that matters here. Upstream vendors its own
+  `libc++_shared-<hash>.so` inside the wheel, the way `auditwheel` repairs a Linux wheel; this
+  recipe instead declares [`flet-libcpp-shared`](https://pypi.flet.dev/flet-libcpp-shared/) and
+  shares the single copy Flet already puts in the APK. Upstream's wheel is about 1.1 MB against
+  this one's 0.6 MB, and the difference is mostly that second C++ runtime.
+
+  Pin the version if you want one pyzmq everywhere:
+
+  ```toml
+  dependencies = ["flet", "pyzmq==<the version in this recipe's meta.yaml>"]
+  ```
+
+  At an equal version this index wins: its wheels carry a build tag and PyPI's do not, and a
+  build tag outranks its absence.
+
 - **One socket used from two threads is a crash, not an exception.** Handing a socket over to
   another thread and never touching it again is legal; two threads using it at once is not, and
   the failure is a native abort with no traceback. When a helper can be reached from more than
