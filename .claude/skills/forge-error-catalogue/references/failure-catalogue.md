@@ -2000,6 +2000,48 @@ face3d, still counts as pure.)
 
 ---
 
+### `<pkg>: no licence file found, so this wheel would ship the library's object code with no notice`
+
+**Cause:** a `build.sh` recipe's wheel is synthesised by forge, so nothing carries a
+licence into it unless forge finds one. It looks for a **top-level** file in the source
+or recipe directory whose name starts with `LICEN[CS]E` / `COPYING` / `COPYRIGHT` /
+`NOTICE` (any case) and, finding none, **fails the build**. Every licence in this tree
+requires its notice to accompany the binary, and a warning here proved worthless — it sat
+unread in a thousand-line log on a job that exits 0, which is how every `flet-lib*` wheel
+shipped with no notice at all for years while CI stayed green.
+
+**You will almost always hit this on a VERSION BUMP**, not a new recipe: upstream renamed
+or relocated its notice (`LICENSE` → `LICENSES/`, or into a subdirectory). That is exactly
+the moment worth stopping, because the alternative is silently shipping a violation.
+
+**Fix:** point at the real file — a path, or a list of them, resolved against the source
+then the recipe directory:
+
+```yaml
+about:
+  license_file: docs/FTL.TXT          # or: [COPYING, modules/oniguruma/COPYING]
+```
+
+Setting it **replaces** auto-discovery, which is also how you *exclude* a notice covering
+something the wheel doesn't contain (libiconv's top-level `COPYING` is the GPL for the
+`iconv` program build.sh deletes; only `COPYING.LIB` applies to the library). A recipe with
+genuinely nothing to ship opts out explicitly, next to a comment saying why:
+
+```yaml
+about:
+  license_file: []                    # deliberately none -- <reason>
+```
+
+Note an **unset** `license_file` still means "discover for me" — only an empty **list** is
+the opt-out.
+
+**Related:** `about.license_file` naming a file that isn't there raises too (a typo or a
+moved file, not a preference). Changing licence metadata does not reach pypi.flet.dev until
+the recipe's **build number is bumped** — see `forge-ci` § Deploying, "Bump before
+republishing". Full authoring guidance in `new-mobile-recipe` § 3.5b.
+
+---
+
 ## Diagnostic snippets
 
 ### Inspect a wheel's contents

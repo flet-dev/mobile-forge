@@ -336,6 +336,12 @@ opt-out. On success the log prints `Bundling licence file: …`.
 Scope the expression to what the wheel *contains*: libiconv ships `COPYING` (GPL, for the
 `iconv` program) beside `COPYING.LIB` (LGPL, for the library we actually build).
 
+**Changing licence metadata on an already-published recipe does nothing until the build
+number is bumped** — the re-publish 409-skips otherwise, so the fix never reaches
+pypi.flet.dev. This is easy to miss precisely because the metadata edit needs no version
+change. See `forge-ci` § Deploying, "Bump before republishing"; the error the *build* side
+produces is catalogued in `forge-error-catalogue` § "no licence file found".
+
 ### 3.6 — Cross-cutting conventions from the ML wave (CMake-heavy recipes)
 
 - **Version as a Jinja constant.** A bare `{% set version = "X.Y.Z" %}` as the first line, reused in `package.version` AND `source.url` — bumps become one-line edits. See `recipes/faiss-cpu/meta.yaml`; onnxruntime uses the same idiom.
