@@ -10,10 +10,14 @@ package:
   version: '{{ version }}'
 
 build:
-  number: 10
+  number: 11
 
 source:
   url: https://download.gnome.org/sources/libxml2/{{ version.rsplit('.', 1)[0] }}/libxml2-{{ version }}.tar.xz
 
 patches:
   - {{ patch }}
+
+about:
+  # The Copyright file excepts dict.c and list.c, both of which are always built.
+  license: MIT AND ISC-Veillard

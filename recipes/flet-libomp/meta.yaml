@@ -19,8 +19,19 @@ package:
   version: "27.3.13750724"
 
 build:
-  number: 2
+  number: 3
 
 # No upstream archive: build.sh produces its own libomp — copied from the NDK on
 # Android, generated as a serial stub on iOS.
 source: null
+
+about:
+  # The two platforms ship different code, so the licence is per-SDK rather than one
+  # expression: Android carries LLVM's libomp.so out of the NDK, while iOS carries the
+  # serial stub build.sh generates, which is this repo's own code. `AND` would be wrong
+  # — no single wheel contains both.
+# {% if sdk == 'android' %}
+  license: Apache-2.0 WITH LLVM-exception
+# {% else %}
+  license: BSD-3-Clause
+# {% endif %}

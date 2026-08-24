@@ -8,7 +8,7 @@ source:
   url: https://github.com/OSGeo/gdal/releases/download/v{{ version }}/gdal-{{ version }}.tar.gz
 
 build:
-  number: 1
+  number: 2
 
 requirements:
   build:
@@ -18,3 +18,9 @@ requirements:
 
 patches:
   - mobile.patch
+
+# No `about.license`, deliberately: the core is MIT but the wheel is not MIT-only.
+# GDAL_BUILD_OPTIONAL_DRIVERS=OFF does not disable GTiff, and the cross build
+# forces internal libtiff/libgeotiff/libjpeg/zlib/json-c/qhull/LercLib, which
+# LICENSE.TXT does not enumerate. Compose it from a real build's CMake configure
+# summary before setting one. LICENSE.TXT ships either way.

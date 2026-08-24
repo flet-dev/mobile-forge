@@ -9,7 +9,7 @@ source:
   url: https://www.freetds.org/files/stable/freetds-{{ version }}.tar.gz
 
 build:
-  number: 1
+  number: 2
   script_env:
     # OpenSSL (for TLS) comes from the python-build support tree, surfaced by the
     # `openssl` host requirement at {platlib}/opt (same as cryptography).
@@ -18,3 +18,9 @@ build:
 requirements:
   host:
     - openssl ^3.0.12
+
+about:
+  # COPYING_LIB.txt is the 1991 *Library* GPL v2, not 2.1. The plain-GPL
+  # notices cover src/pool and src/apps, which --disable-apps/server/pool
+  # excludes -- so GitHub's whole-repo answer of GPL-2.0 is wrong for this wheel.
+  license: LGPL-2.0-or-later

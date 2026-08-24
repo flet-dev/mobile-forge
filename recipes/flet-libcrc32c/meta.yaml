@@ -5,7 +5,7 @@ package:
   version: '{{ version }}'
 
 build:
-  number: 10
+  number: 11
 
 source:
   url: https://github.com/google/crc32c/archive/refs/tags/{{ version }}.tar.gz
@@ -13,3 +13,6 @@ source:
 requirements:
   build:
     - cmake
+
+about:
+  license: BSD-3-Clause
