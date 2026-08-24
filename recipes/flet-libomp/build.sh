@@ -30,7 +30,7 @@ android)
     # No upstream archive, so nothing carries a licence into the wheel on its own.
     # This is LLVM's runtime, under Apache-2.0 WITH LLVM-exception; take the notice
     # from the same NDK the .so was copied from so the two can never drift. Named
-    # LICENSE so it shadows the recipe's own copy, which covers only the iOS stub
+    # LICENSE so it shadows the recipe's own, which covers only the iOS stub
     # below — the two platforms ship different code under different licences.
     cp "$toolchain/NOTICE" ./LICENSE
     ;;
