@@ -1,0 +1,136 @@
+Register GDAL's drivers in every extension that looks a driver name up, so
+rasterio works on iOS where each extension links its own copy of GDAL.
+
+`flet-libgdal` ships only `libgdal.a` on iOS — no shared library, and no
+`flet-lib*` on this index ships one. Each rasterio extension therefore links
+its own complete copy of GDAL, and each copy has its own driver registry.
+`rasterio.Env()` lives in `_env` and calls `GDALAllRegister()` there; but
+`rasterio.open()` resolves the driver name in `_base` (`GDALGetDriverByName`,
+`_base.pyx:106`) and `_io` does its own lookup at `_io.pyx:1429`, and neither
+of those registries is ever populated. The result is the symptom that makes
+the package useless on iOS:
+
+    DriverRegistrationError: ('No such driver registered: %s', b'GTiff')
+
+raised in the same process that has just listed GTiff among its registered
+drivers — because the listing came from `_env`'s registry and the lookup went
+to `_base`'s.
+
+Counting call sites rather than definitions makes it unambiguous; every one of
+these extensions *defines* the registration symbols, which is why `nm` alone
+misleads. `otool -tV`, iOS arm64:
+
+    gdal      _ogr    GDALAllRegister x2, OGRRegisterAll x2, GDALRegister_GTiff x1
+    rasterio  _env    GDALAllRegister x1, OGRRegisterAll x1, GDALRegister_GTiff x1
+    rasterio  _io     none
+    rasterio  _base   none
+
+`osgeo.gdal` escapes the bug for exactly this reason: its `_ogr` registers and
+does the work in one extension.
+
+`GDALAllRegister()` is idempotent, so on Android — where a single shared
+`libgdal.so` means there was only ever one registry — this changes nothing.
+
+What it does NOT do: the copies stay separate GDAL instances, so configuration
+set through `rasterio.Env()` still does not reach `_base` or `_io`. This turns
+"cannot open a file at all" into "opens files, with per-extension config". The
+complete fix is a shared libgdal for iOS.
+
+Only in rasterio-1.5.0: AUTHORS.txt
+Only in rasterio-1.5.0: CHANGES.txt
+Only in rasterio-1.5.0: LICENSE.txt
+Only in rasterio-1.5.0: PKG-INFO
+Only in rasterio-1.5.0: README.rst
+Only in rasterio-1.5.0: docs
+Only in rasterio-1.5.0: examples
+Only in rasterio-1.5.0: pyproject.toml
+Only in rasterio-1.5.0/rasterio: __init__.py
+Only in rasterio-1.5.0/rasterio: _base.pxd
+diff -ru orig/rasterio/_base.pyx rasterio-1.5.0/rasterio/_base.pyx
+--- a/rasterio/_base.pyx	2026-08-25 22:54:38
++++ b/rasterio/_base.pyx	2026-08-25 22:54:10
+@@ -53,6 +53,14 @@
+ 
+ include "gdal.pxi"
+ 
++# Each extension links its own copy of GDAL when libgdal is a static archive
++# (iOS), so the driver registry `_env` populates is not the one this module
++# looks names up in — GDALGetDriverByName below then fails with "No such
++# driver registered". Registering here makes this module's own registry
++# usable. GDALAllRegister is idempotent, so this is a no-op on Android, where
++# a single shared libgdal.so means there was only ever one registry.
++GDALAllRegister()
++
+ log = logging.getLogger(__name__)
+ 
+ 
+Only in rasterio-1.5.0/rasterio: _env.pxd
+Only in rasterio-1.5.0/rasterio: _env.pyx
+Only in rasterio-1.5.0/rasterio: _err.pxd
+Only in rasterio-1.5.0/rasterio: _err.pyx
+Only in rasterio-1.5.0/rasterio: _example.pyx
+Only in rasterio-1.5.0/rasterio: _features.pxd
+Only in rasterio-1.5.0/rasterio: _features.pyx
+Only in rasterio-1.5.0/rasterio: _filepath.pxd
+Only in rasterio-1.5.0/rasterio: _filepath.pyx
+Only in rasterio-1.5.0/rasterio: _fill.pyx
+Only in rasterio-1.5.0/rasterio: _io.pxd
+diff -ru orig/rasterio/_io.pyx rasterio-1.5.0/rasterio/_io.pyx
+--- a/rasterio/_io.pyx	2026-08-25 22:54:38
++++ b/rasterio/_io.pyx	2026-08-25 22:54:10
+@@ -57,6 +57,10 @@
+ 
+ np.import_array()
+ 
++# Same reason as _base.pyx: this module calls GDALGetDriverByName itself, so
++# with a static libgdal it needs its own registry populated. Idempotent.
++GDALAllRegister()
++
+ log = logging.getLogger(__name__)
+ 
+ 
+Only in rasterio-1.5.0/rasterio: _path.py
+Only in rasterio-1.5.0/rasterio: _show_versions.py
+Only in rasterio-1.5.0/rasterio: _transform.pyx
+Only in rasterio-1.5.0/rasterio: _vendor
+Only in rasterio-1.5.0/rasterio: _version.pxd
+Only in rasterio-1.5.0/rasterio: _version.pyx
+Only in rasterio-1.5.0/rasterio: _vsiopener.pxd
+Only in rasterio-1.5.0/rasterio: _vsiopener.pyx
+Only in rasterio-1.5.0/rasterio: _warp.pxd
+Only in rasterio-1.5.0/rasterio: _warp.pyx
+Only in rasterio-1.5.0/rasterio: abc.py
+Only in rasterio-1.5.0/rasterio: cache.pyx
+Only in rasterio-1.5.0/rasterio: control.py
+Only in rasterio-1.5.0/rasterio: coords.py
+Only in rasterio-1.5.0/rasterio: crs.pxd
+Only in rasterio-1.5.0/rasterio: crs.pyx
+Only in rasterio-1.5.0/rasterio: drivers.py
+Only in rasterio-1.5.0/rasterio: dtypes.py
+Only in rasterio-1.5.0/rasterio: enums.py
+Only in rasterio-1.5.0/rasterio: env.py
+Only in rasterio-1.5.0/rasterio: errors.py
+Only in rasterio-1.5.0/rasterio: features.py
+Only in rasterio-1.5.0/rasterio: fill.py
+Only in rasterio-1.5.0/rasterio: gdal.pxi
+Only in rasterio-1.5.0/rasterio: io.py
+Only in rasterio-1.5.0/rasterio: mask.py
+Only in rasterio-1.5.0/rasterio: merge.py
+Only in rasterio-1.5.0/rasterio: path.py
+Only in rasterio-1.5.0/rasterio: plot.py
+Only in rasterio-1.5.0/rasterio: profiles.py
+Only in rasterio-1.5.0/rasterio: rio
+Only in rasterio-1.5.0/rasterio: rpc.py
+Only in rasterio-1.5.0/rasterio: sample.py
+Only in rasterio-1.5.0/rasterio: session.py
+Only in rasterio-1.5.0/rasterio: shutil.pyx
+Only in rasterio-1.5.0/rasterio: stack.py
+Only in rasterio-1.5.0/rasterio: tools.py
+Only in rasterio-1.5.0/rasterio: transform.py
+Only in rasterio-1.5.0/rasterio: vrt.py
+Only in rasterio-1.5.0/rasterio: warp.py
+Only in rasterio-1.5.0/rasterio: windows.py
+Only in rasterio-1.5.0: rasterio.egg-info
+Only in rasterio-1.5.0: setup.cfg
+Only in rasterio-1.5.0: setup.py
+Only in rasterio-1.5.0: tests

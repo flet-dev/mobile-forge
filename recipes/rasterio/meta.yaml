@@ -23,7 +23,10 @@ build:
   # per PEP 427 when name+version collide; the new wheel must outrank
   # build 10 or downstream installs would silently keep the old
   # libgdal-3.10-linked rasterio and the gdal chain bump would be invisible.
-  number: 11
+  # 12 adds ios-driver-registry.patch: with a static libgdal each extension
+  # gets its own driver registry, so rasterio.open failed on iOS with
+  # "No such driver registered: GTiff" while the driver listing succeeded.
+  number: 12
   script_env:
     GDAL_VERSION: 3.13.1
     # rasterio reads GDAL_LIB_PATH (a colon-separated list); pyogrio's is spelled
@@ -45,3 +48,4 @@ build:
 
 patches:
   - mobile.patch
+  - ios-driver-registry.patch
