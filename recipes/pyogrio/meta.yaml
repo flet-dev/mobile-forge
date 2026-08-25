@@ -12,7 +12,10 @@ requirements:
 # {% endif %}
 
 build:
-  number: 1
+  # 2 adds ios-driver-registry.patch: with a static libgdal each extension has
+  # its own driver registry, so _io resolved driver names in one nothing had
+  # populated and could not open a dataset on iOS.
+  number: 2
   script_env:
     GDAL_VERSION: 3.13.1
     # pyogrio reads GDAL_LIBRARY_PATH (one directory). fiona and rasterio read
@@ -32,3 +35,4 @@ build:
 
 patches:
   - mobile.patch
+  - ios-driver-registry.patch

@@ -24,3 +24,40 @@ def test_gdal_version():
     assert len(v) == 3
     assert all(isinstance(x, int) for x in v)
     assert v[0] >= 3  # GDAL ≥ 3.0
+
+
+def test_vector_round_trip(tmp_path):
+    """Write features and read them back — the path listing drivers does not cover.
+
+    The two tests above touch `pyogrio._ogr`, which calls `GDALAllRegister()`
+    itself. `_io`, where a read or a write actually happens, is a different
+    extension — and with a static libgdal it links its own copy of GDAL with
+    its own driver registry. So a wheel can list every driver and still be
+    unable to open a dataset, which is what made the iOS breakage invisible to
+    this suite for as long as it was.
+
+    This asserts the round trip instead: two Points out through the GeoJSON
+    driver, both back with their attribute intact.
+    """
+    import struct
+
+    import numpy as np
+    from pyogrio.raw import read, write
+
+    def wkb_point(x, y):
+        return struct.pack("<BI2d", 1, 1, x, y)
+
+    path = tmp_path / "round-trip.geojson"
+    geometry = np.array([wkb_point(4.35, 50.85), wkb_point(2.35, 48.85)], dtype=object)
+    names = np.array(["brussels", "paris"], dtype=object)
+
+    write(
+        str(path), geometry=geometry, field_data=[names], fields=["name"],
+        driver="GeoJSON", geometry_type="Point", crs="EPSG:4326",
+    )
+    assert path.exists() and path.stat().st_size > 0
+
+    _meta, _fids, read_geometry, read_fields = read(str(path))
+
+    assert len(read_geometry) == 2, len(read_geometry)
+    assert list(read_fields[0]) == ["brussels", "paris"], read_fields[0]

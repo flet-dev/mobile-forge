@@ -1,0 +1,93 @@
+Register GDAL's drivers in the extensions that resolve driver names, so
+pyogrio can open a dataset on iOS.
+
+Same defect as `recipes/rasterio/patches/ios-driver-registry.patch`, same
+cause: `flet-libgdal` ships only `libgdal.a` on iOS, so each extension links
+its own copy of GDAL and each copy carries its own driver registry.
+
+pyogrio registers in `_ogr` (`_register_drivers()` calls `GDALAllRegister()`),
+but `_io` and `_geometry` resolve driver names in their own registries, which
+nothing populates. Call sites on iOS arm64, counted with `otool -tV` because
+every extension *defines* the symbols and `nm` therefore cannot tell you who
+calls them:
+
+    _ogr        GDALAllRegister x1, GDALGetDriverByName x57
+    _io         GDALGetDriverByName x42, and no registration at all
+    _geometry   GDALGetDriverByName x41, and no registration at all
+
+This also explains why the recipe's tests pass on iOS while the package does
+not work there: they exercise `_ogr`, which self-registers, and never reach
+`_io`, which is where a read or a write actually happens.
+
+`GDALAllRegister()` is idempotent, so on Android — one shared `libgdal.so`,
+one registry — this changes nothing.
+
+The same limit applies as for rasterio: the copies remain separate GDAL
+instances, so configuration set through one extension still does not reach
+another. This makes the package usable rather than correct in every respect;
+a shared libgdal for iOS is the complete fix and would repair rasterio, fiona
+and pyogrio together.
+
+Only in pyogrio-0.12.1: LICENSE
+Only in pyogrio-0.12.1: MANIFEST.in
+Only in pyogrio-0.12.1: PKG-INFO
+Only in pyogrio-0.12.1: README.md
+Only in pyogrio-0.12.1/pyogrio: __init__.py
+Only in pyogrio-0.12.1/pyogrio: _compat.py
+Only in pyogrio-0.12.1/pyogrio: _env.py
+Only in pyogrio-0.12.1/pyogrio: _err.pxd
+Only in pyogrio-0.12.1/pyogrio: _err.pyx
+Only in pyogrio-0.12.1/pyogrio: _geometry.pxd
+diff -ru orig/pyogrio/_geometry.pyx pyogrio-0.12.1/pyogrio/_geometry.pyx
+--- a/pyogrio/_geometry.pyx	2026-08-25 23:03:41
++++ b/pyogrio/_geometry.pyx	2026-08-25 23:03:41
+@@ -1,6 +1,14 @@
+ import warnings
+ from pyogrio._ogr cimport *
+ from pyogrio._err cimport *
++
++# With a static libgdal (iOS) each extension links its own copy of GDAL and
++# gets its own driver registry. pyogrio registers in _ogr, but this module
++# resolves driver names itself, in a registry nobody populates — so an open
++# fails here while _ogr-backed calls succeed. Registering here fixes that.
++# GDALAllRegister is idempotent, so Android, which shares one libgdal.so and
++# therefore one registry, is unaffected.
++GDALAllRegister()
+ from pyogrio._err import CPLE_BaseError, NullPointerError
+ from pyogrio.errors import DataLayerError, GeometryError
+ 
+Only in pyogrio-0.12.1/pyogrio: _io.pxd
+diff -ru orig/pyogrio/_io.pyx pyogrio-0.12.1/pyogrio/_io.pyx
+--- a/pyogrio/_io.pyx	2026-08-25 23:03:41
++++ b/pyogrio/_io.pyx	2026-08-25 23:03:41
+@@ -39,6 +39,14 @@
+ from pyogrio._ogr cimport *
+ from pyogrio._ogr import MULTI_EXTENSIONS
+ from pyogrio._vsi cimport *
++
++# With a static libgdal (iOS) each extension links its own copy of GDAL and
++# gets its own driver registry. pyogrio registers in _ogr, but this module
++# resolves driver names itself, in a registry nobody populates — so an open
++# fails here while _ogr-backed calls succeed. Registering here fixes that.
++# GDALAllRegister is idempotent, so Android, which shares one libgdal.so and
++# therefore one registry, is unaffected.
++GDALAllRegister()
+ from pyogrio.errors import (
+     CRSError, DataSourceError, DataLayerError, GeometryError, FieldError, FeatureError
+ )
+Only in pyogrio-0.12.1/pyogrio: _ogr.pxd
+Only in pyogrio-0.12.1/pyogrio: _ogr.pyx
+Only in pyogrio-0.12.1/pyogrio: _version.py
+Only in pyogrio-0.12.1/pyogrio: _vsi.pxd
+Only in pyogrio-0.12.1/pyogrio: _vsi.pyx
+Only in pyogrio-0.12.1/pyogrio: arrow_bridge.h
+Only in pyogrio-0.12.1/pyogrio: core.py
+Only in pyogrio-0.12.1/pyogrio: errors.py
+Only in pyogrio-0.12.1/pyogrio: geopandas.py
+Only in pyogrio-0.12.1/pyogrio: raw.py
+Only in pyogrio-0.12.1/pyogrio: tests
+Only in pyogrio-0.12.1/pyogrio: util.py
+Only in pyogrio-0.12.1: pyogrio.egg-info
+Only in pyogrio-0.12.1: pyproject.toml
+Only in pyogrio-0.12.1: setup.cfg
+Only in pyogrio-0.12.1: setup.py
