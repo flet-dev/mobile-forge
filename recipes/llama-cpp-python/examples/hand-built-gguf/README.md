@@ -12,6 +12,10 @@ control tokens, all 256 `<0xNN>` byte tokens, eight word pieces). About a hundre
 `struct` and numpy emit the GGUF v3 header, metadata block, tensor table and 32-byte-aligned
 tensor data.
 
+`src/model.py` holds all of that — the serialiser, the parser, the numpy forward pass and the
+quantiser — and returns one finished result per run. `src/main.py` is the screen and the
+threading around it, and imports nothing but `flet` and `model`.
+
 A slider picks the embedding width — 32, 64, 128, 256 or 512 — and releasing it rebuilds,
 reloads and re-runs everything. Widths and the files they produce:
 
@@ -78,8 +82,8 @@ What it demonstrates:
   `llama_cpp.llama_cpp._lib._name`, the name ctypes ended up opening. On Android that should
   be the bare soname `libllama.so`, since the bundled libraries are not files on disk there;
   on iOS, a path inside a code-signed framework. It is the quickest way to confirm the loader
-  story in [Android notes](../../README.md#android-notes) and
-  [iOS notes](../../README.md#ios-notes) on a device you have.
+  story in [Android](../../README.md#android) and [iOS](../../README.md#ios) on a device you
+  have.
 - **What the run cost in memory, in the three terms it is actually made of.** The footer
   prints the weights (`llama_model_size()`), the KV cache (`n_ctx × blocks × width`, K and
   V, at the cache's type) and the float32 logits buffer numpy holds on the Python side —
@@ -145,4 +149,4 @@ needed, because wheels exist for all three Android ABIs and all three iOS slices
 
 **A simulator run is not a device run for this package.** The iOS arm64 simulator slice is
 the one build that has the dot-product kernels the phone does not; see
-[iOS notes](../../README.md#ios-notes).
+[iOS](../../README.md#ios).

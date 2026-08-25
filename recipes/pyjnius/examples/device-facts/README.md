@@ -51,18 +51,16 @@ What it demonstrates:
 A `DIFFERS` verdict is information, not a failure. The two sources really are different code
 paths, and where they disagree that is the fact worth knowing.
 
-Before any of that, the app checks `FLET_JNI_READY` — the variable
-[serious_python](https://github.com/flet-dev/serious_python), the runtime that starts Python
-inside a Flet app, sets only when its `System.loadLibrary("pyjni")` succeeded. Without that load
-libpyjni's `JNI_OnLoad` never ran, and the first JNI call reads a `JavaVM` pointer that was never
-assigned: a crash with no Python exception to catch. So the check comes before `import jnius`
-itself — `jnius/reflect.py` resolves `java.lang.Class` while it is being imported, which makes the
-import statement the process's first JNI call, too early for any check inside `main()` to help.
-Its value is in the header line where you can see it. Every reader after that is
-wrapped individually, because
-pyjnius raises `JavaException` for a Java-side throw but a plain `AttributeError` for a member
-that does not exist, and an unhandled exception in a Flet handler ends the session with a crash
-screen.
+`src/device.py` holds the JNI work and `src/main.py` only the screen, and the gate is why that
+split runs in that order: the `FLET_JNI_READY` check and the `import jnius` behind it are the
+first two statements `device.py` executes, so `from device import ...` is what arms them. The
+[recipe README](../../README.md#things-to-know) has the mechanism — importing pyjnius is itself
+the process's first JNI call, so a check inside `main()` would already be too late. The
+variable's value is in the header line where you can see it.
+
+Every reader is wrapped individually, because pyjnius raises `JavaException` for a Java-side
+throw but a plain `AttributeError` for a member that does not exist, and an unhandled exception
+in a Flet handler ends the session with a crash screen.
 
 The header line is entirely computed on device: pyjnius and Python versions,
 [`page.platform`](https://flet.dev/docs/controls/page/#flet.Page.platform), `FLET_JNI_READY`, the
@@ -81,10 +79,9 @@ not reach background threads.
 
 `pyproject.toml` keeps `[project] dependencies` at `flet` alone and puts `pyjnius` under
 `[tool.flet.android] dependencies`, which `flet build` appends only for Android targets. `uv` never
-sees pyjnius at all — `uv lock` on this file resolves 52 packages, none of them pyjnius — and that
-is the point: a desktop `flet run` shows the Android-only card, and an iOS build is never asked to
-resolve a wheel that does not exist. `requires-python` is `>=3.12`, the floor of the Python
-versions pyjnius has wheels for on Flet's mobile index.
+sees pyjnius at all, and that is the point: a desktop `flet run` shows the Android-only card, and
+an iOS build is never asked to resolve a wheel that does not exist. `requires-python` is `>=3.12`,
+the floor of the Python versions pyjnius has wheels for on Flet's mobile index.
 
 ## Try it
 

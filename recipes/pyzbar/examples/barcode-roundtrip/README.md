@@ -30,11 +30,14 @@ What it demonstrates:
 - **Detecting errors versus correcting them.** A
   [`Slider`](https://flet.dev/docs/controls/slider/) inverts 0–30 whole modules before
   rasterising, seeded from its own position so every stop is reproducible. Measured against
-  zbar 0.23.93: **one** flipped module already kills both 1-D symbols — which have no error
-  correction at all, so a 1-D symbol either reads or it does not — and they stay dead at every
-  later stop, while the 25×25 QR (error correction level Q) still decodes
-  at every count up to 18 and goes intermittent from 19 — in a 0-to-40 sweep it last decoded
-  at 28. The app prints whatever the device's own library does.
+  zbar 0.23.93: **one** flipped module already kills both 1-D symbols at the position this
+  seed picks, and they stay dead at every later stop. That is not the seed being unkind — a
+  single inversion loses the EAN-13 at all 95 of its module positions and the Code 128 at 151
+  of its 156, the five survivors all sitting in the stop pattern. A 1-D symbol has no error
+  correction at all: it either reads or it does not. The 25×25 QR (error correction level Q)
+  still decodes at every count up to 18 — where it survived 112 of 120 random damage patterns,
+  so that stop is not one lucky picture either — and goes intermittent from 19; in a 0-to-40
+  sweep it last decoded at 28. The app prints whatever the device's own library does.
 - **Rotation is the library's problem, not yours.** The switch turns all three buffers 90°
   clockwise; the data is unchanged and `orientation` goes from `UP` to `RIGHT`.
 - **Two independent cross-checks.** The app computes EAN-13's mod-10 check digit and Code
@@ -47,14 +50,18 @@ What it demonstrates:
   `flet run` without a system zbar shows `ImportError: Unable to find zbar shared library`
   and what to do about it, instead of failing to launch.
 
-The QR's modules are carried in the file as 25 bit-packed rows — 100 bytes, 136 characters of
-base64 — rather than generated: writing a QR encoder means Reed-Solomon and mask selection,
+The QR's modules are carried in `barcodes.py` as 25 bit-packed rows — 100 bytes, 136 characters
+of base64 — rather than generated: writing a QR encoder means Reed-Solomon and mask selection,
 which teaches nothing about pyzbar. They encode `https://flet.dev`, and the decode is what
 proves they are right. The two 1-D symbols are generated in full, pattern tables included.
 
 What it deliberately does **not** show is the other half of a scanning app: getting a buffer
-out of a camera frame or a photo the user picked. That needs an image library, and the recipe
-[`README.md`](../../README.md#things-to-know) says which one and where it comes from.
+out of a camera frame or a photo the user picked. That needs an image library, because anything
+off a camera or a picker arrives as JPEG or PNG while pyzbar takes only 8-bit greyscale.
+[Pillow](https://pillow.readthedocs.io/) does that conversion, `pypi.flet.dev` publishes it for
+both platforms, and `decode()` accepts a PIL `Image` directly — add `"pillow"` alongside
+`"pyzbar"` and hand it the object. The recipe [`README.md`](../../README.md) walks the rest of
+the input surface.
 
 Everything runs synchronously — a redraw is three rasters, three decodes and three PNG
 compressions, about 3 ms on a development machine (twice that with the rotation switch on) —

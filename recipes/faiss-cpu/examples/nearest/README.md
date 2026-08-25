@@ -34,10 +34,13 @@ What it demonstrates:
   slider disabled, spinner up, worker body wrapped in `try/except` because `run_thread`
   discards what it raises, and an explicit
   [`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update) at the end.
-- **Persistence.** The IVF index is written to
+- **Persistence, reported for what it is.** The IVF index is written to
   [`FLET_APP_STORAGE_DATA`](https://flet.dev/docs/reference/environment-variables/#flet_app_storage_data)
-  with `faiss.write_index`, reloaded with `faiss.read_index(path, faiss.IO_FLAG_MMAP)`,
-  and the reloaded index's ids are compared against the one still in memory.
+  with `faiss.write_index`, read back with `faiss.read_index(path, faiss.IO_FLAG_MMAP)`,
+  then searched and compared against the copy still in memory. The line on screen claims
+  only what that shows — a lossless round trip — and says outright that it is not proof
+  the mapping engaged, because `read_index` accepts either mmap flag on any index and
+  returns the same ids either way. Only memory can answer that one.
 - **The build describing itself.** The header line prints
   `faiss.get_compile_options()`, `faiss.omp_get_max_threads()` and
   `faiss.get_num_gpus()`, which is the shortest way to see which slice you are running

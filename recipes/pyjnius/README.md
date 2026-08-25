@@ -7,17 +7,19 @@ clipboard, anything with a Java API — without writing a Flutter plugin for it.
 name and it reflects over the class, hands you a Python object with the same methods and fields,
 and converts the values in both directions.
 
-**This is an Android-only package, and deliberately so.** There is no iOS wheel on this index and
-there will not be one: JNI has no iOS counterpart. The iOS answer is a different package with a
-different API, [`pyobjus`](https://pyobjus.readthedocs.io/en/latest/), which binds the
-Objective-C runtime instead — see [iOS notes](#ios-notes). Flet's own write-up of the pair is
+**This is an Android-only package, and deliberately so.** JNI has no iOS counterpart, and the
+gate is enforced twice: this recipe declares `platforms: [android]`, and the
+[`flet-libpyjni`](../flet-libpyjni) recipe behind it refuses any non-Android SDK outright. The
+iOS answer is a different package with a different API,
+[`pyobjus`](https://pyobjus.readthedocs.io/en/latest/), which binds the Objective-C runtime
+instead — see [Other considerations](#other-considerations). Flet's own write-up of the pair is
 [Tap into native Android and iOS APIs with Pyjnius and Pyobjus](https://flet.dev/blog/tap-into-native-android-and-ios-apis-with-Pyjnius-and-pyobjus/).
 
 Every Python file in the wheel is byte-identical to upstream's sdist except one line in
 `jnius/env.py` (a link-time library list), so [upstream's documentation](https://pyjnius.readthedocs.io/en/latest/quickstart.html)
-applies unchanged. What is worth knowing is how the bridge is wired under Flet, and which parts of
-pyjnius do not survive the trip. Everything below about the Flet side was read off Flet 0.86.5,
-which pins serious_python 4.5.1.
+applies unchanged. What this page adds is the Flet side: what the runtime hands you before your
+first call, and which parts of pyjnius do not survive the trip. Everything below about Flet was
+read off Flet 0.86.5, which pins serious_python 4.5.1.
 
 ## Install
 
@@ -36,38 +38,12 @@ dependencies = [
 
 Put it under [`[tool.flet.android]`](https://flet.dev/docs/publish/#app-dependencies) rather than
 in `[project] dependencies`. `flet build` appends that table to your dependencies only when the
-target is Android, which is exactly the scope pyjnius has; leave it in `[project]` and your iOS
-build stops at *Could not find a version that satisfies the requirement pyjnius*, while on desktop
-`uv` quietly installs PyPI's macOS, Linux or
+target is Android, which is exactly the scope pyjnius has.
+
+Leave it in `[project]` instead and your iOS build stops at *Could not find a version that
+satisfies the requirement pyjnius*, while on desktop `uv` quietly installs PyPI's macOS, Linux or
 Windows build — a library that starts its own JVM and needs a JDK on the machine — so `flet run`
 exercises something no device will ever run.
-
-Nothing else to configure. `flet-libpyjni` — the JNI shim the extension links against — is a
-`Requires-Dist` of the wheel and comes along on its own: resolving the way `flet build` does
-(`pip install --only-binary :all: --extra-index-url https://pypi.flet.dev`) for Android arm64-v8a
-on Python 3.14, with only `pyjnius` asked for, downloaded the pyjnius wheel **and** a matching
-`flet_libpyjni-…-android_24_arm64_v8a.whl`.
-
-A bare `pyjnius` really does resolve from this index on every Android slice. Upstream publishes 49
-files for this version — macOS, manylinux, Windows and an sdist — and not one carries an `android`
-or `ios` platform tag, so there is nothing on PyPI a mobile target can select. Measured, one
-resolve per slice: arm64-v8a, armeabi-v7a and x86_64 all resolve on Python 3.12, 3.13 and 3.14,
-and the legacy 32-bit `android_24_x86` slice resolves on 3.12 only. The three iOS slice tags —
-device, arm64 simulator and x86_64 simulator — all come back with *Could not find a version that
-satisfies the requirement pyjnius*, so guard the import in app code and let a desktop or iOS run
-say so on screen rather than raise.
-
-No [`[tool.flet.android] extract_packages`](https://flet.dev/docs/publish/android/#extract-packages)
-entry is needed. The wheel is fourteen files — one extension, six Python modules, a Java source
-and its `.class`, and five metadata files — and across all of them the only uses of `__file__`,
-`importlib.resources` and `pkg_resources` are inside `jnius/__init__.py`'s `sys.platform ==
-'win32'` branch and inside `jnius_config.get_classpath()`, which on Android is dead code (see
-[Things to know](#things-to-know)). There is no `getsource` anywhere, so Flet's default
-compile-to-`.pyc` is safe, and the extension carries a CPython ABI tag on every slice, so it runs
-straight out of Android's relocated `jniLibs`.
-
-Release builds need no extra ProGuard/R8 configuration either — Flet already writes the keep rules
-pyjnius needs. See [Android notes](#android-notes) for what happens if you switch them off.
 
 ## Examples
 
@@ -76,7 +52,57 @@ See runnable Flet apps in [`examples/`](examples):
 - [`device-facts`](examples/device-facts) — Android identity, battery and sensors read through
   JNI, each checked against a second source.
 
-## Threading
+## Usage in a Flet app
+
+```python
+import os
+
+import flet as ft
+
+# Gate the import, not the first call: `import jnius` is itself the first JNI call.
+if os.getenv("FLET_JNI_READY") == "1":
+    from jnius import autoclass
+
+
+def main(page: ft.Page):
+    build = autoclass("android.os.Build")
+    page.add(ft.Text(f"{build.MANUFACTURER} {build.MODEL}"))
+
+
+if __name__ == "__main__":
+    ft.run(main)
+```
+
+`FLET_JNI_READY` is the runtime's own signal, exported by serious_python only when the JNI bridge
+loaded, and [`autoclass`](https://pyjnius.readthedocs.io/en/latest/api.html#jnius.autoclass) is
+the whole API surface you need behind it. That load is best-effort by design, so it is possible to
+be running with `jnius` importable and nothing behind it — and that case is a crash rather than an
+exception, which is why the gate goes on the `import` statement and not on the first
+`autoclass()`; the first bullet under [Things to know](#things-to-know) has the mechanism. Print
+the variable's value on screen while you are developing: it is the fastest way to tell "the bridge
+is missing" from "my class name is wrong".
+
+### Reaching your Activity
+
+Anything that needs a `Context` — system services, battery, sensors, the clipboard — starts from
+the holder class serious_python parks in the environment:
+
+```python
+import os
+
+from jnius import autoclass
+
+activity = autoclass(os.getenv("MAIN_ACTIVITY_HOST_CLASS_NAME")).mActivity
+context = activity.getApplicationContext()
+```
+
+`MAIN_ACTIVITY_HOST_CLASS_NAME` is set to `com.flet.serious_python_android.PythonActivity`, a
+seven-line class inside the Flet plugin whose only member is a static `mActivity`. It is **not**
+kivy's `org.kivy.android.PythonActivity`, which is what most pyjnius material on the web reaches
+for and which does not exist in a Flet app. `MAIN_ACTIVITY_CLASS_NAME` is set alongside it and
+names your real Activity class.
+
+### Threading
 
 Any thread can call into Java, and pyjnius attaches it to the JVM for you: `get_jnienv()` calls
 `AttachCurrentThread` on every single call. What it never does under Flet is detach. pyjnius ships
@@ -98,80 +124,46 @@ future, so an exception raised in a worker surfaces nowhere at all — wrap the 
 auto-update does not reach background threads, so end the handler with an explicit
 [`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update).
 
-## Android notes
+### Release builds
 
-The extension does not talk to ART directly. `jnius.jnius` leaves exactly two non-CPython,
-non-libc symbols undefined — `PyJni_AndroidGetJNIEnv` and `PyJni_FindClass` — and picks them up
-from `libpyjni.so`, a 5–8 KB shared library listed in its `DT_NEEDED` under that bare soname
-and shipped by the `flet-libpyjni` wheel. Flet's Android build flattens it out of the wheel's
-`opt/lib/` into `jniLibs/<abi>/libpyjni.so`, which is both the name the bare `DT_NEEDED` wants and
-the name `System.loadLibrary("pyjni")` resolves.
-
-That `System.loadLibrary` call is the part you get for free. serious_python makes it from Java,
-over a method channel, **before the interpreter starts** — which is the only way to run
-`libpyjni`'s `JNI_OnLoad`, because the `dlopen` behind `dart:ffi` never triggers it. `JNI_OnLoad`
-caches two things: the `JavaVM`, and the application's `ClassLoader`, taken from
-`ActivityThread.currentApplication().getClassLoader()`.
-
-The `ClassLoader` half is why `PyJni_FindClass` exists at all. `JNIEnv->FindClass` takes its loader
-from the current native call frame, and a thread attached from native code has no frame, so it
-falls back to the system loader, which only sees framework classes. Routing every caller-supplied
-class name through the app's loader instead means classes from your own APK and from Flutter
-plugins are reachable, not just `android.*`.
-
-When that load succeeds serious_python exports **`FLET_JNI_READY=1`** into the interpreter's
-environment. Check it before touching `jnius`, and put its value on screen:
-
-```python
-if os.getenv("FLET_JNI_READY") == "1":
-    from jnius import autoclass
-```
-
-The load is best-effort by design — it is wrapped in a `catch` so that apps without pyjnius do not
-pay for a missing library — and if it did not happen there is nothing to catch on the Python side.
-See [Things to know](#things-to-know).
-
-To reach your app's `Activity`, ask for the holder class serious_python parks in the environment:
-
-```python
-import os
-from jnius import autoclass
-
-activity = autoclass(os.getenv("MAIN_ACTIVITY_HOST_CLASS_NAME")).mActivity
-context = activity.getApplicationContext()
-```
-
-`MAIN_ACTIVITY_HOST_CLASS_NAME` is set to `com.flet.serious_python_android.PythonActivity`, a
-seven-line class inside the Flet plugin whose only member is a static `mActivity`. It is **not**
-kivy's `org.kivy.android.PythonActivity`, which is what most pyjnius material on the web reaches
-for and which does not exist in a Flet app. `MAIN_ACTIVITY_CLASS_NAME` is set alongside it and
-names your real Activity class.
-
-**Release builds work as-is.** R8 renames classes while pyjnius looks them up by name, so this
-would otherwise break; both halves of the fix already ship. serious_python's own
+R8 renames classes while pyjnius looks them up by name, so a release build would otherwise
+resolve nothing — and both halves of the fix already ship. serious_python's own
 `consumer-rules.pro` keeps `com.flet.serious_python_android.**`, and flet-cli writes
 `-keep class com.flet.serious_python_android.** { *; }` plus `-keepnames class * { *; }` as
-`android_proguard_rules` defaults. Add rules for your own classes with
-`[tool.flet.android] proguard_rules`, which appends; setting `proguard_default_rules = false`
-drops the defaults entirely, including the serious_python keep, and the symptom is the one written
-into that file as a comment — `type object 'C.f' has no attribute 'mActivity'`.
+`android_proguard_rules` defaults.
 
-ABI coverage differs by Python version: Python 3.12 ships four Android slices including the legacy
-32-bit `android_24_x86`, while 3.13 and 3.14 ship three (arm64-v8a, armeabi-v7a, x86_64). Every
-`.so` in both wheels reports 16 KB (`0x4000`) alignment on all of its `PT_LOAD` segments, which is
-what Android's 16 KB page-size devices need.
+Add rules for your own classes with
+[`[tool.flet.android] proguard_rules`](https://flet.dev/docs/publish/android/), which appends.
+Setting `proguard_default_rules = false` drops the defaults entirely, including the
+serious_python keep, and the symptom is the one written into that file as a comment —
+`type object 'C.f' has no attribute 'mActivity'`.
 
-## iOS notes
+### App size
 
-There is no iOS wheel, and this is a gate rather than a gap: the recipe declares
-`platforms: [android]`, and `flet-libpyjni`'s build script refuses any other SDK outright. The
-package index for pyjnius contains twenty-two files and not one mentions iOS.
+The arm64-v8a wheel is 196 KB compressed and 517 KB unpacked; armeabi-v7a is 182 KB and 359 KB.
+The extension is about 90% of that. It is small enough that an app bundle, split APKs and a
+narrowed [`target_arch`](https://flet.dev/docs/publish/android/#supported-target-architectures)
+are decisions about the rest of your app rather than about this package.
 
-Use [`pyobjus`](https://pyobjus.readthedocs.io/en/latest/) there — it has its own recipe in this
-repository, gated the mirror-image way at `platforms: [ios]`. It is **not** a drop-in: it binds
-the Objective-C runtime, so the class names, the calling convention and the frameworks are all
-different. An app that needs native APIs on both platforms writes two backends behind one
-interface of its own and declares them per platform:
+2,362 bytes of the payload are `NativeInvocationHandler.java` and its `.class`, which ship into
+the app and are never used — serious_python's junk-file cleanup strips `.c`, `.h`, `.pyi`, `.pyx`
+and friends, but neither `.java` nor `.class`. Not worth chasing; mentioned so a payload audit
+does not look wrong.
+
+### Other considerations
+
+**A desktop `flet run` does not exercise this package at all.** `uv` never sees pyjnius, because
+it is not in `[project] dependencies`, so a desktop run takes whichever branch your app has for a
+missing `FLET_JNI_READY` — that branch is what you are testing, not the JNI code behind it. Every
+class name, every signature and every conversion has to be validated on an Android device or
+emulator.
+
+**There is no iOS wheel.** Use [`pyobjus`](https://pyobjus.readthedocs.io/en/latest/) there — it
+has its own [recipe](../pyobjus) in this repository, gated the mirror-image way at
+`platforms: [ios]`. It is **not** a drop-in: it binds the Objective-C runtime, so the class
+names, the calling convention and the frameworks are all different. An app that needs native APIs
+on both platforms writes two backends behind one interface of its own and declares them per
+platform:
 
 ```toml
 [tool.flet.android]
@@ -180,9 +172,6 @@ dependencies = ["pyjnius"]
 [tool.flet.ios]
 dependencies = ["pyobjus"]
 ```
-
-Everything in [Android notes](#android-notes) — `libpyjni`, `JNI_OnLoad`, the app `ClassLoader`,
-`FLET_JNI_READY`, `PythonActivity.mActivity` — is an Android-runtime concept with no iOS analogue.
 
 ## Things to know
 
@@ -193,9 +182,9 @@ Everything in [Android notes](#android-notes) — `libpyjni`, `JNI_OnLoad`, the 
   `jnius` importable and no bridge behind it. Importing is already too late: `jnius/__init__.py`
   does `from .reflect import *` at module scope, and `reflect.py`'s first class definition binds
   `java.lang.Class` through `MetaJavaClass`, whose `resolve_class` calls `get_jnienv()` at
-  class-creation time — so the JNI env is acquired while the `import` statement is still running. Gate the **import** on
-  `FLET_JNI_READY`, not the first `autoclass()`, and show a message instead; a `try/except` around
-  either will not save you.
+  class-creation time — so the JNI env is acquired while the `import` statement is still running.
+  Gate the **import** on `FLET_JNI_READY`, not the first `autoclass()`, and show a message
+  instead; a `try/except` around either will not save you.
 - **`PythonJavaClass` and `@java_method` — every listener and callback — cannot work in a Flet
   app.** Implementing a Java interface from Python goes through
   `autoclass('org.jnius.NativeInvocationHandler')`, and that class ships in the wheel only as
@@ -209,7 +198,7 @@ Everything in [Android notes](#android-notes) — `libpyjni`, `JNI_OnLoad`, the 
   instead: read state on demand
   (`BatteryManager.getIntProperty`, `SensorManager.getSensorList`, a sticky broadcast via
   `registerReceiver(None, filter)`) and drive refreshes from Flet. If you truly need a callback,
-  the Java side has to come from a Flutter plugin or AAR you add to the app.
+  the Java side has to come from a Flutter plugin or AAR you add to the app — which works because pyjnius routes every class name through the *application's* `ClassLoader` rather than `JNIEnv->FindClass`, whose loader on a natively-attached thread sees only framework classes. That is what makes your own APK's classes and a plugin's reachable at all, not just `android.*`.
 - **Nested classes need a `$`, and the outer class does not expose them.** `autoclass` replaces
   every `.` with `/` to build the JNI path, so `android.os.Build.VERSION` asks for
   `android/os/Build/VERSION` and raises `NoClassDefFoundError`. `Build.VERSION.SDK_INT` is not how
@@ -219,11 +208,12 @@ Everything in [Android notes](#android-notes) — `libpyjni`, `JNI_OnLoad`, the 
   `autoclass('android.provider.Settings$Secure')`.
 - **A class name the loader cannot resolve does not come back as a clean Python error.**
   `PyJni_FindClass` catches the `ClassNotFoundException`, clears it and returns `NULL`;
-  `find_javaclass` wraps that `NULL` in a `Class` object, and `autoclass` immediately calls
-  `getConstructors()` on it. `autoclass`'s own `if c is None` guard cannot fire, because
-  `find_javaclass` hands back a `Class` instance whichever way the lookup went — the `NULL` is
-  buried inside its `LocalRef`. What ART does with a JNI call on a null object is not established
-  here — treat a wrong class name as something to avoid rather than something to catch.
+  [`find_javaclass`](https://pyjnius.readthedocs.io/en/latest/api.html) wraps that `NULL` in a
+  `Class` object, and `autoclass` immediately calls `getConstructors()` on it. `autoclass`'s own
+  `if c is None` guard cannot fire, because `find_javaclass` hands back a `Class` instance
+  whichever way the lookup went — the `NULL` is buried inside its `LocalRef`. What ART does with a
+  JNI call on a null object is not established here — treat a wrong class name as something to
+  avoid rather than something to catch.
 - **Values come back typed, so you rarely need `cast()`.** A Java `String` arrives as `str`,
   `boolean` as `bool`, `int`/`long` as `int`, `String[]` as `list[str]`, `null` as `None`; an
   object declared as `Object` — a collection element, a `getSystemService` result — arrives as the
@@ -236,12 +226,13 @@ Everything in [Android notes](#android-notes) — `libpyjni`, `JNI_OnLoad`, the 
   with two methods, `getClass` and `hashCode` — not even `toString` — so casting to it throws the
   whole API away and every call after it is an `AttributeError`. `java.lang.Class` is the same
   kind of stub. Cast to the concrete class you mean to call, if at all.
-- **Errors arrive in two different shapes.** A Java-side throw is a `JavaException` (an
-  `Exception` subclass) carrying `.classname`, `.innermessage` and `.stacktrace`, and its `str()`
-  is the whole Java stack trace. A member that does not exist is a plain `AttributeError`. An
-  argument list that matches no overload is a `JavaException` listing the available signatures.
-  Catch broad `Exception` around anything driven by user input — an unhandled exception in a Flet
-  handler ends the session with a crash screen.
+- **Errors arrive in two different shapes.** A Java-side throw is a
+  [`JavaException`](https://pyjnius.readthedocs.io/en/latest/api.html) (an `Exception` subclass)
+  carrying `.classname`, `.innermessage` and `.stacktrace`, and its `str()` is the whole Java
+  stack trace. A member that does not exist is a plain `AttributeError`. An argument list that
+  matches no overload is a `JavaException` listing the available signatures. Catch broad
+  `Exception` around anything driven by user input — an unhandled exception in a Flet handler ends
+  the session with a crash screen.
 - **`autoclass()` is expensive once per class and free afterwards.** It walks the constructors,
   the entire class hierarchy, every method and every field, with `include_protected` and
   `include_private` both defaulting to true — then caches, so `autoclass(x) is autoclass(x)`. Do
@@ -252,48 +243,89 @@ Everything in [Android notes](#android-notes) — `libpyjni`, `JNI_OnLoad`, the 
   them. Do not call `jnius_config`: only the JVM-starting backends read it, and only they set its
   `vm_running` flag — so on Android its getters are meaningless, and `set_classpath` and friends
   neither raise nor take effect, they silently do nothing.
-- **Size.** The arm64-v8a wheel is 196 KB compressed and 517 KB unpacked; armeabi-v7a is 182 KB
-  and 359 KB. The extension is about 90% of that, and `libpyjni.so` behind it is another 7,480
-  bytes on arm64-v8a — it is built per ABI, so 5,480 on armeabi-v7a, 6,692 on x86 and 7,320 on
-  x86_64. 2,362 bytes are `NativeInvocationHandler.java` and `.class`, which ship into the
-  app payload and are never used — serious_python's junk-file cleanup strips `.c`, `.h`, `.pyi`,
-  `.pyx` and friends, but neither `.java` nor `.class`. Not worth chasing; mentioned so a payload
-  audit does not look wrong.
 
 ## Build notes (maintainers)
 
-The patch carries its own 77-line preamble covering all four hunks, so what is left here is what a
-bump can silently invalidate. This recipe is unusual in that most of the consumer-facing claims
-above are about *Flet*, not about pyjnius, so a Flet bump invalidates as much as a pyjnius one.
+### Recipe shape
 
-- **Re-test the `Cython <3.1` ceiling on a bump rather than carrying it forward.** Nothing in the
-  repository records why it is there and nothing exercises it, so it survives bumps by inertia. A
-  desktop build proves nothing about it either — the cross build is where Cython's output has to
-  compile against the NDK sysroot.
-- **The whole bridge lives outside this recipe.** `libpyjni.so` comes from `flet-libpyjni`, and
-  the `System.loadLibrary("pyjni")` that runs its `JNI_OnLoad` comes from serious_python, which
-  Flet pins. Nothing in a green build of *this* recipe exercises either. After a serious_python
-  bump, re-check that `serious_python_android`'s `run()` still makes the `loadLibrary` call and
-  still exports `FLET_JNI_READY`, and that `onAttachedToActivity` still sets
-  `MAIN_ACTIVITY_HOST_CLASS_NAME` — the README tells app authors to rely on all three.
-- **`tests/test_pyjnius.py` skips itself off-device and asserts one thing on it.** That single
-  assert is load-bearing: `autoclass('android.os.Build')` succeeding proves the `.so` resolved
-  `libpyjni.so`, that `JNI_OnLoad` ran, and that class resolution through the app `ClassLoader`
-  works. It does not cover anything the Things-to-know list promises about conversions, the
-  `Activity` handle, or release-mode R8.
-- **Re-check the relocation contract on a serious_python bump.** The extension is matched by
+The extension does not talk to ART directly. `jnius.jnius` leaves exactly two non-CPython,
+non-libc symbols undefined — `PyJni_AndroidGetJNIEnv` and `PyJni_FindClass` — and picks them up
+from `libpyjni.so`, a 5–8 KB shared library listed in its `DT_NEEDED` under that bare soname.
+`patches/mobile.patch` carries a 77-line preamble on what those two entry points do and why the
+recipe needs them; `flet-libpyjni` builds the library, and `requirements.host` is what turns it
+into a `Requires-Dist` so that a bare `pyjnius` resolves both wheels.
+
+What has no home in the patch is the runtime contract on the far side of the wheel. None of it
+lives in this repository and nothing in a green build of *this* recipe exercises any of it, yet
+every consumer-facing claim above rests on it:
+
+- Flet's Android build flattens `libpyjni.so` out of the wheel's `opt/lib/` into
+  `jniLibs/<abi>/libpyjni.so` — both the name the bare `DT_NEEDED` wants and the name
+  `System.loadLibrary("pyjni")` resolves.
+- serious_python makes that `System.loadLibrary` call from Java, over a method channel, **before
+  the interpreter starts**. The ordering is the whole point: it is the only way to run
+  `libpyjni`'s `JNI_OnLoad`, where the `JavaVM` and the app `ClassLoader` are cached, because the
+  `dlopen` behind `dart:ffi` never triggers it. It exports `FLET_JNI_READY=1` on success and
+  swallows the failure otherwise, so apps without pyjnius do not pay for a missing library.
+- serious_python's `onAttachedToActivity` sets `MAIN_ACTIVITY_HOST_CLASS_NAME`, and its
+  `consumer-rules.pro` plus flet-cli's `android_proguard_rules` defaults are what make release
+  builds work.
+
+### Upgrade hazards
+
+Most of the consumer-facing claims above are about *Flet*, not about pyjnius, so a Flet bump
+invalidates as much as a pyjnius one. Re-read the checklist below on either.
+
+**Re-test the `Cython <3.1` ceiling on a bump rather than carrying it forward.** Nothing in the
+repository records why it is there and nothing exercises it, so it survives bumps by inertia. A
+desktop build proves nothing about it either — the cross build is where Cython's output has to
+compile against the NDK sysroot.
+
+### Re-verification checklist
+
+- **The three serious_python contracts.** That `serious_python_android`'s `run()` still makes the
+  `System.loadLibrary("pyjni")` call and still exports `FLET_JNI_READY`; that
+  `onAttachedToActivity` still sets `MAIN_ACTIVITY_HOST_CLASS_NAME`; and that the R8 keeps still
+  ship. The page above tells app authors to rely on all three.
+- **The relocation contract.** The extension is matched by
   `Regex("""\.(cpython-[^/]+|abi3)\.so$""")` and renamed to `libjnius-jnius.so`, and
   `libpyjni.so` is flattened out of `opt/lib/` into the same `jniLibs/<abi>/` directory by a copy
   task that keeps only the basename. A built APK of the example confirms both, per ABI:
   `lib/arm64-v8a/libjnius-jnius.so` (482,424 B) beside `lib/arm64-v8a/libpyjni.so` (7,480 B),
   with `jnius/jnius.soref` left behind in `assets/sitepackages.zip`. Both halves have to keep
-  holding: the mangling regex has to
-  keep matching the cp312 slice's *short* `jnius.cpython-312.so` name as well as the
-  `cpython-31X-<triplet>` form the 3.13 and 3.14 legs emit, and `libpyjni.so` has to keep landing
-  under exactly that basename, since it is resolved both by a bare `DT_NEEDED` and by
-  `System.loadLibrary`.
-- **The claim that nothing needs `extract_packages` is a grep over the wheel's six Python files.**
-  Re-run it on a bump rather than assuming: upstream adding a data file, or moving anything in
+  holding: the mangling regex has to keep matching the cp312 slice's *short*
+  `jnius.cpython-312.so` name as well as the `cpython-31X-<triplet>` form the 3.13 and 3.14 legs
+  emit, and `libpyjni.so` has to keep landing under exactly that basename, since it is resolved
+  both by a bare `DT_NEEDED` and by `System.loadLibrary`.
+- **That nothing needs `extract_packages`, which is a grep result over six Python files.** The
+  wheel is fourteen files — one extension, six Python modules, a Java source and its `.class`,
+  and five metadata files — and across all of them the only uses of `__file__`,
+  `importlib.resources` and `pkg_resources` are inside `jnius/__init__.py`'s
+  `sys.platform == 'win32'` branch and inside `jnius_config.get_classpath()`, which on Android is
+  dead code. There is no `getsource` anywhere either, so Flet's default compile-to-`.pyc` is safe.
+  Re-run both greps rather than assuming: upstream adding a data file, or moving anything in
   `jnius_config` out from behind `get_classpath()`, changes the answer.
+- **That a bare `pyjnius` still resolves per slice, and still does not on iOS.** Upstream
+  publishes 49 files for this version — macOS, manylinux, Windows and an sdist — and not one
+  carries an `android` or `ios` platform tag, so this index is the only source. Measured one
+  resolve per slice the way `flet build` does it
+  (`pip install --only-binary :all: --extra-index-url https://pypi.flet.dev`): arm64-v8a,
+  armeabi-v7a and x86_64 all resolve on Python 3.12, 3.13 and 3.14, and the legacy 32-bit
+  `android_24_x86` slice resolves on 3.12 only. The three iOS slice tags — device, arm64 simulator
+  and x86_64 simulator — must keep failing with *Could not find a version that satisfies the
+  requirement pyjnius*, which is what the Android-only claim at the top of the page rests on.
+- **16 KB alignment.** Every `.so` in both wheels reports 16 KB (`0x4000`) alignment on all of its
+  `PT_LOAD` segments, which is what Android's 16 KB page-size devices need.
 - **Sizes and the file count are measured**, from the cp314 arm64-v8a and armeabi-v7a wheels.
-  Re-measure them rather than adjusting by eye.
+  Re-measure them in decimal KB — `du` reports binary units — rather than adjusting by eye.
+  `libpyjni.so` is built per ABI, so its figure moves independently of the wheel's.
+
+### Coverage gaps
+
+`tests/test_pyjnius.py` skips itself off-device and asserts one thing on it. That single assert is
+load-bearing: `autoclass('android.os.Build')` succeeding proves the `.so` resolved `libpyjni.so`,
+that `JNI_OnLoad` ran, and that class resolution through the app `ClassLoader` works.
+
+It covers nothing else the page promises — not the conversions, not the `Activity` handle, not
+release-mode R8, not the claim that `PythonJavaClass` cannot work. Those rest on reading the code
+and on running the [`device-facts`](examples/device-facts) example, not on a green test run.
