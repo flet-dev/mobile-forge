@@ -1,28 +1,20 @@
 # pyclipper
 
-[`pyclipper`](https://github.com/fonttools/pyclipper) is a Cython wrapper around Angus
-Johnson's Clipper — polygon boolean operations (intersection, union, difference, XOR) and
-polygon offsetting (grow a shape outwards, shrink it inwards) on **integer** coordinates. The
-wheel's own `Summary` line names what it wraps: *Cython wrapper for the C++ translation of the
-Angus Johnson's Clipper library (ver. 6.4.2)*.
+[`pyclipper`](https://github.com/fonttools/pyclipper) is a Cython wrapper around Angus Johnson's
+[Clipper](https://sourceforge.net/projects/polyclipping/) — polygon boolean operations
+(intersection, union, difference, XOR) and polygon offsetting, growing a shape outwards or
+shrinking it inwards, on **integer** coordinates. The wheel's `Summary` line names the version it
+wraps; today that is Clipper 6.4.2.
 
-On a phone it is the cheapest way to do real polygon algebra. Each wheel is eight entries —
-one extension, `pyclipper/__init__.py`, `pyclipper/_version.py` and five `dist-info` files —
-with no data file, no `.pyi` stub, and no Python dependency on either platform. The cp314
-extension is 321,432 bytes on Android arm64-v8a and 381,984 on iOS device, and the symbols it
-leaves undefined are CPython's API, libc/libm and the C++ runtime — there is no `open`, `stat`,
-`fopen`, `socket`, `connect` or `getenv` among them on any of the eighteen slices, so it touches
-neither the filesystem nor the network. That makes it the right tool for growing a detected text
-box before cropping it (`rapidocr` 3.9.2 declares `pyclipper>=1.2.0` for exactly that), merging
+On a phone it is the cheapest way to do real polygon algebra. The wheel is one compiled extension
+beside a two-file Python package, and it opens no file, reads no environment variable and reaches
+no network — so there is no permission to request, no data file to bundle and no first-run
+download. That makes it the tool for growing a detected text box before cropping it, merging
 overlapping footprints into one outline, computing a hatch or an inset for a CAD/CAM or
-3D-printing path, and clipping a route to a boundary.
-
-It is also unfussy about self-intersecting input, with no repair step standing in the way. The
-bow-tie `[[0,0],[100,100],[100,0],[0,100]]`, whose signed area is `-0.0` because the two lobes
-cancel, clips against a bounding box to the correct two triangles of area 2500.0 each, and
-`SimplifyPolygon` on the same ring returns those two triangles directly. What it will not
-tolerate is a *float*; see [Things to know](#things-to-know), which is the section to read before
-writing any of this.
+3D-printing path, and clipping a route to a boundary. It also takes self-intersecting input
+straight, with no repair step, so there is no second geometry library to ship for one. What it
+will not tolerate is a *float*: read [Coordinates and precision](#coordinates-and-precision)
+before writing any of this.
 
 ## Install
 
@@ -34,29 +26,10 @@ dependencies = [
 ]
 ```
 
-Nothing else to configure. No
-[`[tool.flet.android] extract_packages`](https://flet.dev/docs/publish/android/#extract-packages)
-entry is needed and no loader shim: the package `__init__` is a real `.py` file and the
-extension next to it carries a CPython ABI tag on every slice, which is what Flet's relocation
-of native modules requires. There is no data file and no `.pyi` stub for Flet's default
-[compilation and cleanup](https://flet.dev/docs/publish/#compilation-and-cleanup) to remove,
-and nothing in the package reads its own source.
-
-The entry belongs in top-level `[project] dependencies` rather than in the `[tool.flet.android]`
-/ `[tool.flet.ios]` tables, because `flet build` resolves for the build host first and PyPI has
-desktop wheels for every host you would build from: the 1.4.0 release is 36 files — CPython
-3.10–3.14 on macOS (`universal2` and `x86_64`), Linux (`manylinux` x86_64 and aarch64) and
-Windows (`win32`, `win_amd64`), plus four free-threaded `cp314t` wheels (macOS and Windows only,
-no Linux), one PyPy 3.11 `manylinux` wheel and the sdist — all with `requires_dist: None`.
-
-Eighteen mobile wheels, all at the same build number, cover Python 3.12, 3.13 and 3.14 × three
-Android ABIs (arm64-v8a, armeabi-v7a, x86_64) and three iOS slices (device, arm64 simulator,
-x86_64 simulator). No architecture is excluded, so no
-[`target_arch`](https://flet.dev/docs/publish/android/#supported-target-architectures) narrowing
-is needed. There is no legacy 32-bit `android_24_x86` slice — unlike
-[`shapely`](../shapely), whose index does carry `shapely-2.1.2-1-cp312-cp312-android_24_x86.whl`.
-
-On Android one more wheel arrives with it; see [Android notes](#android-notes).
+Keep the entry in top-level `[project] dependencies` rather than in the `[tool.flet.android]` or
+`[tool.flet.ios]` tables. `flet build` resolves for the build host first, and PyPI publishes
+desktop wheels for every host you would build from, so the top-level entry is the one that gets
+you a working `flet run` and the mobile wheels from the same line.
 
 ## Examples
 
@@ -65,135 +38,164 @@ See runnable Flet apps in [`examples/`](examples):
 - [`boolean-canvas`](examples/boolean-canvas) — the four boolean ops, the float-coordinate trap
   and a mitre offset, each drawn and checked against arithmetic done on paper.
 
-## Threading
+## Usage in a Flet app
+
+```python
+import flet as ft
+import pyclipper
+from flet import canvas
+
+# scale_to_clipper is what stops AddPath truncating these floats to whole units
+engine = pyclipper.Pyclipper()
+engine.AddPath(pyclipper.scale_to_clipper(outline), pyclipper.PT_SUBJECT, True)
+engine.AddPath(pyclipper.scale_to_clipper(window), pyclipper.PT_CLIP, True)
+rings = pyclipper.scale_from_clipper(engine.Execute(pyclipper.CT_INTERSECTION))
+
+shapes = []
+for ring in rings:
+    elements = [canvas.Path.MoveTo(*ring[0])]
+    elements += [canvas.Path.LineTo(x, y) for x, y in ring[1:]]
+    elements.append(canvas.Path.Close())
+    shapes.append(canvas.Path(elements, ft.Paint(style=ft.PaintingStyle.STROKE)))
+
+view = canvas.Canvas(shapes=shapes, width=280, height=180)
+```
+
+[`Execute`](https://github.com/fonttools/pyclipper#how-to-use) returns a flat list of rings, so
+one [`canvas.Path`](https://flet.dev/docs/controls/canvas/) per ring is the whole conversion into
+a Flet control. A hole comes back as another ring in that same flat list, wound the other way,
+not as a child of anything — which is what makes summing areas a trap, and one of the several
+[Things to know](#things-to-know) worth reading before you rely on a result.
+
+Build a fresh `Pyclipper` for every call. It costs nothing next to the clip itself, and it is
+what keeps two overlapping taps from sharing one object. `PyclipperOffset` has the same shape:
+`AddPath(path, pyclipper.JT_MITER, pyclipper.ET_CLOSEDPOLYGON)`, then `Execute(delta)`.
+
+### Coordinates and precision
+
+**Clipper works in 64-bit integers, and pyclipper does not round for you.** A float reaching
+`AddPath` is truncated toward zero (`-1.5` becomes `-1`, not `-2`), silently, and you get a wrong polygon rather than an
+exception. Go through the helpers in both directions:
+
+```python
+scaled = pyclipper.scale_to_clipper(path)      # float path -> integer path
+result = pyclipper.scale_from_clipper(rings)   # and back again
+```
+
+The default scale factor is 2\*\*31. That leaves a usable coordinate magnitude of about 2.1e9 at a
+precision of 2\*\*−31 ≈ 4.66e−10, and it is exact for dyadic values, so a coordinate like `0.25`
+survives the round trip unchanged. It is the right starting point; derive a different factor from
+your real extent (2\*\*62 ÷ your largest absolute coordinate, backed off an order of magnitude for
+offsetting headroom) rather than guessing at one.
+
+**The ceiling is ±(2\*\*62 − 1) — 4,611,686,018,427,387,903 — and crossing it kills the process,
+not the call.** It is Clipper's `hiRange`, it is enforced in C++ with no Python exception in
+front of it, and `scale_to_clipper` will hand you a value past it without complaining. Two
+assertions before the first `AddPath` cost nothing next to a clip and turn both failures into
+something you can catch:
+
+```python
+assert all(isinstance(v, int) for point in path for v in point)
+assert max(abs(v) for path in scaled for v in path) <= 2**62 - 1
+```
+
+That ceiling is the same on every mobile slice. `armeabi-v7a` is a 32-bit ABI, but Clipper's
+`use_int32` switch is left off, so coordinates are 64-bit signed integers there too — a 32-bit
+Android device does not get a smaller coordinate space, and does not need a different factor.
+
+### Threading
 
 **The solve releases the GIL; feeding the polygons in and converting the answer back do not.**
-Every mobile slice imports `PyEval_SaveThread` and `PyEval_RestoreThread`, and upstream's
-`.pyx` puts `with nogil` on `Pyclipper.GetBounds`, `Execute` and `Execute2`, on
+Upstream puts `with nogil` on `Pyclipper.GetBounds`, `Execute` and `Execute2`, on
 `PyclipperOffset.Execute` and `Execute2`, and on the free functions (`Area`, `Orientation`,
 `PointInPolygon`, `Simplify*`, `Clean*`, `Minkowski*`, `Reverse*`) — but **not** on `AddPath` or
 `AddPaths` of either class.
 
-That split is visible in measurement. On desktop cp314, a counter thread ran beside repeated
-calls and its rate is given as a percentage of an idle window measured immediately before, three
-runs each. Controls: `math.factorial(190000)`, which holds the GIL, 2.2 / 2.3 / 2.2%;
-`time.sleep(0.5)`, which releases it, 101.8 / 105.5 / 93.3%. Then `Execute` on a disjoint
-64,000-vertex pair, so the solution is empty and the conversion back is free: 100.5 / 99.9 /
-104.0%. `Execute` returning a 133,628-vertex solution: 36.6 / 63.8 / 63.0%. `AddPath` of a
-400,000-vertex path: 21.8 / 29.2 / 25.8%. A one-path `PyclipperOffset.Execute`: 124.8 / 106.1 /
-98.2%.
+That split is visible in measurement. On desktop cp314 a counter thread ran beside repeated
+calls, its rate reported as a percentage of an idle window measured immediately before. Against
+controls of about 2% (`math.factorial`, which holds the GIL) and about 100% (`time.sleep`, which
+releases it), `Execute` on a disjoint pair — empty solution, so the conversion back is free —
+scored around 100%, and so did a one-path `PyclipperOffset.Execute`. But `Execute` returning a
+133,628-vertex solution scored 37–64%, and `AddPath` of a 400,000-vertex path scored 22–29%. The
+conversion at each end is where the GIL goes.
 
 So moving a big clip into
 [`page.run_thread(...)`](https://flet.dev/docs/controls/page/#flet.Page.run_thread) frees the UI
-for less of the wall time than you would expect. On the same machine, two overlapping n-gons,
-best of three, as AddPath ms / Execute ms / total ms / output vertices: 1,000 → 0.04 / 0.08 /
-0.12 / 896; 10,000 → 0.46 / 0.68 / 1.14 / 6,794; 100,000 → 5.95 / 7.60 / 13.55 / 66,356;
-500,000 → 38.71 / 40.73 / 79.44 / 329,790. At half a million vertices `AddPath` alone is 38.71
-of the 79.44 ms, and it holds the GIL throughout. Below about 10,000 vertices the whole clip is
-around a millisecond and a thread is pure overhead. Cut the vertex count first —
-`CleanPolygon` / `SimplifyPolygon`, or decimate — and reach for a thread second.
+for less of the wall time than you would expect. On the same machine, two overlapping n-gons ran
+end to end in roughly 0.1 ms at 1,000 vertices, 1 ms at 10,000, 14 ms at 100,000 and 79 ms at
+500,000 — and in that last case `AddPath` alone was 39 of the 79 ms, holding the GIL throughout.
+Below about 10,000 vertices the whole clip is around a millisecond and a thread is pure
+overhead. Cut the vertex count first — `CleanPolygon` / `SimplifyPolygon`, or decimate — and
+reach for a thread second.
 
 **Give every thread its own object.** Four 150,000-vertex clips on four threads, each building
-its own `Pyclipper`, ran 1.19 / 1.40 / 1.31× faster than the same four in sequence over three
-runs, and all twelve results matched the serial ones exactly.
+its own `Pyclipper`, ran 1.2–1.4× faster than the same four in sequence, and every result
+matched the serial one exactly.
 
 **Sharing one `Pyclipper` across threads segfaults — it is a data race, not just a busy
 object.** Nothing in Clipper guards `AddPath`, so one thread adding a path while another solves
 is unsynchronised access to the same edge list: six threads × 25 rounds of `AddPath`-then-
-`Execute` on one shared object killed the interpreter on **every** run (SIGSEGV, exit 139, 3/3
-and 5/5 across two variants), while the identical calls run serially, or with a
-`threading.Lock` held across the whole add-and-solve, completed cleanly. A segfault is not a
-Python exception and not a Flet crash screen; the app disappears. Threads that only call
-`Execute` on an already-populated object hit Clipper's re-entrancy guard instead and raise
-rather than corrupt — six threads × 20 `Execute` calls gave 100
-`ClipperException: Execution of clipper did not succeed!` out of 120, with 20 correct results
-and no wrong ones, identically in four consecutive runs, and six threads × 40 calls each asking
-for a *different* clip type gave 237–239 right answers, 0 wrong ones and 1–3 exceptions per run.
-That benign half is not something to rely on landing in. Build a fresh `Pyclipper` per call — it
-costs nothing next to the clip — or hold a lock around every use of a shared one.
+`Execute` on one shared object killed the interpreter on **every** run (SIGSEGV, exit 139, 8
+runs across two variants), while the identical calls run serially, or with a `threading.Lock`
+held across the whole add-and-solve, completed cleanly. A segfault is not a Python exception and
+not a Flet crash screen; the app disappears.
+
+Threads that only call `Execute` on an already-populated object hit Clipper's re-entrancy guard
+instead and raise rather than corrupt: six threads calling `Execute` in a loop produced mostly
+`ClipperException: Execution of clipper did not succeed!` with the remainder correct and none
+wrong, repeatably. That benign half is not something to rely on landing in. Build a fresh
+`Pyclipper` per call — it costs nothing next to the clip — or hold a lock around every use of a
+shared one.
 
 In Flet the exception half is invisible if you let it escape: `page.run_thread` never retrieves
 the worker's future, so nothing is logged and nothing crashes — the clip simply does not happen.
 Wrap the worker body in `try/except` and render the message, and end it with an explicit
 [`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update), because auto-update
 does not reach background threads. And note `page.run_thread` submits to a shared pool, so two
-quick taps genuinely overlap: that is the situation the segfault above needs.
+quick taps genuinely overlap: that is the situation the segfault above needs. Nothing in the
+package starts a thread of its own, so every thread involved is one you made.
 
-Nothing in the package starts a thread of its own: `pthread_create` is not among the undefined
-symbols of any Android slice.
+### App size
 
-## Android notes
+Expect approximately 0.33 MB unpacked per Android ABI and 0.39 MB per iOS slice — one extension
+and two small Python files, with no test suite or data directory worth naming in
+[`[tool.flet.cleanup]`](https://flet.dev/docs/publish/#compilation-and-cleanup).
 
-**One extra wheel arrives: `flet-libcpp-shared`.** The extension is C++, and every Android slice
-names `libc++_shared.so` in `DT_NEEDED` — the full list on cp312, cp313 and cp314 alike is
-`libm.so`, `libpython3.<minor>.so`, `libc++_shared.so`, `libdl.so`, `libc.so`, with no `SONAME`,
-`RPATH` or `RUNPATH`. So the `Requires-Dist: flet-libcpp-shared (>=27.2.12479018)` that every
-Android wheel carries is load-bearing rather than defensive, and it is the *only* `Requires-Dist`
-line there. Its only payload file is `opt/lib/libc++_shared.so` — 1,292,904 bytes on arm64-v8a,
-872,872 on armeabi-v7a, 1,252,080 on x86_64, unchanged between the 27.2.12479018 and
-27.3.13750724 releases. Nothing to configure; it resolves on its own.
+Android carries one thing on top: the C++ runtime, `libc++_shared.so`, approximately 0.87 MB on
+`armeabi-v7a` and 1.25–1.3 MB on the 64-bit ABIs. It arrives once per ABI and is shared with
+every other C++ package in the app, so it is not pyclipper's cost twice over.
 
-**Every slice is 16 KB page-aligned**, as Android 15 requires: every `PT_LOAD` segment in all
-nine Android extensions reports `p_align 0x4000`.
+At this size, narrowing
+[`target_arch`](https://flet.dev/docs/publish/android/#supported-target-architectures) or using
+an app bundle or split APKs is a decision to make for the application as a whole — dropping an
+ABI saves the C++ runtime, not the wheel. These figures describe the package payload, not the
+amount added to the final APK or IPA; packaging and compression determine that.
 
-**The 32-bit ABI is not a 32-bit coordinate space.** The armeabi-v7a extension is a 32-bit ELF
-(class 1, `e_machine 0x28`) yet still defines
-`_ZN10ClipperLib7Clipper20ProcessIntersectionsEx`, whose trailing `x` is Itanium-ABI
-`long long`. Clipper's `use_int32` switch is left commented out upstream, so coordinates are
-64-bit signed integers and the ±(2\*\*62 − 1) limit below is identical on every mobile slice.
+### Other considerations
 
-**The extension filename shape differs by Python version, not by platform.** cp313 and cp314
-Android ship the full triplet — `pyclipper/_pyclipper.cpython-314-aarch64-linux-android.so` —
-while all three cp312 Android ABIs ship the short forge tag
-`pyclipper/_pyclipper.cpython-312.so` (319,576 bytes on arm64-v8a, still 16 KB aligned, still
-exporting `PyInit__pyclipper`). Both are ABI-tagged, which is all the relocation needs, so
-neither shape asks anything of you.
+A desktop `flet run` installs PyPI's own wheel. It is built from the same sdist, with the same
+vendored Clipper sources and the same Python layer, so upstream's documentation applies without
+translation and anything you prototype on your laptop transfers.
 
-**The Android `METADATA` loses upstream's long description.** It is 1,801 bytes — headers plus
-the appended `Requires-Dist` line — against 8,577 bytes on iOS, which still carries upstream's
-full README. So `importlib.metadata.metadata("pyclipper")["Description"]` differs by platform.
+What does not transfer is the metadata. The Android wheel's `METADATA` drops upstream's long
+description while the iOS wheel's keeps it, so
+`importlib.metadata.metadata("pyclipper")["Description"]` answers differently by platform.
 Nothing in pyclipper reads it; code of yours might.
 
-## iOS notes
-
-**Nothing extra to install.** The iOS wheels carry no `Requires-Dist` line at all, because C++
-comes from the OS: `otool -L` on each of the nine iOS slices lists only its own install name,
-`@rpath/Python.framework/Python`, `/usr/lib/libc++.1.dylib` and `/usr/lib/libSystem.B.dylib`.
-
-**No `MH_BUNDLE` problem here.** All nine are already `MH_DYLIB` (`otool -hv` →
-`filetype DYLIB`), so the conversion some CMake-built extensions need does not arise. Nor is
-there an interdependent-dylib problem: there is exactly one extension per wheel and it depends
-on no sibling.
-
-**The binary is bigger on iOS and the installed footprint is smaller.** The cp314 extension is
-381,984 bytes on device against 321,432 on Android arm64-v8a — but Android then adds
-`libc++_shared.so` on top, which is
-1,292,904 bytes on that ABI. Unpacked, one cp314 wheel is 393,123 bytes on iOS device against
-325,805 on Android arm64-v8a.
-
-**The arm64 simulator slice disagrees with its own wheel tag about the deployment target.**
-`LC_BUILD_VERSION` reports `minos 13.0` on the device slice and on the x86_64 simulator slice
-but `minos 14.0` on the arm64 simulator slice, at all three Python versions, though every wheel
-is tagged `ios_13_0`. Simulator-only, so no consumer impact has been observed, but it is a real
-disagreement.
+Leave Flet's [package compilation](https://flet.dev/docs/publish/#compilation-and-cleanup)
+enabled. Nothing in pyclipper reads its own source, so compiling to `.pyc` is safe here.
 
 ## Things to know
 
 - **Coordinates are integers, and a float is silently truncated toward zero — no exception, no
-  warning, a wrong polygon.** There is no rounding step anywhere: `_to_clipper_point` in
-  upstream's `.pyx` is one line, `return IntPoint(py_point[0], py_point[1])`, and Cython converts
-  each coordinate to Clipper's 64-bit `cInt` the way `int()` does — toward zero. Measured on
-  desktop: the unit square (0,0)–(1,1) intersected with the square (0.5,0.25)–(1.5,1.25), true
-  area 0.375, came back as `[[[1,1],[0,1],[0,0],[1,0]]]` — area 1.0, 2.67× too large, with
-  nothing said. Probing `AddPath` directly with a 10-wide square whose corner is the value and
-  reading `GetBounds` back: 0.4→0, 0.5→0, 0.6→0, 1.5→1, 2.5→2, −0.9→0, −1.5→−1. Fix it with
-  `pyclipper.scale_to_clipper(path)` before `AddPath` and `pyclipper.scale_from_clipper(...)`
-  after `Execute`: the same test through the helpers returns
-  `[[[1.0,1.0],[0.5,1.0],[0.5,0.25],[1.0,0.25]]]`, area exactly 0.375. If you scale yourself,
-  `round()` rather than truncate, and treat any float reaching `AddPath` as a bug —
-  `assert all(isinstance(v, int) for pt in path for v in pt)` costs nothing next to a clip. NaN
-  and infinity are the well-behaved cases: they raise `ValueError: cannot convert float NaN to
-  integer` and `OverflowError: cannot convert float infinity to integer`.
+  warning, a wrong polygon.** There is no rounding step anywhere; Cython converts each
+  coordinate to Clipper's 64-bit `cInt` the way `int()` does. Measured on desktop: the unit
+  square (0,0)–(1,1) intersected with the square (0.5,0.25)–(1.5,1.25), true area 0.375, came
+  back as `[[[1,1],[0,1],[0,0],[1,0]]]` — area 1.0, 2.67× too large, with nothing said. The same
+  test through `scale_to_clipper` / `scale_from_clipper` returns area exactly 0.375. If you scale
+  yourself, `round()` rather than truncate. NaN and infinity are the well-behaved cases: they
+  raise `ValueError: cannot convert float NaN to integer` and
+  `OverflowError: cannot convert float infinity to integer`.
 - **A coordinate beyond ±(2\*\*62 − 1) aborts the process, and `try/except` cannot catch it.**
   The limit is Clipper's `hiRange`, 4,611,686,018,427,387,903. `x = 0x3FFFFFFFFFFFFFFF` is
   accepted and echoed straight back by `GetBounds`, while `0x4000000000000000` and its negative
@@ -201,25 +203,20 @@ disagreement.
   ClipperLib::clipperException: Coordinate outside allowed range` and exit code 134 — SIGABRT,
   not a Python exception and not a Flet crash screen. Upstream declares `except +` on no C++
   method, which is why the throw reaches `std::terminate`, and that exact message string is
-  present in all eighteen shipped mobile binaries. `PyclipperOffset.Execute(1e19)` on a 100×100 square
+  present in every shipped mobile binary. `PyclipperOffset.Execute(1e19)` on a 100×100 square
   aborts identically. Range-check in Python, where an `if` is catchable, before the first
   `AddPath`.
 - **`scale_to_clipper` can hand you a fatal value without complaining.** It raises only when the
   product exceeds 2\*\*63 — `scale_to_clipper([(1e10, 0)])` at the default scale gives
   `OverflowError: Python int too large to convert to C long` — so the band between 2\*\*62 and
   2\*\*63 is produced silently and aborts one call later: `scale_to_clipper([(5e18, 0)], 1)`
-  returns 5,000,000,000,000,000,000, larger than `hiRange`, with no error. Assert
-  `max(abs(v) for path in scaled for v in path) <= 2**62 - 1` before the first `AddPath`.
-- **The default scale factor of 2\*\*31 is the right starting point, and it costs nothing in
-  speed.** It leaves a usable coordinate magnitude of 2\*\*31 = 2,147,483,648 with a precision of
-  2\*\*−31 ≈ 4.66e−10, and the truncation is exact for dyadic values — `(0.5, 0.25)` and
-  `(1.5, 2.75)` round-trip unchanged, while `0.1 × 2**31 = 214748364.8` becomes `214748364`.
-  Clipper switches to 128-bit arithmetic above `loRange` (0x3FFFFFFF = 1,073,741,823), and that
-  is not a cliff: a 20,000-vertex pair swept from radius 1e9 to 1e18, `Execute` best of five, ran
-  1.79, 1.81 (`loRange` exactly), 1.70, 1.69 (2\*\*31), 1.88 and 1.98 ms while returning the same
-  17,868 output vertices throughout. If your data needs a different factor, derive it from the
-  real extent (2\*\*62 ÷ your largest absolute coordinate, then back off an order of magnitude
-  for offsetting headroom) rather than guessing.
+  returns 5,000,000,000,000,000,000, larger than `hiRange`, with no error.
+- **The default scale factor costs nothing in speed.** Clipper switches to 128-bit arithmetic
+  above `loRange` (0x3FFFFFFF = 1,073,741,823), and that is not a cliff: a 20,000-vertex pair
+  swept from radius 1e9 to 1e18 stayed between 1.7 and 2.0 ms and returned the same 17,868
+  output vertices throughout. Truncation at that factor is exact for dyadic values — `(0.5,
+  0.25)` and `(1.5, 2.75)` round-trip unchanged, while `0.1 × 2**31 = 214748364.8` becomes
+  `214748364`.
 - **`Execute` returns a flat list of rings with no hole information.** A 100×100 square with a
   50×50 hole, clipped against a bounding box, comes back as two paths whose `pyclipper.Area`
   values are `[10000.0, -2500.0]`: the negative one is the hole, and the signed sum, 7500.0, is
@@ -264,69 +261,74 @@ disagreement.
   side: the same square given clockwise and counter-clockwise, offset by +10 with `JT_MITER`,
   both returned x-range (−10, 110) and area 14400.0.
 - **`ArcTolerance` is in your coordinate units, so `JT_ROUND` after scaling explodes.** A square
-  offset with `JT_ROUND` at the default `ArcTolerance` of 0.25, best of five: side 100, delta 10
-  → 16 output vertices, 0.002 ms; side 1e8, delta 1e7 → 13,996 vertices, 1.53 ms; side 2\*\*31,
-  delta 2\*\*28 → 72,568 vertices, 8.19 ms. Multiplying `ArcTolerance` by the same factor the
-  coordinates grew by — 0.25 × 2\*\*31/100 — brings the last case back to 20 vertices and
-  0.003 ms. `JT_MITER` is unaffected — 4
-  output vertices and 0.001 ms at every size. A round-joined offset that returns tens of
-  thousands of vertices is this, not your geometry.
+  offset with `JT_ROUND` at the default `ArcTolerance` of 0.25 returns 16 output vertices at side
+  100, about 14,000 at side 1e8, and about 73,000 at side 2\*\*31 — 8 ms for one offset of one
+  rectangle. Multiplying `ArcTolerance` by the same factor the coordinates grew by brings that
+  last case back to 20 vertices and microseconds. `JT_MITER` is unaffected — 4 output vertices at
+  every size. A round-joined offset that returns tens of thousands of vertices is this, not your
+  geometry.
 - **Cost tracks intersections, not vertices, so self-intersecting input blows up
-  superlinearly.** A convex ring clipped against a box went 0.1 → 0.3 → 0.9 ms from 1,000 to
-  4,000 to 12,000 vertices; random star-shaped self-intersecting rings at the same counts went
-  4.4 ms (122 paths, 24,486 output vertices) → 105.6 ms (501 paths, 361,703) → 3,201.8 ms (1,465
-  paths, 3,275,825). A 12× increase in input cost 728× the time. `SimplifyPolygon` /
-  `CleanPolygon` first if your input might look like that.
+  superlinearly.** A convex ring clipped against a box went from 0.1 to 0.9 ms as it grew from
+  1,000 to 12,000 vertices. Random star-shaped self-intersecting rings over the same range went
+  from 4 ms to 3.2 *seconds*, the output growing from 24,000 vertices to 3.3 million: a 12×
+  increase in input cost more than 700× the time. `SimplifyPolygon` / `CleanPolygon` first if
+  your input might look like that.
 - **A `Pyclipper` keeps its paths after `Execute`,** so one object can answer more than one
   question: after adding two overlapping squares, `Execute(CT_INTERSECTION)` returned the same
   result twice and a third call with `CT_UNION` returned the correct 8-vertex union. `Clear`
   starts over. (This is about *sequential* reuse — see [Threading](#threading) for why two threads
   cannot share one object.)
 - **There is no way to read the Clipper version at runtime.** `pyclipper.__version__` is the
-  wrapper's version, and `dir(pyclipper)` — 46 names in total, of which 5 are types, 18 are
-  constants, 18 are functions, one is `SILENT` and four are leaked imports — exports no Clipper
-  version constant. `strings` finds no `6.4.2` in any of the eighteen mobile binaries: it exists only as
-  `METADATA` text and a compile-time `#define`. Quote it from the wheel metadata rather than
-  trying to print it. Note also that there is no `SCALING_FACTOR` in this release.
+  wrapper's version, and nothing the package exports names a Clipper version. `strings` finds no
+  `6.4.2` in any mobile binary: it exists only as `METADATA` text and a compile-time `#define`.
+  Quote it from the wheel metadata rather than trying to print it. Note also that there is no
+  `SCALING_FACTOR` in this release.
 - **`pyclipper.SILENT = False` does not enable the tracing; `pyclipper._pyclipper.SILENT = False`
   does.** `pyclipper/__init__.py` is `from ._pyclipper import *`, so assigning to the re-exported
-  copy changes nothing the extension reads. Setting the real one makes `log_action` print
-  `Creating a Clipper instance` / `Deleting the Clipper instance`, and
-  `Creating an ClipperOffset instance` / `Deleting the ClipperOffset instance` for the offsetter,
-  to stdout — on device, the app's console log. Construction and destruction is the whole trace;
-  `AddPath` and `Execute` say nothing, so it is rarely worth it.
+  copy changes nothing the extension reads. Setting the real one prints a line to stdout — on
+  device, the app's console log — each time a `Clipper` or `ClipperOffset` instance is created or
+  deleted. That is the whole trace; `AddPath` and `Execute` say nothing, so it is rarely worth it.
 - **Do not locate anything relative to `pyclipper._pyclipper.__file__`, and do not assume the
   attribute exists.** Flet moves ABI-tagged extensions out of site-packages on both platforms, so
   that value is not a path you can open — and on Android it may be missing outright rather than
   merely wrong. Measured under the same Flet version on other recipes' extensions:
   [`pydantic-core`](../pydantic-core)'s `_pydantic_core` reports no `__file__` at all on Android
   while [`pyyaml`](../pyyaml)'s `_yaml` reports the bare `jniLibs` filename `libyaml-_yaml.so`,
-  and both report a `.fwork` path on iOS. So read it as `getattr(module, "__file__", None)`; written plainly it is
-  an `AttributeError`, and an `AttributeError` raised while building your page is a Flet crash
-  screen rather than a message. Nothing in pyclipper reads it, so this only bites code of yours;
+  and both report a `.fwork` path on iOS. So read it as `getattr(module, "__file__", None)`;
+  written plainly it is an `AttributeError`, and an `AttributeError` raised while building your
+  page is a Flet crash screen rather than a message. This only bites code of yours;
   the [`boolean-canvas`](examples/boolean-canvas) example prints it in its header line so you can
   read the real shape off a device.
 
 ## Build notes (maintainers)
 
-`meta.yaml` is seventeen lines, and the one thing in it that needs justifying — the Android-only
-`flet-libcpp-shared` host requirement — carries its own comment. There is no `patches/` directory
-and no `source:` key, so forge builds the PyPI sdist unmodified. What is left for here is why
-that is the whole recipe, and the bump checklist.
+### Recipe shape
 
 **The recipe is minimal because the sdist is self-contained.** Clipper is two vendored files in
-pyclipper's own sdist (`src/clipper.cpp`, `src/clipper.hpp`) compiled into the extension: every
-Android slice defines 194 `ClipperLib` symbols out of 197 defined dynamic symbols and leaves no
-`ClipperLib` symbol undefined, and 168 of the 170 symbols the iOS device slice exports are
-`ClipperLib::*` (the other two being `PyInit__pyclipper` and Cython's
-`__pyx_module_is_main_pyclipper___pyclipper`). So there is no `flet-lib*` recipe to build,
-nothing to pin, and no `requirements.host` beyond the C++ runtime. Options that were therefore
-not needed and should not be added on a bump without a reason: `extract_packages` (the extension
-is ABI-tagged and sits beside a real `__init__.py`), `excluded_arches` (all three Android ABIs and
-all three iOS slices build), a PEP 517 shim, and any `source.url` override.
+pyclipper's own sdist (`src/clipper.cpp`, `src/clipper.hpp`) compiled straight into the
+extension — nearly every dynamic symbol a built slice defines is `ClipperLib::*`, and no
+`ClipperLib` symbol is left undefined on any of them. So there is no `flet-lib*` recipe to build,
+nothing to pin, and no `requirements.host` beyond the C++ runtime. There is no `patches/`
+directory and no `source:` key either: forge builds the PyPI sdist unmodified.
 
-What to re-verify on a bump — a green build establishes almost none of what the sections above
-claim, and none of it is asserted by `tests/`:
+The one thing in `meta.yaml` that needs justifying, the Android-only `flet-libcpp-shared` host
+requirement, carries its own comment there. It is load-bearing rather than defensive: the
+extension is C++, every Android slice names `libc++_shared.so` in `DT_NEEDED`, and that is the
+only `Requires-Dist` line the Android wheels carry. iOS gets C++ from the OS
+(`/usr/lib/libc++.1.dylib`), so the iOS wheels carry no `Requires-Dist` at all.
+
+Options that were therefore not needed, and should not be added on a bump without a reason:
+`extract_packages` (the extension is ABI-tagged and sits beside a real `__init__.py`; note the
+filename shape differs by Python version, full triplet on cp313/cp314 and the short forge tag on
+cp312, and both are ABI-tagged, which is all the relocation needs), `excluded_arches` (every
+Android ABI and every iOS slice builds), a PEP 517 shim, and any `source.url` override. There is
+no `MH_BUNDLE` conversion to do either: the iOS extensions are already `MH_DYLIB`, and with one
+extension per wheel there is no interdependent-dylib problem.
+
+### Upgrade hazards
+
+A green build establishes almost none of what the consumer sections claim, and none of it is
+asserted by `tests/`.
 
 - **The Clipper version.** Read it off the built wheel's `METADATA` `Summary` line and off
   `CLIPPER_VERSION` in the unpacked sdist's `src/clipper.hpp`. Today both say 6.4.2 while the
@@ -335,8 +337,8 @@ claim, and none of it is asserted by `tests/`:
 - **`hiRange`, `use_int32` and `use_lines`.** `grep -n 'hiRange\|use_int32\|use_lines'
   src/clipper.hpp`. Today `hiRange` is `0x3FFFFFFFFFFFFFFFLL`, `use_int32` is commented out and
   `use_lines` is defined — the first two set the ±(2\*\*62 − 1) limit that
-  [Things to know](#things-to-know) states as a number, and the third is why open-path clipping
-  works and its "disabled" message is absent from the binaries.
+  [Coordinates and precision](#coordinates-and-precision) states as a number and as an assertion,
+  and the third is why open-path clipping works.
 - **`except +`.** `grep -c 'except +' src/pyclipper/_pyclipper.pyx` is 0 today, which is the whole
   reason an out-of-range coordinate is a process abort rather than a Python exception. If upstream
   ever adds it, the two abort bullets become wrong in the reader's favour and should be rewritten,
@@ -345,28 +347,40 @@ claim, and none of it is asserted by `tests/`:
   covering both `Execute`s, both `Execute2`s and `GetBounds` but neither `AddPath` nor `AddPaths`.
   The whole of [Threading](#threading) rests on that split; a release that decorated `AddPath`
   would change the advice rather than just the numbers.
-- **The Android linkage.** `DT_NEEDED` must still name `libc++_shared.so` on all three ABIs, or
-  the `flet-libcpp-shared` requirement is dead weight and [Android notes](#android-notes) is
-  wrong. Re-check 16 KB `PT_LOAD` alignment at the same time, and that iOS is still `MH_DYLIB`
-  with no `Requires-Dist`.
-- **The wheel shape.** Still eight entries with no data file and no `.pyi` stub, and the extension
-  still ABI-tagged next to a real `__init__.py`. A new data file or a stub would put the
-  no-`extract_packages` claim back in question — a `.pyi` in particular is deleted by
-  serious_python's junk-file globs.
-- **The measurements.** Every timing, percentage and byte count above is measured, most on desktop
-  cp314. Re-measure rather than scaling: the ratios transfer, the absolute times do not. The
-  `libc++_shared.so` payload sizes move with the `flet-libcpp-shared` recipe rather than this one.
 - **The behavioural gotchas.** Float truncation, the overlapping constant families, the
   `PFT_NONZERO` hole fill, the open-path aborts, the empty-list erosion and the `ArcTolerance`
   blowup all live in upstream's Python and Cython layers, so a pyclipper bump can move any of them
   without the build noticing.
+- **A known, unexplained discrepancy.** `LC_BUILD_VERSION` reports `minos 13.0` on the iOS device
+  and x86_64 simulator slices but `minos 14.0` on the arm64 simulator slice, though every wheel is
+  tagged `ios_13_0`. Simulator-only so far; if it ever reaches the device slice it stops being
+  cosmetic.
+
+### Re-verification checklist
+
+- **The Android linkage.** `DT_NEEDED` must still name `libc++_shared.so` on all three ABIs, or
+  the `flet-libcpp-shared` requirement is dead weight. Re-check 16 KB `PT_LOAD` alignment at the
+  same time, and that iOS is still `MH_DYLIB` with no `Requires-Dist`.
+- **The wheel shape.** Still one extension beside a real `__init__.py`, still ABI-tagged, still no
+  data file and no `.pyi` stub. Either of the last two would put the no-`extract_packages`
+  decision back in question — a `.pyi` in particular is deleted by serious_python's junk-file
+  globs.
+- **The measurements.** Every timing, percentage and size figure in the consumer sections is
+  measured, most on desktop cp314. Re-measure rather than scaling: the ratios transfer, the
+  absolute times do not. The `libc++_shared.so` payload sizes move with the `flet-libcpp-shared`
+  recipe rather than this one.
+
+### Coverage gaps
 
 `tests/test_pyclipper.py` covers intersection, offset and the scale round trip — presence,
-essentially. Worth adding, in rough order of value: a float path fed straight into `AddPath` and
-asserted to give the *wrong* area, since that is the claim an app author is most likely to hit and
-it would turn red the day upstream starts rounding or raising; an `Execute` over a shape with a
-hole asserting that the flat solution's signed areas sum correctly, which pins the `PFT_EVENODD`
+essentially. It does not exercise hole handling, open paths, float truncation, threading or the
+`ArcTolerance` blowup, so treat every one of those as an inspection-backed or example-backed
+claim.
+
+Worth adding, in rough order of value: a float path fed straight into `AddPath` and asserted to
+give the *wrong* area, since that is the claim an app author is most likely to hit and it would
+turn red the day upstream starts rounding or raising; an `Execute` over a shape with a hole
+asserting that the flat solution's signed areas sum correctly, which pins the `PFT_EVENODD`
 default; and an open path through `Execute2` + `OpenPathsFromPolyTree`, which would catch a build
-that lost `use_lines`. Per the repo's test convention, assert relationships rather than version
-numbers — and do not try to test the out-of-range abort, since it takes the test process down with
-it.
+that lost `use_lines`. Do not try to test the out-of-range abort — it takes the test process down
+with it.

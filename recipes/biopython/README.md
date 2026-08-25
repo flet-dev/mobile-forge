@@ -1,22 +1,22 @@
 # biopython
 
 [Biopython](https://biopython.org/) is the standard Python toolkit for computational
-molecular biology: sequence objects, translation and the genetic code, ~50 file formats
+molecular biology: sequence objects, translation and the genetic code, dozens of file formats
 through [`Bio.SeqIO`](https://biopython.org/wiki/SeqIO) and `Bio.AlignIO`, pairwise
 alignment, substitution matrices, restriction enzymes, phylogenetic trees, PDB structures,
 motifs and clustering.
 
 Almost all of that is arithmetic on strings and small arrays, which makes a phone a
 perfectly reasonable place to run it — a field app can parse a FASTA, translate it, align
-it against a reference and score it with BLOSUM62 without a network round trip. What a
-phone cannot do is the half of Biopython that shells out to external programs or talks to
-NCBI; this page is mostly about which half is which, plus one Android packaging entry you
-have to add yourself.
+it against a reference and score it with BLOSUM62 without a network round trip. The other
+half of Biopython shells out to external programs or talks to NCBI, and that half does not
+travel.
 
 ## Install
 
+Add Biopython to your `pyproject.toml`:
+
 ```toml
-# pyproject.toml
 dependencies = [
     "flet",
     "biopython",
@@ -27,30 +27,42 @@ extract_packages = ["Bio"]
 ```
 
 The [`extract_packages`](https://flet.dev/docs/publish/android/#extract-packages) entry is
-**not optional on Android** if your app loads a substitution matrix or parses saved NCBI
-or BLAST XML — see [Android notes](#android-notes) for the exact failures. It is an *import*
-name, so it is `Bio` with a capital B, not the `biopython` distribution name. `BioSQL`, the wheel's
-other top-level package, is [not usable on mobile at all](#things-to-know).
+**not optional on Android** if your app loads a substitution matrix or parses saved NCBI or
+BLAST XML — [Android](#android) has the exact failures. It is an *import* name, so it is
+`Bio` with a capital B, not the `biopython` distribution name. `BioSQL`, the wheel's other
+top-level package, is [not usable on mobile](#things-to-know).
 
-It is not free: the entry names one package and `Bio` is the whole wheel, so all 10.8 MiB of it
-is written out of `sitepackages.zip` onto the filesystem, 3.8 MiB of that the
-`Bio/Entrez/DTDs/` tree an app that only touches sequences will never open. What that costs in
-disk and in first-launch time on a real device is not established here.
+## Examples
 
-List nothing else. The wheel's `Requires-Dist` is a single line, `numpy` — add numpy to your
-own dependency list only if your code imports it directly. There is no `flet-lib*` chain of
-biopython's own: its thirteen extension modules need nothing beyond `libc`, `libdl`, `libm`
-and `libpython` on Android, and `Python.framework` plus `libSystem` on iOS. You will still
-see `flet-libcpp-shared` scroll past in an Android build — that is numpy's dependency, not
-biopython's, and it is why the stack's Python floor is 3.11 rather than biopython's own 3.10.
+See runnable Flet apps in [`examples/`](examples):
 
-Nineteen wheels at the current build number: Python 3.12, 3.13 and 3.14 × three Android ABIs
-(arm64-v8a, armeabi-v7a, x86_64) and three iOS slices (device, arm64 simulator, x86_64
-simulator), plus a 32-bit `android_24_x86` wheel that exists on the 3.12 leg only. Nothing
-on PyPI competes for a mobile target — upstream's own 1.87 release publishes 31 files, all
-macOS, Linux and Windows.
+- [`offline-seqlab`](examples/offline-seqlab) — parses, translates and aligns sequences on
+  device, every answer checked against one computed by hand.
 
-## Storage
+## Usage in a Flet app
+
+Biopython returns strings, numbers and small objects that print as one, so a parse, a
+translation or an alignment goes into an [`ft.Text`](https://flet.dev/docs/controls/text/)
+as it is — in a monospace font, because sequence output only lines up in one:
+
+```python
+from Bio import Align, SeqIO
+
+records = list(SeqIO.parse(path, "fasta"))
+aligner = Align.PairwiseAligner(mode="local", match_score=2, mismatch_score=-1)
+view = ft.Text(
+    f"{records[0].seq.translate()}\n{aligner.align(records[0].seq, reference)[0]}",
+    font_family="monospace",
+    selectable=True,
+)
+```
+
+Configure
+[`PairwiseAligner`](https://biopython.org/docs/latest/api/Bio.Align.html#Bio.Align.PairwiseAligner)
+once and reuse it. `align()` is lazy — it returns an object you index into — and
+`aligner.score(a, b)` is the cheaper call when the number is all you need.
+
+### Storage
 
 Biopython reads and writes ordinary paths — `SeqIO.write(records, path, "fasta")` and
 `SeqIO.parse(path, "fasta")` take whatever you hand them — so put anything you want to keep
@@ -65,31 +77,25 @@ path = os.path.join(os.getenv("FLET_APP_STORAGE_DATA", "."), "sequences.fasta")
 belongs there too. It builds a stdlib-`sqlite3` index beside your sequence files and gives
 you random access by id without holding the records in memory — 200 FASTA records indexed
 into a 20 kB `.db` and read back correctly, measured on the host. `sqlite3` is the only
-thing it and the MAF indexer need, and both mobile Python builds ship it (the
-[apsw recipe](../apsw/README.md) compares that module against apsw on both platforms).
+thing it and the MAF indexer need, and both mobile Python builds ship it.
+
+An index you can rebuild belongs in
+[`FLET_APP_STORAGE_CACHE`](https://flet.dev/docs/reference/environment-variables/#flet_app_storage_cache)
+instead, and a reference FASTA shipped with the app is an
+[asset](https://flet.dev/docs/cookbook/assets) whose absolute path comes from
+[`FLET_ASSETS_DIR`](https://flet.dev/docs/reference/environment-variables/#flet_assets_dir).
 
 Nothing in the wheel writes anywhere on its own, with one exception:
-`import Bio.Entrez.Parser` creates `~/.config/biopython/Bio/Entrez/{DTDs,XSDs}` while the
-import is still running — see [iOS notes](#ios-notes) for why that is worth knowing.
+`import Bio.Entrez.Parser` creates a cache directory under `$HOME` while the import is still
+running — see [Entrez cache directory](#entrez-cache-directory).
 
-## Examples
+### Threading
 
-See runnable Flet apps in [`examples/`](examples):
-
-- [`offline-seqlab`](examples/offline-seqlab) — parses, translates and aligns sequences on
-  device, every answer checked against one computed by hand.
-
-## Threading
-
-**Alignment holds the GIL for the entire call.** Nothing in the wheel releases it: the
-seventeen shipped `.c`/`.h` files contain no `Py_BEGIN_ALLOW_THREADS`, `PyEval_SaveThread`
-or `Py_UNBLOCK_THREADS`, and no compiled module on either platform references a GIL or
-`pthread` symbol at all. A canary thread confirms the consequence — its tick rate across a
-191 ms
-[`PairwiseAligner.score`](https://biopython.org/docs/latest/api/Bio.Align.html#Bio.Align.PairwiseAligner)
-call was 3.5% of idle, tracking a GIL-holding `sorted()` control at 2.5% rather than a
-GIL-releasing `zlib.compress` control at 99.0%. `sys.setswitchinterval` cannot help, because
-there are no bytecode boundaries inside the C call to switch at.
+**Alignment holds the GIL for the entire call.** Nothing in the wheel releases it. A canary
+thread confirms the consequence — its tick rate across a 191 ms
+`PairwiseAligner.score` call was 3.5% of idle, tracking a GIL-holding `sorted()` control at
+2.5% rather than a GIL-releasing `zlib.compress` control at 99.0%. `sys.setswitchinterval`
+cannot help, because there are no bytecode boundaries inside the C call to switch at.
 
 So [`page.run_thread(...)`](https://flet.dev/docs/controls/page/#flet.Page.run_thread) does
 not keep the UI responsive *during* an alignment — it only keeps the structure right.
@@ -115,11 +121,11 @@ alignment costs roughly three to four times what scoring it does.
 End every `run_thread` handler with an explicit
 [`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update) — auto-update does
 not reach background threads — and wrap the body in `try/except`, because `run_thread` never
-retrieves the worker's future and an exception in it surfaces nowhere at all.
+retrieves the worker's future and an exception in it surfaces nowhere at all. There is no
+shared handle to serialise, so nothing here needs the application-wide lock a document or a
+database connection would.
 
-Biopython imposes no thread rules of its own; there is no shared handle to serialise.
-
-## Android notes
+### Android
 
 `[tool.flet.android] extract_packages = ["Bio"]` prevents three failures, and all of them
 are invisible until an app reaches for them.
@@ -150,46 +156,57 @@ Everything else tried keeps working from the zip: `import Bio`, `Seq` and its
 `reverse_complement`/`translate`, `SeqIO.parse`, `SeqUtils.gc_fraction`, `Bio.Restriction`,
 `Bio.Phylo` including `draw_ascii`, and a default `PairwiseAligner().score` — which is
 exactly why an app that only ever uses match/mismatch scoring never notices the entry is
-missing.
+missing. iOS needs no equivalent entry and has none: it keeps site-packages as a real
+directory in the app bundle, so the same reads resolve there.
 
-This was established by reproducing Flet's Android shape on the host with a real
-`zipimport` — the pure-Python tree in a `sitepackages.zip`, the extensions in a flat
-directory resolved by a `.soref` meta-path finder — and running the
-[example app](examples/offline-seqlab) against it: four panels pass and the BLOSUM50 panel
-prints the `NotADirectoryError` above. The Entrez and BLAST cases were exercised the same
-way, reading saved XML directly, each against a control run from an ordinary directory that
-parsed it fine. **None of it has been confirmed on an Android device**; see
-[Build notes](#build-notes-maintainers).
+### Entrez cache directory
 
-## iOS notes
-
-No `extract_packages` equivalent is needed or exists: iOS keeps site-packages as a real
-directory in the app bundle, so both `__file__`-relative reads above resolve there.
-
-The one iOS-specific hazard is `import Bio.Entrez.Parser`. Its `DataHandlerMeta.__init__`
-runs at class creation and, with no cache directory configured, calls
-`os.path.expanduser("~")` and two `os.makedirs`. Flet's iOS Python ships no `pwd` module, so
-if `HOME` is unset `expanduser` returns the literal string `~` and the import silently
-creates a directory named `~` in the process working directory — measured by simulating that
-runtime on the host (`sys.modules["pwd"] = None`, `HOME` removed), which produced
-`./~/.config/biopython/Bio/Entrez/{DTDs,XSDs}`. It does not raise, which is what makes it
-easy to miss. If anything in your app imports it, set a home first:
+`import Bio.Entrez.Parser` is the one import in the wheel with a side effect. Its
+`DataHandlerMeta.__init__` runs at class creation and, with no cache directory configured,
+calls `os.path.expanduser("~")` and two `os.makedirs`. Flet's iOS Python ships no `pwd`
+module, so if `HOME` is unset `expanduser` returns the literal string `~` and the import
+silently creates a directory named `~` in the process working directory — measured by
+simulating that runtime on the host (`sys.modules["pwd"] = None`, `HOME` removed), which
+produced `./~/.config/biopython/Bio/Entrez/{DTDs,XSDs}`. It does not raise, which is what
+makes it easy to miss. If anything in your app imports it, set a home first:
 
 ```python
 os.environ.setdefault("HOME", os.getenv("FLET_APP_STORAGE_DATA", "."))
 ```
 
 `Bio.Entrez.local_cache` is not a usable lever — `Parser` reads it during its own import, so
-there is no window in which to set it. Most apps are unaffected: plain `import Bio.Entrez`
-does not pull `Parser` in, and neither `from Bio import SeqIO` nor `import Bio.PDB` imports
-`Bio.Entrez` at all. What `HOME` actually is on Flet's mobile runtimes was not established
-here, so the `setdefault` above is the cheap way to stop caring.
+there is no window in which to set it. Most apps never reach this at all: plain
+`import Bio.Entrez` does not pull `Parser` in, and neither `from Bio import SeqIO` nor
+`import Bio.PDB` imports `Bio.Entrez`. What `HOME` is on each mobile runtime is not
+established here, so the `setdefault` above is the cheap way to stop caring.
 
-Otherwise the two platforms agree completely: normalise the ABI tag in the extension
-filenames and the Android arm64-v8a and iOS device wheels list the identical 659 entries,
-including the same thirteen extension modules. Nothing in the tree gates on `sys.platform`,
-and the single `platform.system()` check only distinguishes Windows from everything else —
-so the iOS `platform.system() == "iOS"` trap does not apply.
+### App size
+
+The wheel is about 2.7 MB compressed on every slice and unpacks to about 11 MB on Android,
+12 MB on iOS. Roughly 35% of that — 4.0 MB across 291 files — is `Bio/Entrez/DTDs/`, which
+only `Entrez.read` and `Blast.read` touch, and another 7% is the `.c`/`.h` sources upstream
+ships in its own wheels too, which nothing runs. With numpy, which biopython requires, expect
+roughly 9–10 MB of wheels and a little over 30 MB unpacked before your own assets.
+
+The layout is upstream's own and not configurable, and on Android `extract_packages = ["Bio"]`
+is what makes the unpacked figure real: the whole package is written out of `sitepackages.zip`
+onto the filesystem, DTD tree included, even for an app that only touches sequences. What that
+costs in first-launch time on a real device is not established here.
+
+The lever is the architecture list: use an app bundle, split APKs, or narrow
+[`target_arch`](https://flet.dev/docs/publish/android/#supported-target-architectures) when
+the application does not need every ABI. These figures describe the package payload, not the
+exact amount added to the final APK or IPA.
+
+### Other considerations
+
+A desktop `flet run` uses PyPI's own wheel, whose Python files are the same ones the mobile
+wheel carries — so anything you work out at a desk transfers. What does not transfer is the
+loader: on desktop, site-packages is a real directory and `pwd` exists, so none of the
+`NotADirectoryError` failures above and none of the `~` behaviour can appear there. Validate
+the three loader-sensitive paths — loading a substitution matrix, reading saved Entrez or
+BLAST XML, and importing `Bio.Entrez.Parser` — on a device or emulator/simulator rather than
+on the desktop run that will always pass.
 
 ## Things to know
 
@@ -214,8 +231,8 @@ so the iOS `platform.system() == "iOS"` trap does not apply.
   Needleman-Wunsch with match=1.0, mismatch=0.0, open=extend=−1.0 and no substitution matrix
   — which means a mismatch costs nothing and only matches are rewarded, rarely what you
   want. Setting affine gap costs switches it to Gotoh, `mode="local"` to Smith-Waterman, and
-  1.87 also accepts `mode="fogsaa"`. The `algorithm` attribute names whichever one it
-  picked, which is worth printing next to any score you show a user.
+  `mode="fogsaa"` is also accepted. The `algorithm` attribute names whichever one it picked,
+  which is worth printing next to any score you show a user.
 - **Five modules shell out to external binaries and are dead on mobile:** `Bio.PDB.DSSP`,
   `Bio.PDB.NACCESS`, `Bio.PDB.PSEA`, `Bio.PDB.ResidueDepth` and `Bio.Phylo.PAML`. They invoke
   `dssp`, `naccess`, `psea`, `msms` and the PAML suite; none ships in the wheel and none
@@ -246,21 +263,14 @@ so the iOS `platform.system() == "iOS"` trap does not apply.
   `Bio.codonalign` a `BiopythonExperimentalWarning`; `import Bio` and the modern API are
   silent. Separately, `Seq.translate()` on a sequence whose length is not a multiple of three
   warns `BiopythonWarning: Partial codon…` at call time and translates the whole codons.
-- **Size.** The Android arm64-v8a wheel is 2.55 MiB and unpacks to 10.8 MiB across 659
-  entries (armeabi-v7a 2.53 / 10.7; iOS device 2.55 / 11.5). Of the unpacked total,
-  **35.3% — 3.8 MiB across 291 files — is `Bio/Entrez/DTDs/`**, which only `Entrez.read`
-  touches, and another 6.8% is the `.c`/`.h` sources upstream ships in its own wheels too,
-  which nothing runs. Adding numpy, a hard dependency, takes the pair to about 9.1 MiB of
-  wheels and 32 MiB unpacked before your own assets. None of this is configurable — it is
-  upstream's own wheel layout — but Flet compiles `.py` to `.pyc` and zips site-packages, so
-  what lands on the device is smaller than the unpacked figure.
-- **Nothing here is a mobile fork.** All 298 `.py` files and all 343 data files in the wheel
-  are byte-identical to the PyPI release of the same version, so
+- **Nothing here is a mobile fork.** Every `.py` and every data file in the wheel is
+  byte-identical to the PyPI release of the same version, so
   [upstream's documentation](https://biopython.org/docs/latest/Tutorial/index.html) applies
-  unchanged and anything you work out on a laptop transfers — except for the loader,
-  external-binary and size questions this page is about.
+  unchanged — except for the loader, external-binary and size questions this page is about.
 
 ## Build notes (maintainers)
+
+### Recipe shape
 
 `meta.yaml` is a name, a version and a build number. The shipped C includes nothing but
 `Python.h`, libc headers and biopython's own — no numpy headers, no third-party library — so
@@ -268,42 +278,75 @@ the sdist cross-compiles as-is with no `requirements`, no patch and no flag. Tha
 recipe's whole shape, and a bump that needs more than a version change is a shape change
 worth pausing over.
 
-What has no home in `meta.yaml`, in rough order of how quietly it can go wrong:
+There is no native dependency chain either: the thirteen extension modules need nothing
+beyond `libc`, `libdl`, `libm` and `libpython` on Android, and `Python.framework` plus
+`libSystem` on iOS. `flet-libcpp-shared` does scroll past in an Android build — that is
+numpy's dependency, not biopython's, and it is why the stack's Python floor is 3.11 rather
+than biopython's own 3.10.
 
-- **The recipe declares no `extract_packages`, and its tests would not notice.**
-  `tests/test_biopython.py` exercises `Seq.reverse_complement`/`complement` and a FASTA round
-  trip through a `StringIO` — two pure-Python paths that pass happily from
-  `sitepackages.zip`, which is why CI is green while `substitution_matrices.load()` is not.
-  The `Bio` entry in [Install](#install) is therefore something every consumer has to add by
-  hand today. Closing the gap means confirming the failure on a device, then adding both an
-  `extract_packages: [Bio]` key here and a test that loads BLOSUM62 and parses both a saved
-  Entrez XML and a saved BLAST report. Note that a recipe's own `extract_packages` list is
-  read only by the on-device test app and travels nowhere near a consumer's build, so the
-  README entry stays either way.
+**The recipe declares no `extract_packages`, and its tests would not notice**: they exercise
+two pure-Python paths that pass happily from `sitepackages.zip`, which is why CI is green
+while `substitution_matrices.load()` is not. The `Bio` entry in [Install](#install) is
+therefore something every consumer adds by hand today. Closing that gap means confirming the
+failure on a device, then adding both an `extract_packages: [Bio]` key here and a test that
+loads BLOSUM62 and parses a saved Entrez XML and a saved BLAST report. A recipe's own
+`extract_packages` list is read only by the on-device test app and travels nowhere near a
+consumer's build, so the README entry stays either way.
+
+### Upgrade hazards
+
 - **The consumer-facing claims are almost all about upstream's tree, not the build.** The
   five `subprocess` users, the six optional-dependency guards, the removed
   `Bio.Alphabet`/`Applications`/`SubsMat` surface, the three `__file__` sites and the five
-  `Entrez.__path__[0]` reads — two in `Bio/Entrez/Parser.py`, three in
-  `Bio/Blast/_parser.py` — are all re-derivable by grepping the extracted wheel, and a minor
-  release can move any of them. Grep `__path__` as well as `__file__`: the `Bio/Blast` three
-  are what make saved BLAST XML an `extract_packages` case, and they are easy to miss.
-- **The "no GIL release" claim underpins the whole [Threading](#threading) section.** It
-  rests on two independent checks that are cheap to repeat: zero
+  `Entrez.__path__[0]` reads — two in `Bio/Entrez/Parser.py`, three in `Bio/Blast/_parser.py`
+  — are all re-derivable by grepping the extracted wheel, and a minor release can move any of
+  them. Grep `__path__` as well as `__file__`: the `Bio/Blast` three are what make saved
+  BLAST XML an `extract_packages` case, and they are easy to miss.
+- **If upstream ever releases the GIL around the DP loop**, the advice to chunk work per pair
+  becomes wrong rather than merely conservative, and the whole [Threading](#threading)
+  section has to be rewritten rather than trimmed.
+- **The absence of `Bio.Align._aligners`.** The current release splits the pairwise engine
+  across `_pairwisealigner` and `_aligncore`; older code and older documentation name a
+  module that does not exist here. If a bump reunifies them, the extension count moves.
+
+### Re-verification checklist
+
+- **The GIL claim**, which the whole Threading section rests on, has two independent checks
+  that are cheap to repeat: zero
   `Py_BEGIN_ALLOW_THREADS`/`PyEval_SaveThread`/`Py_UNBLOCK_THREADS` across the seventeen
   shipped `.c`/`.h` files, and no GIL or `pthread` symbol in any compiled module's dynamic
-  symbols on either platform. If upstream ever releases the GIL around the DP loop, the
-  advice to chunk work per pair becomes wrong rather than merely conservative.
-- **The thirteen-extension / four-`NEEDED`-library claim is what says this recipe has no
-  native dependency chain.** Re-read the Android wheel's `DT_NEEDED` entries after a bump: a
-  new library appearing there (`libc++_shared` above all) means the recipe shape has to
-  change. The iOS side should stay MH_DYLIB with only `Python.framework` and `libSystem`.
-- **The absence of `Bio.Align._aligners`.** 1.87 splits the pairwise engine across
-  `_pairwisealigner` and `_aligncore`; older code and older documentation name a module that
-  does not exist here. If a bump reunifies them, the extension count in this page moves.
-- **The sizes, the 35.3% DTD share and the wheel/leg matrix are measured**, including that
-  the 32-bit `android_24_x86` wheel exists on the 3.12 leg only. Re-measure rather than
-  scaling the old numbers, and re-count the legs — that asymmetry follows from Flet's Python
-  builds, not from this recipe.
+  symbols on either platform.
+- **Android `DT_NEEDED` and iOS file types:** re-read the Android wheel's entries after a
+  bump — a new library there, `libc++_shared` above all, turns a zero-requirement recipe
+  into a chained one. The iOS side should stay MH_DYLIB with only `Python.framework` and
+  `libSystem`.
+- **Wheel parity:** normalise the ABI tag in the extension filenames and the Android
+  arm64-v8a and iOS device wheels list identical entries, including the same thirteen
+  extension modules. Nothing in the tree gates on `sys.platform`, and the single
+  `platform.system()` check only distinguishes Windows from everything else — recheck that,
+  because it is what keeps the iOS `platform.system() == "iOS"` trap out of this page.
+- **Sizes and the DTD share are measured**, decimal, from the built wheels, as is the leg
+  matrix: three Python versions × three Android ABIs and three iOS slices, plus a 32-bit
+  `android_24_x86` wheel on the 3.12 leg only. Re-measure rather than scaling, and re-count
+  the legs — that asymmetry follows from Flet's Python builds, not from this recipe.
 - **The timing table and the 6.2× `pairwise2` ratio are desktop numbers** on random DNA at
   5% divergence, quoted as shape rather than as a budget. They move with the machine, not
   with the recipe; the example app is what produces a device figure.
+
+### Coverage gaps
+
+The device tests cover `Seq` complement/reverse-complement and a FASTA round trip through a
+string buffer. They do not exercise a substitution matrix, saved Entrez or BLAST XML,
+`SeqIO.index_db`, or `Bio.Entrez.Parser`'s import side effect — precisely the surface the
+consumer sections make claims about.
+
+**None of the Android section has been confirmed on an Android device.** It was established
+by reproducing Flet's Android shape on the host with a real `zipimport` — the pure-Python
+tree in a `sitepackages.zip`, the extensions in a flat directory resolved by a `.soref`
+meta-path finder — and running the [example app](examples/offline-seqlab) against it: four
+panels pass and the BLOSUM50 panel prints the `NotADirectoryError`. The Entrez and BLAST
+cases were read the same way, each against a control run from an ordinary directory that
+parsed the same file fine. The `~` directory in
+[Entrez cache directory](#entrez-cache-directory) is a host simulation too
+(`sys.modules["pwd"] = None`, `HOME` removed), so what `HOME` holds on either mobile runtime
+remains unmeasured.

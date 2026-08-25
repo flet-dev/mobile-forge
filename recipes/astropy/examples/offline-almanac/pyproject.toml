@@ -17,3 +17,11 @@ path = "src"
 
 [tool.flet.android]
 extract_packages = ["astropy", "astropy_iers_data"]
+
+[tool.flet.cleanup]
+package_files = [
+    "astropy/*/tests",
+    "astropy/*/*/tests",
+    "astropy/*/*/*/tests",
+    "astropy/*/*/*/*/tests",
+]
