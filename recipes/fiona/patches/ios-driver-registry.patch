@@ -1,0 +1,157 @@
+Register GDAL's drivers in the extensions that open datasets.
+
+This removes one of two known iOS blockers; it is NOT established that it makes
+fiona writes work. `tests/test_fiona.py::test_write_read_geojson` skips on iOS
+with a different diagnosis — that OGR's GeoJSON writer calls into PROJ to stamp
+a default WGS84 field, fails with `Cannot find proj.db`, and surfaces as the
+same `FionaNullPointerError`. Both explanations are supported: the missing
+`proj.db` is confirmed (gdal's own example raised
+`proj_create_from_database: Cannot find proj.db` on an iPhone 16 simulator on
+2026-08-25), and the registry split below is confirmed by call sites. Whichever
+fires first, this patch fixes the registry half and nothing else. Do not remove
+that skip on the strength of this patch — remove it when a device run passes.
+
+Third package with the same defect, after rasterio and pyogrio, and the same
+cause: `flet-libgdal` ships only `libgdal.a` on iOS, so each extension links
+its own copy of GDAL and each copy carries its own driver registry.
+
+fiona registers in `_env`. But `ogrext` — where `fiona.open` actually does its
+work — opens datasets in a registry nothing populates. Call sites on iOS
+arm64, counted with `otool -tV` because every extension *defines* the symbols
+and `nm` therefore cannot tell you who calls them:
+
+    _env        GDALAllRegister x1, OGRRegisterAll x1, GDALOpenEx x123
+    ogrext      GDALOpenEx x117, GDALGetDriverByName x45, no registration
+    _geometry   GDALOpenEx x115, no registration
+    _transform  GDALOpenEx x115, no registration
+
+The measured symptom is consistent with this: `fiona._env` reports a driver
+registry identical to Android's — because that is `_env`'s own — while every
+write fails in `fiona.ogrext` with `FionaNullPointerError: NULL pointer error`.
+Consistent with, not proof of; see the caveat above.
+
+`crs.pyx` is deliberately not patched: it does not `include "gdal.pxi"`, and
+its lookups are OSR/CRS work rather than dataset opens.
+
+`GDALAllRegister()` and `OGRRegisterAll()` are idempotent, so on Android — one
+shared `libgdal.so`, one registry — this changes nothing.
+
+Same limit as the rasterio and pyogrio patches: the copies remain separate GDAL
+instances, so configuration set through `fiona.Env()` still does not reach
+`ogrext`. A shared libgdal for iOS is the complete fix and would retire all
+three patches at once.
+
+Only in fiona-1.10.1: CHANGES.txt
+Only in fiona-1.10.1: CITATION.cff
+Only in fiona-1.10.1: CREDITS.txt
+Only in fiona-1.10.1: Fiona.egg-info
+Only in fiona-1.10.1: LICENSE.txt
+Only in fiona-1.10.1: MANIFEST.in
+Only in fiona-1.10.1: PKG-INFO
+Only in fiona-1.10.1: README.rst
+Only in fiona-1.10.1: docs
+Only in fiona-1.10.1/fiona: __init__.py
+Only in fiona-1.10.1/fiona: _cpl.pxd
+Only in fiona-1.10.1/fiona: _crs.pyx
+Only in fiona-1.10.1/fiona: _csl.pxd
+Only in fiona-1.10.1/fiona: _env.pxd
+Only in fiona-1.10.1/fiona: _env.pyx
+Only in fiona-1.10.1/fiona: _err.pxd
+Only in fiona-1.10.1/fiona: _err.pyx
+Only in fiona-1.10.1/fiona: _geometry.pxd
+diff -ru orig/fiona/_geometry.pyx fiona-1.10.1/fiona/_geometry.pyx
+--- a/fiona/_geometry.pyx	2026-08-25 23:10:07
++++ b/fiona/_geometry.pyx	2026-08-25 23:10:07
+@@ -2,6 +2,16 @@
+ 
+ include "gdal.pxi"
+ 
++# With a static libgdal (iOS) each extension links its own copy of GDAL and
++# gets its own driver registry. fiona registers in _env, but this module opens
++# datasets itself and resolves driver names in a registry nothing populates —
++# which is what surfaces as FionaNullPointerError on a write. Registering here
++# makes this module's registry usable. GDALAllRegister and OGRRegisterAll are
++# idempotent, so Android, which shares one libgdal.so and therefore one
++# registry, is unaffected.
++GDALAllRegister()
++OGRRegisterAll()
++
+ import logging
+ 
+ from fiona.errors import UnsupportedGeometryTypeError
+Only in fiona-1.10.1/fiona: _path.py
+Only in fiona-1.10.1/fiona: _show_versions.py
+diff -ru orig/fiona/_transform.pyx fiona-1.10.1/fiona/_transform.pyx
+--- a/fiona/_transform.pyx	2026-08-25 23:10:07
++++ b/fiona/_transform.pyx	2026-08-25 23:10:07
+@@ -4,6 +4,16 @@
+ 
+ include "gdal.pxi"
+ 
++# With a static libgdal (iOS) each extension links its own copy of GDAL and
++# gets its own driver registry. fiona registers in _env, but this module opens
++# datasets itself and resolves driver names in a registry nothing populates —
++# which is what surfaces as FionaNullPointerError on a write. Registering here
++# makes this module's registry usable. GDALAllRegister and OGRRegisterAll are
++# idempotent, so Android, which shares one libgdal.so and therefore one
++# registry, is unaffected.
++GDALAllRegister()
++OGRRegisterAll()
++
+ import logging
+ import warnings
+ from collections import UserDict
+Only in fiona-1.10.1/fiona: _vendor
+Only in fiona-1.10.1/fiona: _vsiopener.pxd
+Only in fiona-1.10.1/fiona: _vsiopener.pyx
+Only in fiona-1.10.1/fiona: abc.py
+Only in fiona-1.10.1/fiona: collection.py
+Only in fiona-1.10.1/fiona: compat.py
+Only in fiona-1.10.1/fiona: crs.pxd
+Only in fiona-1.10.1/fiona: crs.pyx
+Only in fiona-1.10.1/fiona: drvsupport.py
+Only in fiona-1.10.1/fiona: enums.py
+Only in fiona-1.10.1/fiona: env.py
+Only in fiona-1.10.1/fiona: errors.py
+Only in fiona-1.10.1/fiona: features.py
+Only in fiona-1.10.1/fiona: fio
+Only in fiona-1.10.1/fiona: gdal.pxi
+Only in fiona-1.10.1/fiona: inspector.py
+Only in fiona-1.10.1/fiona: io.py
+Only in fiona-1.10.1/fiona: logutils.py
+Only in fiona-1.10.1/fiona: meta.py
+Only in fiona-1.10.1/fiona: model.py
+diff -ru orig/fiona/ogrext.pyx fiona-1.10.1/fiona/ogrext.pyx
+--- a/fiona/ogrext.pyx	2026-08-25 23:10:07
++++ b/fiona/ogrext.pyx	2026-08-25 23:10:07
+@@ -2,6 +2,16 @@
+ 
+ include "gdal.pxi"
+ 
++# With a static libgdal (iOS) each extension links its own copy of GDAL and
++# gets its own driver registry. fiona registers in _env, but this module opens
++# datasets itself and resolves driver names in a registry nothing populates —
++# which is what surfaces as FionaNullPointerError on a write. Registering here
++# makes this module's registry usable. GDALAllRegister and OGRRegisterAll are
++# idempotent, so Android, which shares one libgdal.so and therefore one
++# registry, is unaffected.
++GDALAllRegister()
++OGRRegisterAll()
++
+ import datetime
+ import json
+ import locale
+Only in fiona-1.10.1/fiona: ogrext1.pxd
+Only in fiona-1.10.1/fiona: ogrext2.pxd
+Only in fiona-1.10.1/fiona: ogrext3.pxd
+Only in fiona-1.10.1/fiona: path.py
+Only in fiona-1.10.1/fiona: rfc3339.py
+Only in fiona-1.10.1/fiona: schema.pyx
+Only in fiona-1.10.1/fiona: session.py
+Only in fiona-1.10.1/fiona: transform.py
+Only in fiona-1.10.1/fiona: vfs.py
+Only in fiona-1.10.1: pyproject.toml
+Only in fiona-1.10.1: requirements.txt
+Only in fiona-1.10.1: setup.cfg
+Only in fiona-1.10.1: setup.py
+Only in fiona-1.10.1: tests

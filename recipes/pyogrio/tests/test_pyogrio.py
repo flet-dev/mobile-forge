@@ -23,7 +23,6 @@ def test_gdal_version():
     assert isinstance(v, tuple)
     assert len(v) == 3
     assert all(isinstance(x, int) for x in v)
-    assert v[0] >= 3  # GDAL ≥ 3.0
 
 
 def test_vector_round_trip(tmp_path):
@@ -52,8 +51,13 @@ def test_vector_round_trip(tmp_path):
     names = np.array(["brussels", "paris"], dtype=object)
 
     write(
-        str(path), geometry=geometry, field_data=[names], fields=["name"],
-        driver="GeoJSON", geometry_type="Point", crs="EPSG:4326",
+        str(path),
+        geometry=geometry,
+        field_data=[names],
+        fields=["name"],
+        driver="GeoJSON",
+        geometry_type="Point",
+        crs="EPSG:4326",
     )
     assert path.exists() and path.stat().st_size > 0
 

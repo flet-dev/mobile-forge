@@ -15,7 +15,10 @@ requirements:
 # {% endif %}
 
 build:
-  number: 12
+  # 13 adds ios-driver-registry.patch: with a static libgdal each extension has
+  # its own driver registry, so ogrext opened datasets in one nothing had
+  # populated and every write failed on iOS with FionaNullPointerError.
+  number: 13
   script_env:
     GDAL_VERSION: 3.13.1
     # fiona reads GDAL_LIB_PATH (a colon-separated list); pyogrio's is spelled
@@ -37,3 +40,4 @@ build:
 
 patches:
   - mobile.patch
+  - ios-driver-registry.patch
