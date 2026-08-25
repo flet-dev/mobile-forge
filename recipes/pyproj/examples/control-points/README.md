@@ -1,8 +1,9 @@
 # pyproj control points
 
 One screen of coordinate maths that checks its own answers. Every projected coordinate is
-differenced against arithmetic written in `src/main.py` itself, so what you read on the
-device is a residual in millimetres rather than a claim.
+differenced against arithmetic written in `src/coordinates.py`, so what you read on the
+device is a residual in millimetres rather than a claim. `src/main.py` is the Flet layer
+and nothing else.
 
 It carries no data file. The mobile wheels ship no `proj.db`, and this app plants an empty
 one in [`FLET_APP_STORAGE_DATA`](https://flet.dev/docs/reference/environment-variables/#flet_app_storage_data)

@@ -3,8 +3,9 @@
 One screen that writes an ONNX model **inside the app**, runs it through onnxruntime on the
 device, and checks the answer against the same arithmetic in numpy. No model file, no asset,
 no download, nothing written to disk — and no `onnx` package, which is not published for
-mobile. About sixty lines of protobuf wire-format helpers emit a valid `ModelProto` in memory
-and `ort.InferenceSession(model_bytes, …)` takes it from there.
+mobile. About sixty lines of protobuf wire-format helpers in `src/model.py` emit a valid
+`ModelProto` in memory and `ort.InferenceSession(model_bytes, …)` takes it from there;
+`src/main.py` is the screen and the threading, and nothing else.
 
 The graph is a 256 → 512 → 512 → 512 MLP as `Gemm`/`Relu`/`Gemm`/`Relu`/`Gemm`/`Softmax`,
 weights filled from a fixed-seed `numpy.random.default_rng`, batch dimension left symbolic

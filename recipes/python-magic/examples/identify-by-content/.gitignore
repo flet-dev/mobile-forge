@@ -5,14 +5,4 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 uv.lock
-logo.png
-spinner.gif
-holiday.png
-notes.txt.gz
-receipt
-library.db
-chime.wav
-backup.tar
-readme.txt
-menu.txt
-_scratch.sqlite
+magic-samples/

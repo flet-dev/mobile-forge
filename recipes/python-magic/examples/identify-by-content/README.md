@@ -1,6 +1,6 @@
 # python-magic: what is this file?
 
-One screen that writes ten files into
+One screen that writes ten files into a `magic-samples/` folder under
 [`FLET_APP_STORAGE_DATA`](https://flet.dev/docs/reference/environment-variables/#flet_app_storage_data)
 and then asks [libmagic](https://www.darwinsys.com/file/) what each one actually is, ignoring the
 name it was given. All ten are generated on the spot out of the standard library alone — a PNG
@@ -38,8 +38,8 @@ What it demonstrates:
   database's own 16-byte header, whether that database is a real file or a buffer held in memory,
   [`page.platform`](https://flet.dev/docs/controls/page/#flet.Page.platform) and the Python
   version. On Android it is expected to name `libmagic.so` and an in-memory database; on iOS,
-  `libmagic.fwork` and a file on disk. The recipe [`README.md`](../../README.md#android-notes)
-  explains why the two differ and what the difference costs.
+  `libmagic.fwork` and a file on disk. The recipe [`README.md`](../../README.md) explains why the
+  two differ and what the difference costs.
 - **Honest behaviour where libmagic is absent.** The import is guarded, so a desktop `flet run`
   without a system libmagic shows `ImportError: failed to find libmagic.  Check your installation`
   in place of the header instead of failing to launch.
