@@ -14,3 +14,6 @@ dev = ["flet-cli", "flet-desktop", "flet-web"]
 
 [tool.flet.app]
 path = "src"
+
+[tool.flet.cleanup]
+package_files = ["CoolProp/Plots", "CoolProp/GUI", "CoolProp/tests", "**CoolProp/*.bib"]

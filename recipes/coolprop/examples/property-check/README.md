@@ -38,6 +38,9 @@ What it demonstrates:
   behind a spinner, ending with the explicit
   [`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update) a background
   thread needs. The footer prints what it cost in milliseconds and in resident memory.
+  All the CoolProp work lives in `src/thermo.py`, which deliberately imports nothing at
+  module scope: `main.py` can import it for free, and the price is paid in `load()` when
+  the thread pool calls it.
 - **Failing to text instead of to a crash screen.** Every section is built through one
   `render()` helper that catches whatever the section raises and draws the exception class
   and message in its place, so a device-only failure is legible on the screen rather than

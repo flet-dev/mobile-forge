@@ -9,27 +9,11 @@ data — points, lines and polygons carrying attributes — through
 app store, edit and exchange real vector data with no database and no network — everything
 happens in-process, on files in app storage.
 
-**Read [iOS notes](#ios-notes) before you plan around this.** On iOS each extension carries
-its own statically linked copy of GDAL, and the symbol tables say nothing ever registers a
-vector driver into the image `fiona.open` does its work in. **Both halves of that were
-measured on 2026-08-19 and the binaries were right.** On an arm64-v8a Android 14 emulator
-the round trip works, four times over: GeoJSON and ESRI Shapefile, each carrying 200 Point
-features and 200 Polygon features out and back, all four reporting 200 of 200 read back
-with 0 type, 0 integer and 0 string mismatches. On an iPhone 16 simulator the same build
-reports, through `fiona._env`, a registry identical to Android's — `driver_count()` 17,
-`Env().drivers()` six, `MEM` among them — and then fails all four in `fiona.ogrext` with
-`FionaNullPointerError: NULL pointer error`. That pair is
-the diagnosis rather than a symptom of it: one module can enumerate the drivers another
-module cannot find, in the same process, at the same moment. Two extensions, two GDALs.
-So: treat fiona as Android-only, and use [`gdal`](../gdal)'s `osgeo.ogr` for vector I/O
-on iOS.
-
-On Android everything imports, [`fiona.transform`](https://fiona.readthedocs.io/en/stable/fiona.html#module-fiona.transform) included — the wheel pulls the C++ runtime
-in through its own dependencies, so there is nothing to add to your `pyproject.toml`. The
-[`feature-roundtrip`](examples/feature-roundtrip) example exercises both platforms.
-
-Beyond that, these wheels are a deliberately small GDAL: **six vector drivers registered,
-five of them reachable through fiona and three of those writable**, no `proj.db`, no
+**Treat it as an Android package.** On iOS each extension carries its own statically linked
+copy of GDAL, and the copy `fiona.open` resolves driver names in has nothing registered in
+it, so every write fails while the driver list printed one line above it looks healthy. Use
+[`gdal`](../gdal)'s `osgeo.ogr` for vector I/O there — **iOS** below has the detail. On both
+platforms this is a deliberately small GDAL: six vector drivers, no `proj.db`, no
 `GDAL_DATA`, no GEOS and no libcurl. None of that announces itself at import.
 
 ## Install
@@ -51,160 +35,24 @@ dependencies = [
 ]
 ```
 
-**Why the platform tables rather than `[project] dependencies`.** fiona publishes desktop
-wheels, but only through CPython 3.13: PyPI carries 25 files for 1.10.1 — 24 wheels tagged
-cp38 to cp313 across `macosx_10_15_x86_64`, `macosx_11_0_arm64`, `manylinux_2_17_x86_64`
-and `win_amd64`, plus `fiona-1.10.1.tar.gz`. There is no cp314 wheel. Flet
+**fiona goes in the platform tables rather than in `[project] dependencies`.** Flet
 [appends](https://flet.dev/docs/publish/#app-dependencies)
 `[tool.flet.<platform>].dependencies` to the project list rather than replacing it, so a
-top-level `"fiona"` is *also* handed to the host resolve `flet build` runs first — and on a
-3.14 interpreter that resolve falls through to the sdist, which learns where GDAL is only
-by shelling out to `gdal-config`. Measured on CPython 3.14.6 with `gdal-config` off `PATH`,
-`uv sync` of `flet==0.86.5` plus `fiona==1.10.1` failed with ``Call to
-`setuptools.build_meta.build_wheel` failed``, `Failed to get options via gdal-config:
-[Errno 2] No such file or directory: 'gdal-config'` and `A GDAL API version must be
-specified.` On a machine that happens to have a system GDAL it instead quietly builds a
-*host* fiona from that sdist — a wheel no device will ever load, and one that then sits in
-the resolver's cache: repeating the same `uv sync` on this machine, which has a Homebrew
-`gdal-config`, succeeded in 28 ms off a cached `fiona-1.10.1-cp314-cp314-macosx_11_0_arm64`
-wheel, and only `--no-cache` produced the failure above. The tables keep fiona out of that
-resolve entirely.
+top-level `"fiona"` is *also* handed to the host resolve `flet build` runs first. fiona's
+PyPI wheels stop at CPython 3.13, and its sdist learns where GDAL is in exactly one way —
+by shelling out to `gdal-config` — so on a 3.14 interpreter that resolve either fails with
+`A GDAL API version must be specified.` or, on a machine that happens to have a system
+GDAL, quietly builds a *host* fiona no device will ever load and then serves it from the
+resolver's cache. The tables keep fiona out of that resolve entirely.
 
 The cost is worth stating plainly: **fiona is then absent from `flet run` on your desktop
 and from a web build**, because nothing outside a `flet build` for Android or iOS reads
-those tables, and `import fiona` raises `ModuleNotFoundError` everywhere you develop. Guard the import so
-those runs explain themselves instead of crashing — the
+those tables, and `import fiona` raises `ModuleNotFoundError` everywhere you develop. Guard
+the import so those runs explain themselves instead of crashing — the
 [`feature-roundtrip`](examples/feature-roundtrip) example renders a card naming the missing
 module. If you pin fiona to a version whose desktop wheels cover your interpreter, a
 top-level entry works too; the platform tables are the shape that keeps working as Python
 moves on.
-
-The requirements come along without configuring. **`attrs`**, **`certifi`**, **`click`**,
-**`click-plugins`** and **`cligj`** are pure Python and resolve from PyPI. The native side
-is the recipe's: both wheels require **`flet-libgdal`** (3.13.1), and the iOS wheel
-additionally requires **`flet-libjpeg`** (3.0.90). `flet-libgdal` requires
-**`flet-libproj`** (9.5.0), which requires **`flet-libtiff`** (4.7.0) and
-**`flet-libcurl`** (8.11.0); `flet-libtiff` requires **`flet-libjpeg`** (3.0.90) and
-`flet-libcurl` requires **`flet-libpsl`** (0.21.5). Only Android loads any of them at
-runtime — see
-[Android notes](#android-notes) and [iOS notes](#ios-notes).
-
-Nothing else to configure: no
-[`[tool.flet.android] extract_packages`](https://flet.dev/docs/publish/android/#extract-packages)
-entry and no loader shim. The Android wheel's 65 entries are 40 `.py`, eight `.so`, ten
-Cython `.pxd`, one `.pxi` and six `dist-info` files — **no data file of any kind**, on
-either platform — and a grep across every `.py` for `__file__`, `importlib.resources`,
-`pkgutil`, `pkg_resources`, `ctypes`, `find_library`, `sys.platform`, `platform.system`,
-`os.name` or `inspect.getsource` returns six lines, all inert here: three
-`sys.platform == "win32"` guards in `_path.py` and `vfs.py`, `platform.system()` in
-`_show_versions.py`'s printout, and a `platform.system() == "Windows"` block at
-`fiona/__init__.py` line 31 that is the package's only use of `__file__`.
-
-`Requires-Python` is `>=3.8`, so fiona imposes no floor of its own on your app. Nineteen
-wheels ship at the current build number: Python 3.12, 3.13 and 3.14 × three Android ABIs
-(arm64-v8a, armeabi-v7a, x86_64) and three iOS slices (device, arm64 simulator, x86_64
-simulator), plus a legacy 32-bit `android_24_x86` slice on 3.12 only. No architecture is
-excluded.
-
-Leave Flet's default
-[compilation and cleanup](https://flet.dev/docs/publish/#compilation-and-cleanup) on. Of
-the 2,453,506 bytes an Android arm64-v8a wheel unpacks to, 237,053 are `.py` that become
-`.pyc` and 43,542 are Cython `.pxd` headers cleanup deletes outright. One file slips
-through: `serious_python`'s junk-file globs list `**.pxd` and not `**.pxi`, so
-`fiona/gdal.pxi` (35,961 bytes) ships to the device for nothing. Nothing here reads its own
-source, so compiling is safe.
-
-## Storage
-
-Vector files belong in
-[`FLET_APP_STORAGE_DATA`](https://flet.dev/docs/reference/environment-variables/#flet_app_storage_data)
-— app-private, durable and included in backups. It has to be a **writable** directory
-rather than a bundled asset: OGR writes the dataset in place, and reopening one for writing
-rewrites it.
-
-**Give each dataset its own subdirectory**, because a Shapefile is not one file. Writing a
-point layer with no CRS left `layer.shp`, `layer.shx`, `layer.dbf` and `layer.cpg`, and a
-fifth file `layer.prj` appeared as soon as a CRS was supplied. Copy, move, back up or
-delete them as a unit, and note that losing one **does not raise**: with the `.dbf`
-deleted, `fiona.open(path)` still opened the layer and still returned the right geometry,
-but the schema came back `{'properties': {}, 'geometry': 'Point'}` and every feature's
-`properties` was empty. A half-copied Shapefile reads as a layer with no attributes rather
-than as an error.
-
-Avoid
-[`FLET_APP_STORAGE_CACHE`](https://flet.dev/docs/reference/environment-variables/#flet_app_storage_cache)
-(the OS may purge it) and
-[`FLET_APP_STORAGE_TEMP`](https://flet.dev/docs/reference/environment-variables/#flet_app_storage_temp)
-(may vanish between launches) for anything you want to keep.
-
-### No `proj.db` and no `GDAL_DATA`, on either platform
-
-`unzip -l` over the fiona wheels finds nothing matching `proj`, `share/`, `.db`,
-`gdal_data` or `data` beyond the `dist-info` entries, and `flet-libgdal` is 102 headers
-plus one library (`opt/lib/libgdal.so`, 13,997,320 bytes, on Android; a 524,528,736-byte
-`opt/lib/libgdal.a` on iOS) plus a 2,787-byte `opt/lib/gdalplugins/drivers.ini`. The
-diagnostics for the gap are compiled into the shipped binaries: `strings -a` finds *Cannot
-find proj.db* and *Cannot find %s (GDAL_DATA is not defined)* in Android's `libgdal.so` and
-in each of the iOS `_env`, `ogrext` and `crs`. Both native recipes end their build with
-`rm -rf $PREFIX/{bin,share}`, which is where those files would have come from —
-[`rasterio`](../rasterio), [`gdal`](../gdal) and [`pyproj`](../pyproj) sit on the same
-chain and lose the same files.
-
-**fiona's vector half is not crippled by it.** Reproducing the device's data situation on a
-desktop — fiona 1.10.1 from PyPI with `GDAL_DATA`, `PROJ_DATA` and `PROJ_LIB` all pointed
-at an empty directory — gave:
-
-- `import fiona` **succeeds**.
-- Writing features to GeoJSON and to an ESRI Shapefile with **no CRS** and reading them
-  back **works**: 0 geometry-type mismatches and 0 integer or string property mismatches on
-  both, worst coordinate residual 1.42e-14 through GeoJSON (a text format) against exactly 0
-  through the Shapefile, worst float-property residual 0 and 4.44e-16 respectively.
-- The GeoJSON reads back tagged `CRS.from_wkt('GEOGCS["WGS 84", …AUTHORITY["EPSG","4326"]]')`
-  from the driver's own compiled-in string; the Shapefile reads back `CRS.from_wkt('')`.
-- [`CRS.from_epsg(4326)`](https://fiona.readthedocs.io/en/stable/fiona.html#fiona.crs.CRS.from_epsg)
-  raises `fiona.errors.CRSError: The EPSG code is unknown. PROJ:
-  internal_proj_create_from_database: Cannot find proj.db`, and
-  [`CRS.from_string("EPSG:4326")`](https://fiona.readthedocs.io/en/stable/fiona.html#fiona.crs.CRS.from_string)
-  raises the same — the string form is not a way around it.
-- `CRS.from_string("+proj=longlat +datum=WGS84 +no_defs")` **works**, but `to_string()` then
-  returns `GEOGCS["unknown", …]` rather than `"EPSG:4326"`, because naming a CRS means
-  identifying it against the authority database. With the database present the same call
-  returns `"EPSG:4326"`.
-
-So: write CRSes as proj-strings or WKT and everything works with nothing supplied, which is
-what the [`feature-roundtrip`](examples/feature-roundtrip) example does. What you give up is
-discovery — you have to know the projection parameters, because nothing on device will name
-them for you.
-
-**The device then reproduced those numbers exactly**, which is the reason to trust the
-desktop recipe above as a proxy. On the arm64-v8a emulator on 2026-08-19, at 200 features
-per layer: worst coordinate residual 1.42e-14 through GeoJSON and 0 through the Shapefile,
-worst float-property residual 0 and 4.44e-16 respectively, 0 type, 0 integer and 0 string
-mismatches on all four layers — the same figures the empty-directory desktop run gave, to
-every digit. `CRS.from_string("+proj=longlat +datum=WGS84 +no_defs")` succeeded on device
-and `CRS.from_epsg(4326)` failed on both platforms, on Android naming `proj.db` outright
-(`CRSError: The EPSG code is unknown. PROJ: proj_create_from_database: Cannot find
-proj.db`) and on iOS reporting only `The wrapped function returned an error code, but no
-error message was set.` Android also logs `Cannot find header.dxf (GDAL_DATA is not
-defined)` to logcat at startup; both messages are expected here and neither stops the app.
-
-### Getting EPSG codes back
-
-`fiona._env.set_proj_data_search_path(path)` exists in the shipped wheel, and `GDALEnv.start`
-honours `PROJ_DATA` from the environment, then `PROJ_LIB`, then
-`PROJDataFinder().search_wheel()` — which looks for a `fiona/proj_data` directory these
-wheels do not ship. So the lever is there: ship a `proj.db` as an asset and point fiona at
-the directory holding it, with
-[`FLET_ASSETS_DIR`](https://flet.dev/docs/reference/environment-variables/#flet_assets_dir)
-naming where a bundled `src/assets/` lands on device.
-
-**That has not been run on a device for this recipe**, and on iOS there is a second reason
-for caution: both the function and the environment-variable branch execute inside
-`fiona/_env`, while `fiona/crs` is a separate extension carrying its own statically linked
-PROJ — the string `Rel. 9.5.0, September 15th, 2024` appears independently in the iOS
-`_env`, `ogrext`, `crs`, `_geometry` and `_transform` — so a database supplied through
-`_env` is not the one `fiona.crs` would read there. On Android there is one `libproj.so`
-and the question does not arise.
 
 ## Examples
 
@@ -214,229 +62,259 @@ See runnable Flet apps in [`examples/`](examples):
   app storage, then read back and compared geometry by geometry and property by property
   against the records they came from.
 
-## Threading
+## Usage in a Flet app
+
+```python
+import os
+
+import fiona
+import flet as ft
+
+folder = os.path.join(os.getenv("FLET_APP_STORAGE_DATA", "."), "tracks")
+os.makedirs(folder, exist_ok=True)
+path = os.path.join(folder, "tracks.geojson")
+
+schema = {"geometry": "Point", "properties": {"name": "str", "score": "float"}}
+
+# pass driver= explicitly on every write — see Things to know
+with fiona.open(path, "w", driver="GeoJSON", schema=schema) as dst:
+    dst.write(
+        {
+            "geometry": {"type": "Point", "coordinates": (2.35, 48.86)},
+            "properties": {"name": "Paris", "score": 1.0},
+        }
+    )
+
+with fiona.open(path) as src:
+    features = list(src)
+
+page.add(
+    ft.Column([ft.Text(f["properties"]["name"]) for f in features])
+)
+```
+
+### Storage
+
+Vector files belong in
+[`FLET_APP_STORAGE_DATA`](https://flet.dev/docs/reference/environment-variables/#flet_app_storage_data)
+— app-private, durable and included in backups. It has to be a **writable** directory rather
+than a bundled asset: OGR writes the dataset in place. Avoid
+[`FLET_APP_STORAGE_CACHE`](https://flet.dev/docs/reference/environment-variables/#flet_app_storage_cache)
+(the OS may purge it) and
+[`FLET_APP_STORAGE_TEMP`](https://flet.dev/docs/reference/environment-variables/#flet_app_storage_temp)
+(may vanish between launches) for anything you want to keep.
+
+**Give each dataset its own subdirectory**, because a Shapefile is not one file. Writing a
+point layer with no CRS left `layer.shp`, `layer.shx`, `layer.dbf` and `layer.cpg`, and a
+fifth file `layer.prj` appeared as soon as a CRS was supplied. Copy, move, back up and
+delete them as a unit — and note that losing one **does not raise**: with the `.dbf`
+deleted, `fiona.open(path)` still opened the layer and still returned the right geometry,
+but the schema came back `{'properties': {}, 'geometry': 'Point'}` and every feature's
+`properties` was empty. A half-copied Shapefile reads as a layer with no attributes rather
+than as an error.
+
+### Drivers
+
+This GDAL registers eleven drivers in all: `GTiff`, `COG` and `VRT` (raster only), `MEM`
+(raster *and* vector), the five vector drivers `ESRI Shapefile`, `GeoJSON`, `GeoJSONSeq`,
+`ESRIJSON` and `TopoJSON`, and `GNMFile` and `GNMDatabase`, which are network drivers and
+are not vector-capable. fiona keeps the five, and its mode table marks `ESRI Shapefile`,
+`GeoJSON` and `GeoJSONSeq` as read/append/write and `ESRIJSON` and `TopoJSON` as read-only.
+**No GPKG, no SQLite, no GML, no GPX, no CSV, no FlatGeobuf, no DXF, no OpenFileGDB, no
+MapInfo, no DGN and no S57** — convert those off-device.
+
+Ask both lists rather than trusting either alone.
+[`fiona.supported_drivers`](https://fiona.readthedocs.io/en/stable/fiona.html#module-fiona.drvsupport)
+is what `fiona.open` will accept; `with fiona.Env() as env: env.drivers()` is OGR's
+vector-capable subset of the registry, and it returns **six** names, not five. The sixth is
+`MEM`, which registers with `DCAP_VECTOR` — but fiona's static table has no `MEM` entry, so
+`fiona.open(..., driver="MEM")` raises `DriverError: unsupported driver: 'MEM'` before any
+native call.
+
+### Coordinate systems
+
+There is no `proj.db` and no `GDAL_DATA` on either platform, so **spell CRSes as
+proj-strings or WKT** and everything works with nothing supplied:
+
+```python
+from fiona.crs import CRS
+
+CRS.from_string("+proj=longlat +datum=WGS84 +no_defs")  # works
+CRS.from_epsg(4326)  # CRSError: ... Cannot find proj.db
+```
+
+[`CRS.from_string("EPSG:4326")`](https://fiona.readthedocs.io/en/stable/fiona.html#fiona.crs.CRS.from_string)
+fails the same way; the string form is not a way around it. What you give up is discovery —
+`to_string()` on a CRS built from a proj-string returns `GEOGCS["unknown", …]` rather than
+`"EPSG:4326"`, because naming a CRS means identifying it against the authority database, so
+you have to know the projection parameters yourself.
+
+Writing a layer with **no** CRS at all is fine, and is what the example does: on an
+arm64-v8a emulator at 200 features per layer, GeoJSON and Shapefile round trips came back
+with 0 geometry-type, integer and string mismatches, and worst coordinate residuals of
+1.4e-14 through GeoJSON (a text format) against exactly 0 through the Shapefile.
+
+[`fiona.transform`](https://fiona.readthedocs.io/en/stable/fiona.html#module-fiona.transform)
+reprojects between proj-string CRSes on both platforms. It is the one module a plain
+`import fiona` does not load, so reaching for it is a decision rather than a side effect —
+see **App size** for what that costs on iOS.
+
+To get EPSG codes back you would ship a `proj.db` as an app asset and point fiona at it —
+`GDALEnv.start` honours `PROJ_DATA` from the environment, and
+`fiona._env.set_proj_data_search_path(path)` is in the shipped wheel, with
+[`FLET_ASSETS_DIR`](https://flet.dev/docs/reference/environment-variables/#flet_assets_dir)
+naming where a bundled `src/assets/` lands on device. **That has not been run on a device
+for this recipe**, and on iOS `fiona._env` and `fiona.crs` carry separate statically linked
+copies of PROJ, so a database supplied through one is not the one the other reads.
+[`pyproj`](../pyproj), [`gdal`](../gdal) and [`rasterio`](../rasterio) sit on the same
+native chain and lose the same files.
+
+### Threading
 
 **Two threads must not share one `Collection`, and getting it wrong loses data without
-raising anything.** Measured on a desktop fiona 1.10.1: eight threads each iterating the
-same open `Collection` five times returned the correct feature count on only 15, 18 and 20
-of 40 iterations across three runs — and raised **zero** exceptions. Giving each thread its
-own `fiona.open` returned 40 of 40 correct on each of three runs.
+raising anything.** Measured on a desktop fiona: eight threads each iterating the same open
+`Collection` five times returned the correct feature count on only 15, 18 and 20 of 40
+iterations across three runs — and raised **zero** exceptions. Giving each thread its own
+`fiona.open` returned 40 of 40 correct on each of three runs.
 
 That is worse than it sounds under
 [`page.run_thread(...)`](https://flet.dev/docs/controls/page/#flet.Page.run_thread), which
 submits to a shared pool, so two taps really do overlap — and which never retrieves the
-worker's future, so even a raised exception would surface nowhere. Open one `Collection`
-per thread (what the example does: its worker opens and closes every `Collection` inside
-the thread that uses it) or hold a `threading.Lock` around the whole use, **including
-consuming the iterator** — a half-read `Collection` is still an open handle.
+worker's future, so even a raised exception would surface nowhere. Open one `Collection` per
+thread, or hold a `threading.Lock` around the whole use **including consuming the
+iterator**: a half-read `Collection` is still an open handle.
 
-**There is no per-thread environment to enter by hand.** `fiona/env.py` keeps its `GDALEnv`
-in a `threading.local` subclass, and `fiona.open` carries the `@ensure_env_with_credentials`
-decorator, so a worker thread that calls `fiona.open` gets its own environment created and
-its drivers registered with no preamble. Entering an explicit
-[`fiona.Env()`](https://fiona.readthedocs.io/en/stable/fiona.html#fiona.env.Env) around a
-call adds nothing to that.
+There is no per-thread environment to enter by hand: `fiona.open` carries the
+`@ensure_env_with_credentials` decorator and `fiona/env.py` keeps its `GDALEnv` in a
+`threading.local`, so a worker thread gets its own environment and its drivers with no
+preamble, and an explicit
+[`fiona.Env()`](https://fiona.readthedocs.io/en/stable/fiona.html#fiona.env.Env) adds
+nothing. Auto-update does not reach background threads either, so end a `run_thread` handler
+with an explicit
+[`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update).
 
-Auto-update does not reach background threads either, so end a `run_thread` handler with an
-explicit [`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update).
+### App size
 
-## Android notes
+Android: approximately 0.8–0.95 MB of compressed wheel and 1.8–2.5 MB unpacked per ABI, on
+top of roughly 21–23 MB of shared native libraries per ABI that come with GDAL. iOS:
+approximately 45–49 MB compressed and 126–135 MB unpacked **per slice**, because there is no
+shared library there — five of fiona's eight extensions each carry a complete copy of GDAL.
+Plain `import fiona` maps seven of the eight, about 2 MB of native code on Android arm64-v8a
+against about 102 MB on the iOS device slice: **50× the bytes for the same function**, before
+you touch a file.
 
-**GDAL stays one shared library, and there is one driver table.** All eight extensions name
-exactly `libm.so`, `libgdal.so`, `libpython3.<minor>.so`, `libdl.so` and `libc.so` in
-`DT_NEEDED` — plus `libc++_shared.so` on `_transform` and nowhere else — with no `RUNPATH`
-and no `RPATH`, and every `PT_LOAD` segment reports `align 0x4000`, the 16 KB page
-alignment Android 15 requires. Every GDAL and OGR symbol the extensions use is undefined
-and resolved at load: `_env` imports `GDALAllRegister` and `OGRRegisterAll`, `ogrext`
-imports 20 `GDAL*` and 56 `OGR*` entry points including `GDALGetDriverByName`, `GDALOpenEx`
-and `GDALCreate`, and **`ogrext` defines no GDAL or OGR symbol of its own**. `libgdal.so`
-carries `SONAME libgdal.so` and names `libm.so`, `libdl.so`, `libproj.so` and `libc.so`.
+There is nothing here worth naming to
+[`[tool.flet.cleanup]`](https://flet.dev/docs/publish/#compilation-and-cleanup) — the payload
+is extensions and a little Python, with no test suite or data directory to drop. On Android,
+use an app bundle, split APKs, or narrow
+[`target_arch`](https://flet.dev/docs/publish/android/#supported-target-architectures) when
+the app does not need every ABI; that lever is worth more here than the wheel figures
+suggest, because the 21–23 MB of native library is carried once per ABI. These numbers
+describe the package payload, not the amount added to the final APK or IPA; packaging and
+compression determine that.
 
-| slice (cp314) | wheel | unpacked | fiona `.so` |
-| --- | --- | --- | --- |
-| arm64-v8a | 893,120 | 2,453,506 | 2,128,416 |
-| armeabi-v7a | 806,730 | 1,779,666 | 1,454,576 |
-| x86_64 | 946,971 | 2,536,143 | 2,211,064 |
+Budget build-machine time and disk too. Each iOS slice pulls a roughly 113 MB GDAL wheel
+that is one half-gigabyte static archive plus headers, and Flet's cleanup then deletes all
+of it, so expect a slow first `ipa` or `ios-simulator` build.
 
-Behind those 2.1 MB sits the shared native chain, which on arm64-v8a is `libgdal.so` at
-13,997,320 bytes plus `libproj.so` 4,640,656, `libturbojpeg.so` 748,184, `libtiff.so`
-744,048, `libcurl.so` 723,712, `libjpeg.so` 589,784 and `libpsl.so` 67,488 — 21,511,192
-bytes of shared library.
+### Android
 
-**`fiona.transform` needs the Android C++ runtime, and the wheel asks for it.**
-`_transform` is the one extension of the eight whose `DT_NEEDED` names `libc++_shared.so`,
-and Flet supplies none of its own — no `serious_python_android` release ships one. So the
-Android wheel declares `flet-libcpp-shared (>=27.2.12479018)` beside `flet-libgdal`, the way
-[`gdal`](../gdal) and [`rasterio`](../rasterio) do, and the runtime lands in every ABI slice
-of your APK: 1,292,904 bytes on arm64-v8a, 872,872 on armeabi-v7a, 1,252,080 on x86_64. You
-declare nothing for it. Verified on an arm64-v8a Android 14 emulator with `fiona` as the only
-dependency and no `[tool.flet.android]` entry of any kind: `fiona.transform` imports and
-reprojects, and the recipe's five tests pass.
+Everything imports, `fiona.transform` included, and there is one GDAL: all eight extensions
+resolve every `GDAL*` and `OGR*` entry point out of a single shared `libgdal.so` at load
+time, so the driver table `fiona.Env()` registers into is the one `fiona.open` reads and the
+two lists agree. Verified on an arm64-v8a Android 14 emulator with `fiona` as the only
+dependency: GeoJSON and ESRI Shapefile, each carrying 200 Point and 200 Polygon features out
+and back, all four layers reading back 200 of 200 with 0 type, integer and string
+mismatches.
 
-**Plain `import fiona` is not exposed to that**, and this is worth spelling out because the
-opposite is easy to assume. `libgdal.so` leaves 215 C++ runtime symbols undefined — 200
-mangled `_Z…` entries of which 112 are `_ZNSt6__ndk1…`, plus thirteen `__cxa_*`,
-`__gxx_personality_v0` and `__dynamic_cast` — and sets `DT_FLAGS = 8` (`DF_BIND_NOW`) and
-`DT_FLAGS_1 = 1` (`DF_1_NOW`), so nothing binds lazily. It resolves them without
-`libc++_shared.so`: `libproj.so`, which it names in `DT_NEEDED`, statically links libc++ and
-defines 828 symbols of that shape, covering 212 of the 215, and the remaining three
-(`__cxa_atexit`, `__cxa_finalize`, `__cxa_thread_atexit_impl`) are defined by bionic's own
-`libc.so`. `import fiona` loads seven of the eight extensions and not `_transform`.
+Android logs `Cannot find header.dxf (GDAL_DATA is not defined)` to logcat at startup. It is
+expected here and stops nothing.
 
-## iOS notes
+### iOS
 
-**There is no shared library at all, and the driver table splits.** `flet-libgdal` ships
-only `libgdal.a`, and the link pulls a full copy of GDAL into five of the eight extensions:
-`ogrext` (25,158,696 bytes on the device slice), `_env` (25,085,416), `crs` (24,548,496),
-`_geometry` (24,410,968) and `_transform` (24,336,152), against `_vsiopener` (1,256,432),
-`_err` (1,015,264) and `schema` (270,840). All eight are `MH_DYLIB`, so forge's
-`MH_BUNDLE` conversion has nothing to do, and `otool -L` on `ogrext` names only its own
-install name, `@rpath/Python.framework/Python`, `/usr/lib/libsqlite3.dylib`,
-`/usr/lib/libz.1.dylib` and `/usr/lib/libSystem.B.dylib` — no libproj, libtiff or libcurl,
-because those are already inside it.
+**`fiona.open` cannot reach a vector driver, and the driver list will tell you otherwise.**
+There is no shared GDAL on iOS, so the link pulls a full copy — global driver table included
+— into five of fiona's eight extensions, and every image is two-level namespaced, so none of
+them can see another's copy. `fiona._env` defines *and calls* all eleven registration entry
+points. `fiona.ogrext`, which is where `fiona.open` resolves a driver name, defines its own
+`GDALGetDriverByName` and calls no registration function that fiona can reach. On Android
+those are one library and the distinction is invisible; here they are separate tables, and
+the one `fiona.open` reads stays empty.
 
-**And that is where fiona breaks.** `nm` on the shipped iOS binaries says:
+The symptom, on an iPhone 16 simulator: `fiona.open(path, "w", driver="GeoJSON", ...)`
+raises `FionaNullPointerError: NULL pointer error` out of
+`exc_wrap_pointer(GDALGetDriverByName(driver_c))`, while the same screen reports
+`driver_count()` 17 and six names from `Env().drivers()`, exactly as Android does. There is
+no app-side fix: `ogrext` exposes no registration entry point Python can call, and an
+explicit `fiona.Env()` only registers into `_env` again.
 
-- `_env` **defines** `GDALAllRegister`, `OGRRegisterAll` and all eleven registration entry
-  points — `GDALRegister_GTiff`, `_COG`, `_MEM`, `_VRT`, `RegisterOGRShape`,
-  `RegisterOGRGeoJSON`, `RegisterOGRGeoJSONSeq`, `RegisterOGRESRIJSON`,
-  `RegisterOGRTopoJSON`, `RegisterGNMFile` and `RegisterGNMDatabase` — and imports none of
-  them.
-- `ogrext` defines its **own** `GetGDALDriverManager`, `GDALGetDriverByName`,
-  `OGRGetDriverByName`, `GDALOpenEx` and `GDALCreate`, and imports no GDAL or OGR symbol at
-  all (790 undefined symbols, none of them `GDAL*`, `OGR*`, `OSR*`, `CPL*` or `VSI*`). It
-  contains **no symbol whose name matches `RegisterOGR`, `GDALAllRegister` or
-  `OGRRegisterAll` at any binding, local or global** — the linker did drag in four
-  `GDALRegister_*` entry points (`GTiff`, `COG`, `VRT`, `MEM`), but disassembling every
-  branch in its `__text` finds exactly one call to any of them, `GDALRegister_VRT` from
-  `VRTDataset`'s constructor, which nothing fiona does can reach. So the table stays empty
-  in practice as well as by name. `crs`, `_geometry` and `_transform` are in the same state.
-- `otool -hv` reports every image `TWOLEVEL`, so none of them can bind another's copy.
+**Use [`gdal`](../gdal)'s `osgeo.ogr` instead.** Its registration and its lookups share one
+image: `PyInit__ogr` in the shipped iOS `_ogr` extension *calls* `OGRRegisterAll`, which is
+exactly what `ogrext` does not do. Treat it as the structurally sound bet rather than a
+settled one — what has been measured on an iPhone 16 simulator, on 2026-08-25, is
+`osgeo.gdal` writing and re-reading a 512×512 float32 GeoTIFF with 0 of 262,144 elements
+differing and passing the band through `_gdal_array`, `_osr` and `_ogr`. That covers the raster
+half and the vector re-read; it does not cover EPSG codes, which fail there for the same
+missing `proj.db` as here. It is not free
+either: `osgeo/__init__.py` pulls in `_gdal` and `osgeo/ogr.py` pulls in `osr`, so the three
+iOS extensions together are about 77 MB, and `gdal` also has to go under the platform tables
+— for a different reason than fiona's, since upstream publishes no desktop wheel at all.
 
-`fiona.Env()` registers drivers in `_env`. `fiona.open` resolves a driver name in `ogrext`.
-On Android those are one shared `libgdal.so` and the distinction is invisible; on iOS they
-are separate tables, and nothing ever registers a vector driver into the one `fiona.open`
-reads. There is no app-side fix — `ogrext` exposes no registration entry point Python can
-call, and entering an explicit `fiona.Env()` only registers into `_env` again.
+`fiona.transform` does import and reproject here — and maps another complete GDAL to do
+it, which is the single most expensive line an iOS app can write against this wheel.
 
-**This was run on an iPhone 16 simulator (iOS 18.6) on 2026-08-19, and the binaries called it
-exactly.** The write raises `FionaNullPointerError: NULL pointer error` — the class and
-message predicted from `ogrext.pyx` line 1365,
-`exc_wrap_pointer(GDALGetDriverByName(driver_c))`, with `_err.pyx` raising that class when
-the pointer is NULL and GDAL set no message. It happens twice, once for GeoJSON and once
-for ESRI Shapefile, and the display above it reads the registry out of `_env` in the same
-breath: `driver_count()` 17, `Env().drivers()` six including `MEM`. The read half of the
-prediction — `fiona.errors.DriverError: Failed to open dataset (flags=68): <path>` — was
-never reached, because there is nothing to read after a write that could not start; treat
-that one as still untested.
+### Other considerations
 
-Android, run the same day on an arm64-v8a emulator, is the control: identical driver
-counts, and 200 Point plus 200 Polygon features out and back through both drivers — four
-layers, each reading back 200 of 200 with 0 type, 0 integer and 0 string mismatches. Same
-wheel, same code path, same registry numbers, opposite outcome — which is what a
-per-extension driver table looks like from the outside.
+**Your desktop is not a preview of the device.** `flet run` cannot see fiona at all with the
+install shape above, and a desktop fiona installed by hand is a different package: PyPI's
+macOS wheel bundles its own — older — GDAL and its own `proj_data`, and reported 17 entries
+in `supported_drivers`, 55 from `Env().drivers()` and a working `CRS.from_epsg(4326)`.
+Twelve of those 17, including `CSV`, `GML`, `GPKG`, `GPX`, `OpenFileGDB` and `SQLite`, are
+absent from the mobile registry. To approximate the device's *data* situation locally,
+run with `GDAL_DATA`, `PROJ_DATA` and `PROJ_LIB` pointed at an empty directory. That proxy is
+worth trusting because it was checked: the device reproduced those numbers exactly. It is how the
+CRS findings above were established. It will not show you the driver set, and on iOS it will
+not show you the split.
 
-The same split is what breaks [`rasterio`](../rasterio) on iOS, and that one *has* been
-measured: on 2026-08-19, while that recipe was being documented, its example wrote and read
-back a GeoTIFF on an arm64 Android emulator with 0 pixels differing, and failed both halves
-on an iPhone simulator, where `rasterio.open(…, "w", driver="GTiff")` raised
-`DriverRegistrationError`.
-**The alternative on iOS is [`gdal`](../gdal)'s `osgeo.ogr`**, whose registration and
-lookups share one image: `osgeo/ogr.py` has 638 lines referencing `_ogr` and none
-referencing any other extension, the iOS `_ogr` defines `OGRGetDriverByName`,
-`GDALGetDriverByName` and `GDALOpenEx`, and — the part that matters — its module init
-*calls* the registration: `PyInit__ogr` in the shipped `_ogr.cpython-314-iphoneos.so`
-contains a `bl _OGRRegisterAll`. Defining is not calling, which is precisely why `ogrext`
-having four registration functions of its own buys fiona nothing. What has *not* been shown
-is a vector layer written on a device: the iOS measurement behind that recommendation is
-raster, `osgeo.gdal` round-tripping a 512×512 GeoTIFF on the iPhone simulator on
-2026-08-19 with 0 of 262,144 pixels differing. Treat `osgeo.ogr` as the structurally sound
-bet, not as a settled one — and note it is not free, since `osgeo/__init__.py` imports
-`_gdal` and `osgeo/ogr.py` imports `osr`, so the three iOS extensions together are
-76,930,728 bytes. `gdal` also has to go under `[tool.flet.android]`/`[tool.flet.ios]`, for
-a different reason than fiona's: upstream publishes no desktop wheel at all.
-
-| slice (cp314) | wheel | unpacked | fiona `.so` |
-| --- | --- | --- | --- |
-| arm64 (device) | 44,856,928 | 126,407,304 | 126,082,264 |
-| arm64 (simulator) | 46,211,443 | 127,966,519 | 127,641,416 |
-| x86_64 (simulator) | 49,329,823 | 135,331,488 | 135,006,384 |
-
-`flet-libgdal` contributes nothing executable here — its 112,772,601-byte iOS wheel is that
-half-gigabyte `libgdal.a` plus headers, which Flet's cleanup deletes — but the build machine
-still downloads and unpacks three of them. Expect a slow first `ipa` or `ios-simulator`
-build and plenty of free disk; nothing to configure.
-
-SQLite differs too: Android's `libproj.so` names Flet's `libsqlite3_python.so` in
-`DT_NEEDED`, while every iOS extension binds the system `/usr/lib/libsqlite3.dylib`.
-Whichever `proj.db` an app supplies is read by that one.
-
-The `libc++_shared.so` question in [Android notes](#android-notes) has no iOS counterpart:
-`_transform` is again the only extension needing a C++ runtime, and here `otool -L` shows it
-binding `/usr/lib/libc++.1.dylib`, an OS library present on every device, where the other
-seven bind none.
+Leave Flet's
+[compilation and cleanup](https://flet.dev/docs/publish/#compilation-and-cleanup) on.
+Nothing in the package reads its own source and it carries no data file of its own, so
+compiling to `.pyc` is safe and the default cleanup only takes Cython headers.
 
 ## Things to know
 
-- **Six vector drivers are registered; fiona can reach five of them, three writable.** This
-  GDAL registers eleven drivers in all — `GTiff`, `COG` and `VRT` (raster only), `MEM`
-  (raster *and* vector), the five vector drivers `ESRI Shapefile`, `GeoJSON`, `GeoJSONSeq`,
-  `ESRIJSON` and `TopoJSON`, and the two network drivers `GNMFile` and `GNMDatabase`. That
-  list is exhaustive: `GDALAllRegister` in Android's `libgdal.so` and in the iOS `_env`
-  calls exactly those eleven registration functions and nothing else. Which of them OGR
-  will show you is decided by the `DCAP_VECTOR` metadata each one sets, and
-  `OGRGetDriverCount`/`OGRGetDriver` — the pair `fiona.Env().drivers()` loops — filter on
-  precisely that string. `GDALRegister_MEM` sets `DCAP_VECTOR`, `DCAP_CREATE_LAYER`,
-  `DCAP_DELETE_LAYER` and `DCAP_CREATE_FIELD` on both platforms and calls itself *In Memory
-  raster, vector and multidimensional raster*, so **`env.drivers()` returns six names, not
-  five** — the sixth is `MEM`. `GNMFile` and `GNMDatabase` set only `DCAP_GNM` and do not
-  appear. fiona cannot use `MEM` regardless: its static table in `fiona/drvsupport.py` has
-  no `MEM` entry at all (the old `Memory` name survives only as a comment there), so it
-  never enters `fiona.supported_drivers` and `fiona.open(..., driver="MEM")` raises
-  `fiona.errors.DriverError: unsupported driver: 'MEM'` before any native call. Of the five
-  fiona does keep, its mode table marks `ESRI Shapefile`, `GeoJSON` and `GeoJSONSeq` as
-  `raw` (read, append, write) and `ESRIJSON` and `TopoJSON` as `r`. **No GPKG, no SQLite,
-  no GML, no GPX, no CSV, no FlatGeobuf, no DXF, no OpenFileGDB, no MapInfo, no DGN and no
-  S57** — convert those off-device. Ask both lists rather than trusting either alone:
-  `with fiona.Env() as env: env.drivers()` is OGR's vector-capable subset of the registry,
-  `fiona.supported_drivers` is what `fiona.open` will accept, and they differ by `MEM`.
-  Because `MEM` carries both capability flags, a raster-side census of this same
-  `flet-libgdal` counts it among four raster drivers and this one counts it among six
-  vector drivers: eleven registrations, counted twice from two sides. A listing taken
-  through `GDALGetDriverCount` — which references no `DCAP_*` string at all — returns all
-  eleven, so a driver count from a raster package against this same library is not
-  comparable with this one.
-- **`fiona.driver_count()` is not the number of drivers you can use.** It is
-  `GDALGetDriverCount() + OGRGetDriverCount()` evaluated inside `fiona._env`, so it counts
-  every registered driver plus the vector-capable ones a second time. It read 124 on a
-  desktop where `fiona.supported_drivers` held 17 names and `Env().drivers()` held 55. Read
-  it off a device rather than reasoning from it; the
-  [`feature-roundtrip`](examples/feature-roundtrip) example prints it.
-- **`fiona.supported_drivers` is filtered at import — against the wrong table on iOS.**
-  `fiona/drvsupport.py` runs `_filter_supported_drivers()` at module scope, which intersects
-  fiona's static table with `Env().drivers()`, and that is `fiona._env.drivers()` looping
-  `OGRGetDriverCount()` inside `_env`. On Android that is the same registry `fiona.open`
-  uses. On iOS it is not, so an app that checks the driver list before writing gets a green
-  light from a table `fiona.open` never consults.
 - **`FionaNullPointerError` is not a `FionaError`.** `fiona/_err.pyx` defines
   `class FionaNullPointerError(CPLE_BaseError)` and `class CPLE_BaseError(Exception)`, with
-  no relation to anything in `fiona/errors.py`; the measured MRO is `FionaNullPointerError →
-  CPLE_BaseError → Exception`, and `isinstance(err, fiona.errors.FionaError)` is `False`.
+  no relation to anything in `fiona/errors.py` — the measured MRO is
+  `FionaNullPointerError → CPLE_BaseError → Exception`, and
+  `isinstance(err, fiona.errors.FionaError)` is `False`. So
   `except fiona.errors.FionaError` will not catch it, and an uncaught exception in a Flet
   handler ends the session with a crash screen. Catch bare `Exception` around fiona calls
   and render `type(err).__name__` alongside `str(err)`.
+
 - **Always pass `driver=` explicitly when writing.** Left out,
   [`fiona.open`](https://fiona.readthedocs.io/en/stable/fiona.html#fiona.open) calls
   [`driver_from_extension`](https://fiona.readthedocs.io/en/stable/fiona.html#fiona.drvsupport.driver_from_extension),
   which builds its extension map by asking every driver in `supported_drivers` for its
-  metadata through `fiona.ogrext._get_metadata_item`, and that function raises
-  `FionaValueError: Could not find driver '<name>'` the moment `GDALGetDriverByName` returns
-  NULL — so on iOS the convenient form fails inside the empty table before it ever reaches
-  your file. The three messages you can see today, all measured on a desktop: an
-  unrecognised extension gives `ValueError: Unable to detect driver. Please specify
-  driver.`; a driver name absent from `supported_drivers` gives `fiona.errors.DriverError:
-  unsupported driver: 'NoSuchDriver'` before any native call; opening a file that is not
-  there gives `fiona.errors.DriverError: Failed to open dataset (flags=68): <path>`.
+  metadata and raises `FionaValueError: Could not find driver '<name>'` the moment
+  `GDALGetDriverByName` returns NULL — so on iOS the convenient form fails inside the empty
+  table before it ever reaches your file. On a working platform the same omission gives
+  `ValueError: Unable to detect driver. Please specify driver.` for an extension it does not
+  recognise, so the two failures look nothing alike.
+
+- **`fiona.supported_drivers` is filtered at import — against the wrong table on iOS.**
+  `fiona/drvsupport.py` runs `_filter_supported_drivers()` at module scope, intersecting
+  fiona's static table with `Env().drivers()`, which loops `OGRGetDriverCount()` inside
+  `fiona._env`. On Android that is the same registry `fiona.open` uses. On iOS it is not, so
+  an app that checks the driver list before writing gets a green light from a table
+  `fiona.open` never consults.
+
+- **`fiona.driver_count()` is not the number of drivers you can use.** It is
+  `GDALGetDriverCount() + OGRGetDriverCount()` evaluated inside `fiona._env`, so it counts
+  every registered driver plus the vector-capable ones a second time. It read 124 on a
+  desktop where `fiona.supported_drivers` held 17 names and `Env().drivers()` held 55. Read
+  it off a device rather than reasoning from it.
+
 - **A round-tripped schema is not the schema you wrote**, so `src.schema == schema` is the
   wrong check. Writing `{"name": "str", "n": "int", "v": "float"}` read back as
   `{"name": "str", "n": "int32", "v": "float"}` from GeoJSON and
@@ -444,59 +322,35 @@ seven bind none.
   round-tripped in both — worst residual 4.44e-16 on the floats — and coordinates came back
   as `tuple`, not `list`. Compare feature values element by element and treat the schema as
   information.
-- **A Shapefile holds one geometry type and rewinds your rings.** A layer declared
-  `Unknown` whose first feature is a Point becomes a point shapefile, and the next feature
-  raises `RuntimeError: GDAL Error: Attempt to write non-point (LINESTRING) geometry to
-  point shapefile.`; GeoJSON takes the mixture happily. Separately, an outer ring written
+
+- **A Shapefile holds one geometry type and rewinds your rings.** A layer declared `Unknown`
+  whose first feature is a Point becomes a point shapefile, and the next feature raises
+  `RuntimeError: GDAL Error: Attempt to write non-point (LINESTRING) geometry to point
+  shapefile.`; GeoJSON takes the mixture happily. Separately, an outer ring written
   counter-clockwise comes back with its vertices reversed, because the format fixes the
-  winding order — measured on a desktop, a clockwise ring round-tripped identical through
-  both drivers and the same ring counter-clockwise survived GeoJSON but not the Shapefile.
-  Keep field names to ten characters or fewer while you are at it: DBF truncates silently,
-  and a property written as `a_very_long_name` came back keyed `a_very_lon`.
-- **`click`, `click-plugins` and `cligj` arrive as requirements and nothing you import uses
-  them.** They exist for the `fio` console script: `import click` appears in 15 files, all
-  of them under `fiona/fio/`, and `fiona/__init__.py` never imports `fiona.fio`. That
-  subpackage is 53,196 bytes across 17 files.
-- **`certifi` is different: it is imported on every `import fiona`.** The call is not in any
-  `.py` — it is compiled into `fiona/_env`, which does `import certifi` at module scope and
-  puts `certifi.where()` into `GDAL_CURL_CA_BUNDLE` and `PROJ_CURL_CA_BUNDLE`; the strings
-  `certifi`, `GDAL_CURL_CA_BUNDLE` and `PROJ_CURL_CA_BUNDLE` are all in the shipped Android
-  `_env.cpython-314-aarch64-linux-android.so`. Two consequences. `certifi.where()` needs a
-  real filesystem path for `certifi/cacert.pem` (240,216 bytes at certifi 2026.7.22, and
-  nothing pins it), so if your site-packages
-  are zipped it is unpacked to a temporary file at import — the one data file in fiona's
-  dependency tree that gets touched, and the reason the *no data file* finding above is
-  about fiona's own wheel and not about the whole install. And the GDAL half of it is dead
-  weight: this `libgdal` has no libcurl, so nothing reads `GDAL_CURL_CA_BUNDLE`. Do not drop
-  `certifi` from a lockfile on the theory that fiona only declares it — the `try/except`
-  around the import catches `ImportError` only.
-- **GEOS is not compiled in and neither is libcurl.** Android's `libgdal.so` and the iOS
-  extensions all carry the diagnostics *GEOS support not enabled.* and *GDAL/OGR not
-  compiled with libcurl support, remote requests not supported.*, and `libgdal.so`'s
-  dynamic symbol table holds no `GEOS*` and no `curl_*` symbol at all, defined or
-  undefined. So OGR geometry predicates and operations are unavailable — use
-  [`shapely`](../shapely) for those — and `/vsicurl/`, `/vsis3/`, `/vsigs/` and `/vsiaz/`
-  are dead, which leaves fiona's `session` module nothing to drive. (`flet-libcurl` still
-  installs on Android because `libproj.so` names it in `DT_NEEDED`.)
-- **Your desktop is not a preview of the device.** `flet run` cannot see fiona at all with
-  the install shape above, and a desktop fiona installed by hand is a different package:
-  PyPI's macOS wheel bundles its own GDAL — 3.9.2, against 3.13.1 here — and its own
-  `proj_data`, and reported 17 entries in `supported_drivers`, 55 from `Env().drivers()`
-  and a working `CRS.from_epsg(4326)`. Twelve of those 17 — `CSV`, `DGN`, `DXF`,
-  `FlatGeobuf`, `GML`, `GPKG`, `GPX`, `MapInfo File`, `OGR_GMT`, `OpenFileGDB`, `S57` and
-  `SQLite` — are absent from the mobile registry. To approximate the device's *data*
-  situation locally, run with `GDAL_DATA`, `PROJ_DATA` and `PROJ_LIB` pointed at an empty
-  directory; that is how the CRS findings in [Storage](#storage) were established. It will
-  not show you the driver set, and on iOS it will not show you the split.
-- **Size.** Android arm64-v8a: an 893,120-byte wheel unpacking to 2,453,506, of which
-  2,128,416 is the eight extensions, on top of 21,511,192 bytes of shared `flet-lib*`
-  libraries. iOS device: a 44,856,928-byte wheel unpacking to 126,407,304, of which
-  126,082,264 is the same eight extensions and nothing else installs. `import fiona` maps
-  seven of the eight — everything but `_transform` — which is 2,026,280 bytes on Android
-  arm64-v8a against 101,746,112 on the iOS device slice, **50× the native bytes for the same
-  function**, before you touch a file. There is nothing a consumer can configure.
+  winding order; GeoJSON leaves it alone. Keep field names to ten characters or fewer while
+  you are at it: DBF truncates silently, and a property written as `a_very_long_name` came
+  back keyed `a_very_lon`.
+
+- **GEOS is not compiled in, and neither is libcurl.** Both platforms carry the diagnostics
+  *GEOS support not enabled.* and *GDAL/OGR not compiled with libcurl support, remote
+  requests not supported.*, and the Android `libgdal.so` holds no `GEOS*` and no `curl_*`
+  symbol at all, defined or undefined. So OGR geometry predicates and operations are
+  unavailable — use [`shapely`](../shapely) for those — and `/vsicurl/`, `/vsis3/`,
+  `/vsigs/` and `/vsiaz/` are dead, which leaves fiona's `session` module nothing to drive.
+
+- **`certifi` is imported on every `import fiona`, from compiled code.** The call is in no
+  `.py`: `fiona/_env` does `import certifi` at module scope and puts `certifi.where()` into
+  `GDAL_CURL_CA_BUNDLE` and `PROJ_CURL_CA_BUNDLE`. So `certifi/cacert.pem` needs a real
+  filesystem path and is unpacked to a temporary file if your site-packages are zipped — and
+  do not drop `certifi` from a lockfile on the theory that fiona only declares it, because
+  the `try/except` around that import catches `ImportError` only. (`click`, `click-plugins`
+  and `cligj` arrive the same way and really are unused here: they exist for the `fio`
+  console script, which `fiona/__init__.py` never imports.)
 
 ## Build notes (maintainers)
+
+### Recipe shape
 
 Two recipes: `flet-libgdal` builds GDAL, this one consumes it. `patches/mobile.patch`
 explains its own hunks and `meta.yaml` comments the Android/iOS `GDAL_LIBS` split next to
@@ -505,61 +359,79 @@ it, so what is left here is shape and the bump checklist.
 **Almost everything this page warns about is a `flet-libgdal` decision, not a fiona one.**
 The eleven-driver registry, the missing `GDAL_DATA` and `proj.db`, the absent GEOS and
 libcurl and the iOS static-only link all come from that recipe and from `flet-libproj`. A
-`flet-libgdal` bump can invalidate most of this README without a line changing here — which
-is why the version pin in `meta.yaml` is exact. Bump the two together and re-read the claims
-off the built wheels.
+`flet-libgdal` bump can invalidate most of this README without a line changing here, which
+is why the pin in `meta.yaml` is exact.
+
+`flet-libgdal` is `requirements.host` rather than `requirements.host_build`, so it ships and
+lands in `Requires-Dist` on both platforms. That is load-bearing on Android, where the
+extensions resolve `libgdal.so` by bare soname at load, and redundant but harmless on iOS,
+where the wheel's payload is a static archive plus headers that Flet's cleanup deletes.
 
 **The iOS driver split is the one that matters, and it is a linking artefact.** `GDAL_LIBS`
 names the whole static chain because `libgdal.a` leaks undefined symbols, and that is what
-drags a full GDAL — including its global driver table — into five of the eight extensions.
+drags a full GDAL — global driver table included — into five of the eight extensions.
 Aligning `flet-libgdal`'s iOS CMake with Android's would let `GDAL_LIBS` drop back to `gdal`
-and would rewrite the [iOS notes](#ios-notes), both size tables and the Android-only
-recommendation at the top of this page in one go. It is the highest-value fix available to
-this recipe.
+and would rewrite the **iOS** section, the size figures and the Android-only recommendation
+at the top of this page in one go. It is the highest-value fix available to this recipe.
 
-What to re-verify on a bump — a green build establishes almost none of what this page
-claims:
+### Upgrade hazards
 
-- **That the Android wheel still declares `flet-libcpp-shared`.** `_transform.so` carries
-  `DT_NEEDED libc++_shared.so` and is the only extension that does; `libgdal.so` itself does
-  **not** need it, since its 215 undefined C++ symbols are covered by `libproj.so`'s
-  statically linked libc++ (212) and bionic `libc.so` (3). So the declaration buys exactly
-  `import fiona.transform` and nothing else, and losing it costs exactly that one import —
-  silently, because every other test still passes. Check `Requires-Dist` in the built Android
-  wheel, and keep `test_transform_loads_and_reprojects`, which is the only test that would
-  go red.
-- **`tests/test_fiona.py` records the wrong cause for its iOS skip.**
-  `test_write_read_geojson` skips iOS on the grounds that OGR's GeoJSON writer calls PROJ to
-  stamp WGS84 and fails with *Cannot find proj.db*. Two things refute that: `ogrext.pyx`
-  touches OSR only inside `if col_crs:`, so a CRS-less write never enters PROJ there; and a
-  desktop run with `GDAL_DATA`, `PROJ_DATA` and `PROJ_LIB` all pointed at an empty directory
-  wrote and read back both a GeoJSON and a Shapefile intact. The exception class the skip
-  names is right; the reason is not — it is the driver-table split.
-- **The tests assert almost nothing about this build.** `test_supported_drivers` checks two
-  names in a dict `_filter_supported_drivers()` built from `_env`'s registry, which is
-  exactly the table that is *not* in question on iOS. Worth adding: an assertion over the
-  exact six driver names `fiona.Env().drivers()` returns — the five OGR ones plus `MEM`,
-  which is registered with `DCAP_VECTOR` — so a driver appearing is as red as one
-  vanishing; a write-read-compare through `fiona.open` with an explicit `driver=` and
-  no CRS; an assertion that `CRS.from_epsg(4326)` raises `CRSError`; and an
-  `import fiona.transform` that would catch a missing C++ runtime on Android.
+- **Bump `flet-libgdal` and this recipe together**, and re-read every claim above off the
+  built wheels rather than assuming the Python layer moved alone.
+- **The Android C++ runtime declaration is one line from being lost.** `_transform.so` is
+  the only extension whose `DT_NEEDED` names `libc++_shared.so`; `libgdal.so` itself does
+  not need it, because its undefined C++ symbols are covered by `libproj.so`'s statically
+  linked libc++ and by bionic. So the `flet-libcpp-shared` entry buys exactly
+  `import fiona.transform`, and losing it costs exactly that one import — silently, because
+  every other test still passes.
+- **`serious_python`'s junk-file globs list `**.pxd` and not `**.pxi`**, so `fiona/gdal.pxi`
+  (about 36 KB) ships to the device for nothing. That is a claim about another project's
+  current source; recheck it before repeating it, and drop this note if the glob gains
+  `**.pxi`.
+- **The example is the live regression test.** Bumping this recipe means bumping
+  [`feature-roundtrip`](examples/feature-roundtrip)'s `fiona==` pin and rebuilding it on both
+  platforms; its sections map one-to-one onto the claims above.
+
+### Re-verification checklist
+
+- **`Requires-Dist` in the built Android wheel** still names `flet-libcpp-shared`, and
+  `test_transform_loads_and_reprojects` still exists — it is the only test that would go red.
 - **The linkage split.** Android: `DT_NEEDED` still naming `libgdal.so` by bare soname,
   `libc++_shared.so` on `_transform` and nowhere else, `ogrext` still defining zero GDAL
   symbols, and 16 KB `PT_LOAD` alignment everywhere. iOS: still eight `MH_DYLIB`, still
   exactly five carrying GDAL, and `_env` still the only image with a `RegisterOGR*` in it.
-  If iOS ever links dynamically, the [iOS notes](#ios-notes) and both size tables change
-  together.
+  If iOS ever links dynamically, the **iOS** section and every size figure change together.
 - **The driver set**, from the symbol tables on both platforms — Android's `libgdal.so` is
-  stripped, so read it from dynamic symbols rather than `nm`. Two traps there. The exported
+  stripped, so read it from dynamic symbols rather than `nm`. Two traps. The exported
   `GDALRegister_*`/`RegisterOGR*` names are a superset of what is actually called: follow
   the `BL` targets out of `GDALAllRegister` instead, which is how the eleven above were
   fixed. And a name says nothing about vector capability — `MEM` registers with
   `DCAP_VECTOR` and shows up in `env.drivers()` — so read each registration function's
   `DCAP_*` strings, not its name.
+- **Nothing reads its own source and the wheel ships no data file**, which is what makes
+  the no-`extract_packages` and leave-compilation-on advice safe. Re-grep every `.py` for
+  `__file__`, `importlib.resources`, `pkgutil`, `pkg_resources`, `ctypes`, `find_library`
+  and `inspect.getsource`; today the hits are Windows guards in `_path.py`, `vfs.py` and
+  `__init__.py` plus a `platform.system()` in `_show_versions.py`'s printout, all inert.
 - **The sizes are measured.** Re-measure rather than adjusting by eye; the 50× import
-  footprint is the whole argument for budgeting 126 MB of extension on iOS.
-- **The example is the live regression test, and the instrument for the open questions.**
-  Bumping this recipe means bumping [`feature-roundtrip`](examples/feature-roundtrip)'s
-  `fiona==` pin and rebuilding it on both platforms. Its sections map one-to-one onto the
-  claims above, and the two things this page cannot settle — the iOS split and the Android
-  C++ runtime — are the two it probes first.
+  footprint is the whole argument for budgeting 126–135 MB of extension on iOS.
+
+### Coverage gaps
+
+- **The tests assert almost nothing about this build.** `test_supported_drivers` checks two
+  names in a dict `_filter_supported_drivers()` built from `_env`'s registry — exactly the
+  table that is *not* in question on iOS. Worth adding: an assertion over the exact six
+  names `fiona.Env().drivers()` returns, so a driver appearing is as red as one vanishing; a
+  write-read-compare through `fiona.open` with an explicit `driver=` and no CRS; and an
+  assertion that `CRS.from_epsg(4326)` raises `CRSError`.
+- **`test_write_read_geojson` records the wrong cause for its iOS skip.** It skips on the
+  grounds that OGR's GeoJSON writer calls PROJ to stamp WGS84 and fails with *Cannot find
+  proj.db*. Two things refute that: `ogrext.pyx` touches OSR only inside `if col_crs:`, so a
+  CRS-less write never enters PROJ there, and a desktop run with `GDAL_DATA`, `PROJ_DATA`
+  and `PROJ_LIB` all pointed at an empty directory wrote and read back both a GeoJSON and a
+  Shapefile intact. The exception class the skip names is right; the reason is not — it is
+  the driver-table split.
+- **Three claims on this page are untested.** The iOS *read* failure was never reached,
+  because there is nothing to read after a write that could not start; the `proj.db`-as-asset
+  lever has never been run on a device; and `osgeo.ogr` has not been shown writing a vector
+  layer on an iOS device — the measurement behind that recommendation is raster.

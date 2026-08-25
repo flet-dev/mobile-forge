@@ -5,9 +5,11 @@ numbers it was built from — with the `gdal_array`, `osr` and `ogr` paths run b
 because on iOS each of those is a **separate statically-linked copy of GDAL with its own
 driver table**. Every row on screen is a residual or an exception class, not a claim.
 
-The surface is generated at runtime by a formula in `src/main.py`, in pure Python via
-`array("f")`, so the raster panel owes numpy nothing and the read-back is differenced
-against a reference GDAL never touched. Nothing is bundled and nothing is downloaded.
+Every osgeo call lives in `src/terrain.py`, which imports no Flet and returns already-formatted
+strings; `src/main.py` is the wiring that puts them on screen. The surface is generated at
+runtime by a formula in `terrain.py`, in pure Python via `array("f")`, so the raster panel owes
+numpy nothing and the read-back is differenced against a reference GDAL never touched. Nothing
+is bundled and nothing is downloaded.
 
 What it demonstrates:
 
@@ -75,7 +77,9 @@ uv run flet build ipa
 uv run flet build ios-simulator
 ```
 
-A desktop run (`uv run flet run`) resolves GDAL from PyPI or Homebrew instead, and differs
+A desktop `uv run flet run` gets no GDAL at all — this example lists it only under
+`[tool.flet.android]` and `[tool.flet.ios]`, so the app renders its unavailable card. The
+desktop figures below came from a hand-built environment with GDAL on the host, and differs
 in three places over and above the timings: the driver line reads hundreds rather than
 eleven, `ImportFromEPSG(4326)` succeeds because that build bundles `proj.db`, and the
 extension byte totals are whatever your host GDAL happens to weigh. Every residual should

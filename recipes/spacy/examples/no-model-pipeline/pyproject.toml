@@ -17,3 +17,6 @@ path = "src"
 
 [tool.flet.android]
 extract_packages = ["spacy", "thinc"]
+
+[tool.flet.cleanup]
+package_files = ["spacy/tests"]

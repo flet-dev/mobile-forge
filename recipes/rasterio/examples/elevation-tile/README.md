@@ -4,11 +4,20 @@ A GeoTIFF written, read back and differenced against the array it came from, on 
 that carries no PROJ database. Every panel prints a count of mismatched elements and a
 worst absolute residual, so what you read is a measurement rather than a claim.
 
-A 1024×1024 float32 elevation surface is generated in numpy from a formula written in
-`src/main.py`, written into
+A 1024×1024 float32 elevation surface is generated in numpy from a formula in
+`src/elevation.py`, written into
 [`FLET_APP_STORAGE_DATA`](https://flet.dev/docs/reference/environment-variables/#flet_app_storage_data)
 as a tiled DEFLATE GeoTIFF, and read back several ways. It ships no data file and reaches
-no network — everything is generated at runtime.
+no network — everything is generated at runtime. `src/elevation.py` holds every rasterio and
+numpy call; `src/main.py` is Flet and the threading around them.
+
+**On an iPhone or iPhone simulator this app fails, and that is the point of running it
+there.** It is the measurement the [recipe page](../..) cites for treating rasterio as
+Android-only: run on
+2026-08-19, it wrote and read the raster on an arm64 Android emulator with 0 of 1,048,576
+pixels differing, and on an iPhone simulator the write raised
+`DriverRegistrationError: ('No such driver registered: %s', b'GTiff')` in a process that had
+just listed `GTiff` among its drivers. Build it for iOS to see that, not to use it.
 
 What it demonstrates:
 
