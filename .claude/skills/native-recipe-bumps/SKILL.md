@@ -188,6 +188,30 @@ patch --dry-run -p1 --ignore-whitespace < /path/to/recipes/<pkg>/patches/mobile-
 
 Render with both `sdk='iphoneos'` and `sdk='android'` whenever the file has SDK conditionals.
 
+## Licences: the two things a bump can invalidate
+
+A bump is the likeliest moment for both, and neither announces itself:
+
+- **The licence FILE moves or is renamed.** forge auto-bundles a top-level
+  `LICEN[CS]E*`/`COPYING*`/`COPYRIGHT*`/`NOTICE*` from the source or recipe directory, and
+  **fails the build** when it finds none — so this one stops you, loudly, with the fix in
+  the error. Point `about.license_file` at the new location (a path or a list). Check it
+  cheaply before building:
+  ```bash
+  tar tf downloads/<pkg>-<new>.tar.gz | awk -F/ 'NF==2' | grep -iE 'licen|copying|copyright|notice'
+  ```
+- **The licence EXPRESSION changes at a version boundary** — this one is silent, because
+  `about.license` is just a string forge copies into the metadata. Two real cases:
+  `libpng` is `Libpng` up to 1.6.35 and `libpng-2.0` after; `libtiff` 4.7.0's `LICENSE.md`
+  omits the second Berkeley grant covering `tif_lzw.c`, which upstream added in 4.7.1, so
+  the correct expression differs between those two releases. Re-read the licence text in
+  the archive you are now shipping from, not the one you shipped last time.
+
+And whichever changed: **licence metadata does not reach pypi.flet.dev until the build
+number is bumped** — an existing `<version>-<build>` 409-skips on re-publish. A version
+bump usually moves the version anyway, so this mostly bites when you fix metadata *without*
+a version change. See `forge-ci` § Deploying.
+
 ## Build / debug loop
 
 `forge` takes a *host* (top-level platform name like `iOS`/`android`, or a `platform:arch` / `platform:version:arch` triple) followed by one or more recipe names. There is no `build` subcommand.

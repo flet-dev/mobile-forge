@@ -40,8 +40,8 @@ build-wheels.yml (push / workflow_dispatch / workflow_call)
 
 Key structural facts:
 
-- **On push**, `detect` diffs `recipes/**` against the base and builds every
-  changed recipe. The detected package list is ordered like `git diff` output
+- **On push**, `detect` diffs `recipes/**` for **that push** (before..after) and builds
+  every changed recipe. The detected package list is ordered like `git diff` output
   (pathname-sorted) — do not rely on that ordering for dependency chains.
 - **Consumer docs don't trigger builds.** `recipes/*/README.md` and
   `recipes/*/examples/**` are in the `files_ignore` of the changed-files step,

@@ -19,3 +19,6 @@ requirements:
 
 patches:
   - config.patch
+
+about:
+  license: curl

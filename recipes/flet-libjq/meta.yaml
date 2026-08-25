@@ -8,7 +8,7 @@ source:
   url: https://github.com/jqlang/jq/releases/download/jq-{{ version }}/jq-{{ version }}.tar.gz
 
 build:
-  number: 11
+  number: 12
 
 requirements:
   build:
@@ -16,3 +16,10 @@ requirements:
 
 patches:
   - config.patch
+
+about:
+  # oniguruma is bundled (--with-oniguruma=builtin), so its notice ships too.
+  license_file:
+    - COPYING
+    - modules/oniguruma/COPYING
+  license: MIT AND BSD-2-Clause AND ICU AND dtoa

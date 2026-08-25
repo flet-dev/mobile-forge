@@ -5,10 +5,14 @@ package:
   version: '{{ version }}'
 
 build:
-  number: 10
+  number: 11
 
 source:
   url: https://github.com/pnggroup/libpng/archive/refs/tags/v{{ version }}.tar.gz
 
 patches:
   - config.patch
+
+about:
+  # Lowercase libpng-2.0: the capital-L `Libpng` licence applies only up to 1.6.35.
+  license: libpng-2.0

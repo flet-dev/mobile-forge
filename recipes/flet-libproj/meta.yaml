@@ -20,3 +20,6 @@ requirements:
   host:
     - flet-libtiff 4.7.0
     - flet-libcurl 8.11.0
+
+about:
+  license: MIT
