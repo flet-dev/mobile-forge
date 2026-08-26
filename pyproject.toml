@@ -29,7 +29,9 @@ classifiers = [
 dependencies = [
     # Currently using a fork of crossenv to get iOS fixes.
     # Replace when/if these are merged and released.
-    "crossenv @ git+https://github.com/flet-dev/crossenv@flet",
+    # TEMP (python-315 rollout): 3.15 fixes live on the fork until they land on
+    # flet-dev/crossenv@flet — restore that pin at merge time.
+    "crossenv @ git+https://github.com/ndonkoHenri/crossenv@python-315",
     #"crossenv @ git+https://github.com/freakboy3742/crossenv@f0f07129eb06ea16d180650a26a02df2b948b888",
     #"crossenv @ git+https://github.com/benfogle/crossenv",
     "httpx == 0.27.0",

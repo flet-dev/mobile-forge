@@ -1,6 +1,12 @@
 package:
   name: pydantic-core
+# 2.47.0 builds with a pyo3 < 0.29, which hard-stops at Python 3.14;
+# 2.48.0 is upstream's cp315-supporting release (pyo3 >= 0.29).
+# {% if py_version.minor >= 15 %}
+  version: "2.48.0"
+# {% else %}
   version: "2.47.0"
+# {% endif %}
 
 build:
   number: 10

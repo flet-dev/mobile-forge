@@ -122,7 +122,24 @@ if echo "$PYTHON_INPUT" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]'; then
     PYTHON_VERSION="$PYTHON_INPUT"
 else
     echo "Resolving Python $PYTHON_VER from python-build release $PYTHON_BUILD_RELEASE..."
-    PYTHON_VERSION="$(resolve_full_version "$PYTHON_VER")" || return
+    PYTHON_VERSION="$(resolve_full_version "$PYTHON_VER")" || {
+        # Minor not in the pinned release (e.g. a prerelease line still living
+        # on a python-build branch): resolve the full version from the pinned
+        # Actions run's artifact names instead (python-android-<full>), i.e.
+        # the same run download_support will fetch the tarballs from.
+        if [ -n "${PYTHON_BUILD_RUN_ID:-}" ]; then
+            echo "Resolving Python $PYTHON_VER from python-build run $PYTHON_BUILD_RUN_ID..."
+            pb_run_art="$(gh api "repos/flet-dev/python-build/actions/runs/${PYTHON_BUILD_RUN_ID}/artifacts" \
+                --jq '.artifacts[].name' 2>/dev/null \
+                | grep -E "^python-android-${PYTHON_VER//./\\.}\." | head -n1)"
+            PYTHON_VERSION="${pb_run_art#python-android-}"
+            unset pb_run_art
+        fi
+        if [ -z "${PYTHON_VERSION:-}" ]; then
+            echo "Could not resolve Python $PYTHON_VER from the release or PYTHON_BUILD_RUN_ID." >&2
+            return 1
+        fi
+    }
 fi
 
 echo "Python version: $PYTHON_VERSION"
@@ -160,11 +177,13 @@ download_support() {
     mkdir -p downloads
     if [ ! -f "downloads/${tarball}" ]; then
         if [ -n "${PYTHON_BUILD_RUN_ID:-}" ]; then
-            # python-build's CI uploads iOS tarballs under the "darwin" artifact
-            # (it bundles iOS + macOS together). The android lane has a 1:1 artifact name.
-            local artifact_plat="$plat"
-            [ "$plat" = "ios" ] && artifact_plat="darwin"
-            local artifact_name="python-${artifact_plat}-${PYTHON_VERSION}"
+            # python-build's CI artifact names: the android lane is 1:1
+            # (python-android-<ver>); iOS tarballs ship inside the darwin
+            # artifact (iOS + macOS bundled), which build-only runs upload as
+            # darwin-unsigned-<ver> — the provider-signed python-darwin-signed
+            # artifact exists only on release runs.
+            local artifact_name="python-${plat}-${PYTHON_VERSION}"
+            [ "$plat" = "ios" ] && artifact_name="darwin-unsigned-${PYTHON_VERSION}"
 
             echo "Fetching ${tarball} from python-build run ${PYTHON_BUILD_RUN_ID} (artifact: ${artifact_name})..."
             local stage

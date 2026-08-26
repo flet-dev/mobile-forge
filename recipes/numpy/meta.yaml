@@ -3,7 +3,13 @@
 
 package:
   name: numpy
+# 2.4.x predates 3.15 support; 2.5.x is upstream's 3.15 line (cp315 wheels
+# from 2.5.2, "supported starting with the first 3.15 rc" per 2.5.0 notes).
+# {% if py_version.minor >= 15 %}
+  version: "2.5.2"
+# {% else %}
   version: "2.4.6"
+# {% endif %}
 
 requirements:
  build:
