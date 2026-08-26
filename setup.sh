@@ -131,7 +131,7 @@ else
             echo "Resolving Python $PYTHON_VER from python-build run $PYTHON_BUILD_RUN_ID..."
             pb_run_art="$(gh api "repos/flet-dev/python-build/actions/runs/${PYTHON_BUILD_RUN_ID}/artifacts" \
                 --jq '.artifacts[].name' 2>/dev/null \
-                | grep -E "^python-android-${PYTHON_VER//./\\.}\." | head -n1)"
+                | grep -E "^python-android-${PYTHON_VER//./\\.}\." | head -n1 || true)"
             PYTHON_VERSION="${pb_run_art#python-android-}"
             unset pb_run_art
         fi
@@ -148,7 +148,11 @@ echo "python-build release: $PYTHON_BUILD_RELEASE"
 
 # Android ABI set for this minor, from the python-build manifest.
 # Overridable by setting ANDROID_ABIS env var.
-ANDROID_ABIS="${ANDROID_ABIS:-$(resolve_android_abis "$PYTHON_VER")}"
+if [ -z "${ANDROID_ABIS:-}" ]; then
+    # `|| true` keeps a missing manifest entry non-fatal under `set -e` (CI
+    # sources this script with -euo pipefail); the fallback below handles it.
+    ANDROID_ABIS="$(resolve_android_abis "$PYTHON_VER" || true)"
+fi
 if [ -z "$ANDROID_ABIS" ]; then
     ANDROID_ABIS="arm64-v8a x86_64 armeabi-v7a"
     echo "Warning: manifest has no android_abis for $PYTHON_VER; defaulting to: $ANDROID_ABIS" >&2
