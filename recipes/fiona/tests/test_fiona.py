@@ -34,28 +34,28 @@ def test_write_read_geojson(tmp_path):
     """Write a Point feature to GeoJSON then read it back — covers OGR's
     writer + reader without depending on bundled test data.
 
-    Skipped on iOS until the flet-libgdal / flet-libproj recipes stop
-    stripping `share/` from the install (and the iOS app launcher sets
-    `GDAL_DATA` / `PROJ_DATA` to point at them). Even when the caller
-    supplies no CRS, OGR's GeoJSON writer calls into PROJ to stamp a
-    default WGS84 metadata field, which fails with `Cannot find
-    proj.db` and surfaces as `FionaNullPointerError`. Distinct from
-    the linker-level static-cascade fix this recipe already ships —
-    that's `import fiona` succeeding; this is runtime data."""
-    import sys
+    This used to skip on iOS, on the reasoning that OGR's GeoJSON writer stamps
+    a default WGS84 field through PROJ even when the caller supplies no CRS, so
+    the missing `proj.db` made a write impossible. Naming the CRS as a
+    proj-string avoids that lookup entirely — PROJ needs its database only to
+    resolve an authority code — and `pyogrio`, which shares this GDAL, writes
+    GeoJSON on an iPhone simulator this way. So the restriction is avoidable
+    rather than fundamental, and the test now runs everywhere.
 
-    if sys.platform == "ios":
-        pytest.skip(
-            "iOS: proj.db not bundled — see flet-libgdal/libproj `rm -rf "
-            "$PREFIX/share` strip step; needs follow-up recipe change."
-        )
-
+    It also covers the driver registry: `ogrext`, where `fiona.open` works, has
+    its own GDAL copy under a static libgdal, and `ios-driver-registry.patch`
+    is what populates it. Without that patch this fails at the driver rather
+    than at the CRS."""
     import fiona
 
     schema = {"geometry": "Point", "properties": {"name": "str"}}
     path = tmp_path / "tiny.geojson"
 
-    with fiona.open(path, "w", driver="GeoJSON", schema=schema) as dst:
+    # proj-string, never an authority code: this chain ships no proj.db.
+    with fiona.open(
+        path, "w", driver="GeoJSON", schema=schema,
+        crs="+proj=longlat +datum=WGS84 +no_defs",
+    ) as dst:
         dst.write(
             {
                 "geometry": {"type": "Point", "coordinates": (2.35, 48.86)},
@@ -123,5 +123,18 @@ def test_epsg_codes_need_proj_db():
     from fiona.errors import CRSError
     from fiona.transform import transform
 
-    with pytest.raises(CRSError):
+    wgs84 = "+proj=longlat +datum=WGS84 +no_defs"
+    mercator = "+proj=merc +a=6378137 +b=6378137 +lon_0=0 +units=m +no_defs"
+    # Proj-strings must keep working wherever this runs; that is the control.
+    assert transform(wgs84, mercator, [4.3517], [50.8503])[0]
+
+    try:
         transform("EPSG:4326", "EPSG:3857", [4.3517], [50.8503])
+    except CRSError:
+        return  # the expected state on a device: no proj.db, authority lookups fail
+    pytest.skip(
+        "a PROJ database is present, so authority codes resolve — the state this "
+        "test exists to detect is a device without one. If this skip ever appears "
+        "on a device, the chain has gained proj.db and the docs saying otherwise "
+        "need updating."
+    )
