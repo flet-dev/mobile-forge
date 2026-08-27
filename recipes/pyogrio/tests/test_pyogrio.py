@@ -57,7 +57,12 @@ def test_vector_round_trip(tmp_path):
         fields=["name"],
         driver="GeoJSON",
         geometry_type="Point",
-        crs="EPSG:4326",
+        # A proj-string, not "EPSG:4326": this chain ships no proj.db, so an
+        # authority-named CRS raises `CRSError: Could not set CRS` on BOTH
+        # platforms — before the test reaches the thing it exists to check.
+        # Desktop has the database and hides it, which is how it got written
+        # that way in the first place.
+        crs="+proj=longlat +datum=WGS84 +no_defs",
     )
     assert path.exists() and path.stat().st_size > 0
 
