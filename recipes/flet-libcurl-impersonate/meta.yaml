@@ -13,6 +13,9 @@ package:
   excluded_arches:
     - armeabi-v7a
 
+build:
+  number: 1
+
 source:
 # {% if sdk == 'iphoneos' %}
   url: https://github.com/lexiforest/curl-impersonate/releases/download/v{{ version }}/libcurl-impersonate-v{{ version }}.arm64-apple-ios.tar.gz
@@ -27,8 +30,6 @@ source:
   # nonexistent top-level component.
   strip: 0
 
-build:
-  number: 1
 
 about:
   # The release tarballs ship no licence text at all, so the notices are vendored

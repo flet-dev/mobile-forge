@@ -90,8 +90,6 @@ def result_row(target):
 
 
 async def main(page: ft.Page):
-    """Probe one fingerprinting endpoint as five browsers at the same time."""
-
     async def run():
         """Refill every row from one concurrent fan-out, then total the timings.
 
@@ -153,7 +151,7 @@ async def main(page: ft.Page):
         rows[target] = refill
         row_controls.append(control)
 
-    page.appbar = ft.AppBar(title=ft.Text("Fingerprint fan-out"), center_title=True)
+    page.appbar = ft.AppBar(title="Fingerprint fan-out", center_title=True)
     page.add(
         ft.SafeArea(
             expand=True,
