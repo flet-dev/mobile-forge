@@ -2066,6 +2066,37 @@ about:
 Note an **unset** `license_file` still means "discover for me" — only an empty **list** is
 the opt-out.
 
+**The prebuilt-repackage case: upstream ships no notice ANYWHERE.** A recipe that repackages
+a third-party *binary* release often gets a tarball holding nothing but the library and its
+headers — no `LICENSE`, no `COPYING`, nothing to point `license_file` at. `[]` is the wrong
+reflex here: the wheel really does contain that object code, so the notice has to come from
+somewhere, and the schema says so — *"or to the recipe directory, for a notice the upstream
+archive doesn't ship"*. **Vendor the notices into the recipe directory** and list them:
+
+```yaml
+about:
+  license_file: [COPYING.curl, LICENSE.boringssl, LICENSE.zstd]   # flet-libcurl-impersonate
+  license: curl AND MIT AND Apache-2.0 AND BSD-3-Clause AND Zlib
+```
+
+Keep them **flat in the recipe dir**, not under a `licenses/` subdir — paths are preserved
+into the wheel, so a subdir yields `dist-info/licenses/licenses/COPYING.curl`.
+
+Getting the component list right is the actual work, and a mega-archive will not tell you
+directly: `ar t` on a `ld -r` blob lists one member. Recover it from the symbols the linker
+left behind, then corroborate against upstream's build config:
+
+```bash
+llvm-nm -a libfoo.a | awk '$2=="-"||$2=="f"{print $3}' | sort -u   # STT_FILE syms per project
+strings libfoo.a | grep -oE '/build/deps/src/[a-z0-9-]+' | sort | uniq -c
+```
+
+Two traps when picking each file, both the libiconv trap in different directions: a project's
+`LICENSE` may be a stub redirect (nghttp2's is 12 bytes, "See COPYING"), and a dual-licensed
+project's `COPYING` may be the arm we do *not* take (zstd's is the full GPL-2.0; the BSD arm
+is in `LICENSE`). Fetch every file at the **pinned version tag**, never `main` — the texts
+carry copyright year ranges that drift.
+
 **Related:** `about.license_file` naming a file that isn't there raises too (a typo or a
 moved file, not a preference). Changing licence metadata does not reach pypi.flet.dev until
 the recipe's **build number is bumped** — see `forge-ci` § Deploying, "Bump before
