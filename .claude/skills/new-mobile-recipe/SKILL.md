@@ -79,11 +79,43 @@ Match the package to one of these shapes. Each maps to a template in `templates/
 | Native library, **ctypes-loaded (shared)** | A pure-Python wrapper `dlopen`s the lib at runtime via `ctypes` (pyzbar→libzbar, python-magic→libmagic) | `templates/meta-flet-lib.yaml` + `templates/build-flet-lib-shared.sh`; see Pattern H |
 | Cython-accelerated pure-Python (poetry-core build script) | `build-backend = "poetry.core.masonry.api"` + `[tool.poetry.build] script` that cythonizes the runtime `.py` files themselves (zeroconf; the Home-Assistant-ecosystem idiom). Forge's PEP 517 path handles poetry-core unchanged | No template — copy `recipes/zeroconf/` (branch `zeroconf`): `script_env REQUIRE_CYTHON: "1"` + a fail-loud patch (upstream swallows compile errors → silent pure-py wheel), test asserts the modules are real extensions |
 | C-ext that links a lib via a `*-config` tool | Compiled C-ext whose `setup.py` shells out to `pg_config`/`mysql_config`/… (psycopg2→libpq, mysqlclient→libmysqlclient) | A **static+PIC** `flet-lib*` (`build-flet-lib.sh` + `-fPIC`) shipping a config-shim, + consumer `script_env`/patch; see Pattern I |
+| **setup.py that drives CMake itself** for a vendored native lib | An sdist that vendors a C library and builds it with its own `subprocess` CMake call inside `build_ext`, then links the static result via `extra_objects` (pycares→c-ares). Not scikit-build-core — the arg list is hardcoded in `setup.py` | No template — copy `recipes/pycares/`: one patch appends `shlex.split(os.environ['FORGE_CMAKE_ARGS'])` to the arg list, `requirements.build: [cmake]`; see "vendored-CMake" deep-dive below |
 | CMake giant, **no sdist AND no setup.py/pyproject.toml** | Upstream's only wheel path is a host==target build script (onnxruntime's `ci_build/build.py`, TF's `build_pip_package_with_cmake.sh`) | No template — copy from `recipes/onnxruntime/` or `recipes/tflite-runtime/` (branches `machine/onnxruntime` / `machine/tflite-runtime`); see "PEP 517 shim" deep-dive below |
 | **Prebuilt-repackage + host_build chain**  | Upstream publishes official prebuilt mobile archives of the native lib AND the consumer's own cmake links + re-ships the `.so` (flet-libonnxruntime→sherpa-onnx) | `build.sh` repackager + consumer `requirements.host_build`; copy from `recipes/flet-libonnxruntime/` + `recipes/sherpa-onnx/` (branch `machine/sherpa-onnx`); see "prebuilt-repackage" deep-dive below |
 | **cffi/ctypes consumer of a prebuilt archive** | The package's own build DOWNLOADS a prebuilt static lib keyed by the build host's `uname` and statically links it (curl-cffi → curl-impersonate); breaks under cross because host≠target | `flet-lib*` prebuilt-repackage dep (`source.strip: 0` for root-level tarballs) + `requirements.host_build` + a `mobile.patch` opt-in env lever that steers arch/link off the forge target; copy from `recipes/flet-libcurl-impersonate/` + `recipes/curl-cffi/` (branch `curl-cffi`); see deep-dive below |
 
 If unsure, start with **minimal C-extension** and let the build tell you what's missing. Iterate up the table as failures surface.
+
+### Shape deep-dive: setup.py that drives CMake for a vendored lib (pycares)
+
+**When:** the sdist vendors a C library (`deps/<lib>/`) and its `build_ext` shells out to
+`cmake` to build it, then links the resulting static lib into the extension with
+`extra_objects`. It looks like a CMake recipe but no CMake build backend is involved, so
+`CMAKE_ARGS` (which only scikit-build-core reads) does nothing — the argument list is a
+literal in `setup.py`, configured for the build host.
+
+The whole recipe is one patch that makes that list extensible, plus the env var to fill it:
+
+```python
+cmake_args.extend(shlex.split(os.environ.get('FORGE_CMAKE_ARGS', '')))
+```
+
+Append it **after** upstream's own platform block so the recipe's args win — repeated `-D`
+on a cmake command line is last-one-wins, which is how `-DCMAKE_OSX_DEPLOYMENT_TARGET`
+gets overridden without touching upstream's line. Then the usual per-SDK `script_env`
+lanes (`{NDK_ROOT}/build/cmake/android.toolchain.cmake` + `{ANDROID_ABI}` +
+`{ANDROID_API_LEVEL}` on Android; `-DCMAKE_SYSTEM_NAME=iOS` + `{{ sdk }}` / `{{ arch }}` /
+`{{ sdk_version }}` on iOS), and `requirements.build: [cmake]`.
+
+**Why this shape is worth naming: getting it wrong produces a green wheel.** A host-configured
+vendored lib still *links* whenever host and target arch agree (macOS arm64 objects go into an
+`ios_arm64` extension without complaint), and the resulting wheel then fails on device — or
+worse, works while quietly missing a feature the configure step probed for. Verify from the
+build log, not the exit code: `Check for working C compiler:` must name the cross compiler,
+and the feature macros that matter must have resolved for the target (for pycares:
+`HAVE___SYSTEM_PROPERTY_GET` on Android, `Found Threads: TRUE` on both — a threadless c-ares
+makes `import pycares` raise outright). Grep the generated `ares_config.h`-equivalent in
+`build/<py>/<pkg>/<ver>/build/temp.*/` when in doubt.
 
 ### Shape deep-dive: PEP 517 shim for no-sdist CMake giants (onnxruntime, tflite-runtime)
 
@@ -96,7 +128,7 @@ The shim's load-bearing rules (each one bought with a failed build):
 - **Stage the python package fresh on every hook** (overlay / rm+copy from the current slice's build dir into the source root) so the current slice always wins.
 - Prefer **`-D<pkg>_BUILD_SHARED_LIB=OFF` → one statically-linked pybind module**: no ctypes/dylib gate, and it is exactly the wheel shape that works on BOTH platforms today (onnxruntime's Android design turned out to BE the iOS wheel shape; pywhispercpp/ncnn are the same shape).
 - CMake args ride in a recipe `script_env` var (`FORGE_CMAKE_ARGS`) that the shim `shlex.split`s. **Multi-token `-D` values cannot ride inside it** — give linker-flag strings their own env var and let the shim assemble the single `-D` argument (tflite's `FORGE_SHARED_LINKER_FLAGS: -Wl,-z,max-page-size=16384 -L{HOST_PYTHON_HOME}/lib -lpython{py_version_short}`).
-- **Trap — `setup.py` platform predicates:** under the crossenv `platform.system()` returns `"Android"` / `"iOS"`, which may match NO upstream branch → the libs list stays unset and the wheel silently ships **without the pybind `.so`** (onnxruntime extends upstream's predicate to `("Linux", "AIX", "Android", "iOS")`; the Darwin branch stays intact for real macOS builds).
+- **Trap — `setup.py` platform predicates:** under the crossenv `platform.system()` returns `"Android"` / `"iOS"`, which may match NO upstream branch → the libs list stays unset and the wheel silently ships **without the pybind `.so`** (onnxruntime extends upstream's predicate to `("Linux", "AIX", "Android", "iOS")`; the Darwin branch stays intact for real macOS builds). `sys.platform` is the same story one layer down — crossenv sets it to `"android"` / `"ios"` (from the sysconfigdata's `_PYTHON_HOST_PLATFORM`), so `sys.platform.startswith('linux')` and `== 'darwin'` are both False. **Matching nothing is sometimes exactly right**: it is what keeps `-lrt` (no librt in bionic) and a macOS deployment target out of the pycares build, which is why that recipe needs no platform patch at all. Read the branches before assuming you must extend them.
 
 **Real examples:** `machine/onnxruntime:recipes/onnxruntime/` and `machine/tflite-runtime:recipes/tflite-runtime/` — read via `git show <branch>:<path>` if not on those branches. Both are ONE `mobile.patch` (description as text preamble above the first `---` header, per repo convention).
 

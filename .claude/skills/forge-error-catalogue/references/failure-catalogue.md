@@ -834,6 +834,38 @@ run (sherpa's setup.py falls back to a bounded `make -j4`). **Related trap:**
 
 ---
 
+### A vendored native lib is built by setup.py's OWN cmake call — green build, host-configured library
+
+**Cause:** the sdist vendors a C library (`deps/<lib>/`) and `build_ext` shells out to
+`cmake` with an argument list that is a **literal in setup.py**, then links the static
+result via `extra_objects`. No CMake build backend is involved, so `CMAKE_ARGS` (which
+only scikit-build-core reads) is ignored and the vendored lib configures for the build
+host. Nothing errors: repeated arch (macOS arm64 host → `ios_arm64` target) links
+without complaint, and the configure-time feature probes answer for macOS. The wheel is
+green and wrong — either dead at first use, or quietly missing whatever the probes
+turned off. pycares → c-ares 1.34.6.
+
+**Fix:** patch the arg list to be extensible and fill it from a recipe `script_env` var:
+
+```python
+cmake_args.extend(shlex.split(os.environ.get('FORGE_CMAKE_ARGS', '')))
+```
+
+Append **after** upstream's own platform block — repeated `-D` on a cmake command line
+is last-one-wins, so this overrides e.g. `-DCMAKE_OSX_DEPLOYMENT_TARGET=10.12` without
+editing upstream's line. Then the usual lanes (`{NDK_ROOT}/build/cmake/android.toolchain.cmake`
++ `{ANDROID_ABI}` + `{ANDROID_API_LEVEL}`; `-DCMAKE_SYSTEM_NAME=iOS` + `{{ sdk }}` /
+`{{ arch }}` / `{{ sdk_version }}`) and `requirements.build: [cmake]`.
+
+**Confirm from the log, not the exit code:** `-- Check for working C compiler:` must name
+the cross compiler (NDK clang / `arm64-apple-ios*-clang`), and the feature macros you
+depend on must have resolved for the target — grep the generated config header under
+`build/<py>/<pkg>/<ver>/build/temp.*/`. For pycares that is `HAVE___SYSTEM_PROPERTY_GET 1`
+and `CARES_THREADS 1` on Android (`import pycares` raises `RuntimeError` outright if
+`ares_threadsafety()` is false, which is a mercy — most losses of this class are silent).
+
+---
+
 ### CMake-driving setup.py keys its build tool on a literal `"-G Ninja"` substring
 
 **Cause:** sherpa-onnx's `cmake/cmake_extension.py` decides make-vs-ninja with
@@ -1825,6 +1857,35 @@ don't need it. Desktop dev machines mask this (scipy is always around).
 `mobile.patch`). **Detection method that catches these before the device does:**
 build a device-emulating desktop venv containing ONLY the wheel's declared deps
 (no jax, no dev leftovers) and run the recipe tests there.
+
+---
+
+### Android only: a library that reads *system configuration* through a Java-only API silently degrades instead of failing
+
+**Cause:** Android 8 removed most `net.*` / config system properties an app can read, and
+the replacements live behind Java APIs (`ConnectivityManager`, `TelephonyManager`, …). A C
+library that supports Android at all usually reaches them through JNI, and needs the app to
+hand it a `JavaVM*` first. Nothing in the Flet/serious-python stack does that, and no pure
+CPython wheel can — so the discovery returns nothing, and libraries of this class then
+**seed a default rather than erroring**, leaving a working object that cannot do its job.
+
+pycares/c-ares is the worked example: `ares_init_sysconfig_android()` needs
+`ares_library_init_jvm()` + `ares_library_init_android()` (neither exposed by pycares),
+falls back to the removed `net.dns1`…`net.dns8` properties, returns `ARES_EFILE` — and
+`ares_init.c` swallows that and installs `127.0.0.1:53` as the sole nameserver. So
+`pycares.Channel()` constructs fine, `channel.servers == ['127.0.0.1:53']`, and every
+lookup fails with `DNSError: (11, 'Could not contact DNS servers')`. iOS is unaffected —
+there c-ares `dlsym`s Apple's configd SPIs out of libSystem and gets the real resolvers.
+
+**Tell:** the same code works on iOS and fails on Android, the error is a *connection*
+failure rather than a configuration error, and the object's config property reads back a
+loopback/default value.
+
+**Fix:** there is no wheel-side fix — configure it explicitly from Python
+(`pycares.Channel(servers=[...])` / `aiodns.DNSResolver(nameservers=[...])`), or read the
+real values on the Java side with pyjnius and pass them in. Document it in the recipe
+README; do not encode a public default in the wheel. A recipe test cannot assert any of
+this (it differs per platform and network) — surface it with a consumer verify-app.
 
 ---
 

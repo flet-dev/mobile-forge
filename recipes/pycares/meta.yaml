@@ -1,0 +1,32 @@
+package:
+  name: pycares
+  version: "5.0.1"
+
+build:
+  number: 1
+  script_env:
+    # pycares' setup.py builds the vendored c-ares (deps/c-ares) with CMake before
+    # compiling the CFFI extension, using a hardcoded argument list that configures
+    # for the build host. mobile.patch makes it append FORGE_CMAKE_ARGS so the
+    # static libcares.a folded into pycares/_cares*.so is built for the target.
+# {% if sdk == 'android' %}
+    FORGE_CMAKE_ARGS: >-
+      -DCMAKE_TOOLCHAIN_FILE={NDK_ROOT}/build/cmake/android.toolchain.cmake
+      -DANDROID_ABI={ANDROID_ABI}
+      -DANDROID_NATIVE_API_LEVEL={ANDROID_API_LEVEL}
+# {% else %}
+    FORGE_CMAKE_ARGS: >-
+      -DCMAKE_SYSTEM_NAME=iOS
+      -DCMAKE_OSX_SYSROOT={{ sdk }}
+      -DCMAKE_OSX_DEPLOYMENT_TARGET={{ sdk_version }}
+      -DCMAKE_OSX_ARCHITECTURES={{ arch }}
+# {% endif %}
+
+requirements:
+  build:
+    # setup.py shells out to `cmake` for the vendored c-ares; the build image
+    # isn't guaranteed to have one.
+    - cmake
+
+patches:
+  - mobile.patch

@@ -85,7 +85,9 @@ instead of re-deriving it.
   `source.strip: 0`** (default strip=1 drops files with no wrapper dir),
   **`User for pypi.flet.dev:` → `EOFError` at build-tool/host-dep resolution** (the
   index 401s, not the recipe — deterministic locally on a fresh cmake cross-venv,
-  transient/scattered in CI where a rerun clears it).
+  transient/scattered in CI where a rerun clears it). **A vendored lib built by
+  setup.py's OWN cmake call** (arg list hardcoded, so `CMAKE_ARGS` does nothing) →
+  green host-configured library, fix by patching in a `FORGE_CMAKE_ARGS` extend.
 - **Runtime failures** (device/emulator/simulator) — **the Flet 0.86 Android
   `sitepackages.zip` class** (its umbrella entry explains "why only now"):
   `NotADirectoryError` on a bundled data file → **`extract_packages`** meta field;
@@ -109,7 +111,9 @@ instead of re-deriving it.
   `libssl.so.3`/`libcrypto`/`libsqlite` not found, import-name errors, old version
   loaded, **lazy_loader "non-existent stub" (serious_python strips `*.pyi`)**,
   **hidden runtime deps** (keras→scipy; device-emulating venv method),
-  **insightface `root=` PermissionError**, and **iOS app crashes at launch with a
+  **insightface `root=` PermissionError**, **Android-only silent degradation when a lib
+  reads system config through a Java-only API** (c-ares gets no nameservers, seeds
+  `127.0.0.1:53`, every lookup fails while iOS is fine — configure it from Python), and **iOS app crashes at launch with a
   0-byte `console.log` → `dyld: Library not loaded: @rpath/lib<X>.dylib` for a chain
   of interdependent bundled dylibs (pyarrow, llama)** → **serious_python #223**:
   reconcile framework install-ids + `@rpath` deps to the dotted-framework paths
