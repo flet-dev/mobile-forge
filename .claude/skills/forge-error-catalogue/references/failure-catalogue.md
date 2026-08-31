@@ -149,7 +149,6 @@ source:
   url: https://.../libX-<arch>.tar.gz
   strip: 0
 ```
-(The `strip` key requires forge with the `source.strip` schema addition — on the `curl-cffi` branch / after it merges.) Verify the actual behavior empirically before trusting either value: replicate `members()` from `src/forge/build.py` on the real tarball. Precedent: `recipes/flet-libcurl-impersonate/` (branch `curl-cffi`).
 
 ---
 

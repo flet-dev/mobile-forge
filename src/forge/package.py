@@ -102,10 +102,7 @@ class Package:
             except KeyError:
                 pass
 
-        # Whether the recipe actually wrote an `about:` block. Validation fills in
-        # schema defaults in place, and `about`'s are empty strings rather than
-        # nothing — so afterwards every recipe has a non-empty `about` dict and
-        # "did the author ask for this?" is no longer answerable from the metadata.
+        # Whether the recipe actually wrote an `about:` block.
         self.declares_about = "about" in meta
 
         # Validate the metadata against the schema.

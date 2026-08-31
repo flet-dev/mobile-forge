@@ -32,20 +32,24 @@ if TYPE_CHECKING:
     from forge.package import Package
 
 
-# Names a project uses for its licence notice. Matches the prefix rather than the whole
-# name so LICENSE.txt, COPYING.LGPL, LICENCE.md and LICENSE-THIRD-PARTY all qualify.
-# COPYRIGHT is included because for several projects here it IS the licence grant and
-# the only such file shipped — postgresql, libxml2 and libxslt each carry their full
-# permission notice in a file by that name and nothing else. NOTICE is included because
-# Apache-2.0 section 4(d) requires redistributing it alongside the licence, and an
-# ASF-sourced archive (arrow) keeps its attributions there rather than in LICENSE.
 LICENSE_FILE_RE = re.compile(r"^(licen[cs]e|copying|copyright|notice)", re.IGNORECASE)
+"""
+Names a project uses for its licence notice. Matches the prefix rather than the whole
+name so LICENSE.txt, COPYING.LGPL, LICENCE.md and LICENSE-THIRD-PARTY all qualify.
+COPYRIGHT is included because for several projects here it IS the licence grant and
+the only such file shipped — postgresql, libxml2 and libxslt each carry their full
+permission notice in a file by that name and nothing else. NOTICE is included because
+Apache-2.0 section 4(d) requires redistributing it alongside the licence, and an
+ASF-sourced archive (arrow) keeps its attributions there rather than in LICENSE.
+"""
 
-# A recipe subdirectory whose entire contents are licence notices, alongside tests/
-# and examples/. Everything in it ships, whatever it is named — a recipe supplying
-# notices for a binary that carries none usually has one per bundled project, and
-# those names (COPYING.curl, LICENSE.boringssl) are ours to choose.
 LICENSES_DIR_NAME = "licenses"
+"""
+A recipe subdirectory whose entire contents are licence notices, alongside. 
+Everything in it ships, whatever it is named — a recipe supplying
+notices for a binary that carries none usually has one per bundled project, and
+those names (COPYING.curl, LICENSE.boringssl) are ours to choose.
+"""
 
 
 class Builder(ABC):
@@ -911,8 +915,6 @@ class Builder(ABC):
         # `about` drives metadata that only the build.sh path synthesises. A Python
         # package's own build backend already carries upstream's licence through, so
         # setting it there would be a no-op — say so rather than ignoring it silently.
-        # Test what the recipe DECLARED: schema defaults leave every recipe with a
-        # populated `about` dict, so testing the dict warned on all of them.
         if self.package.declares_about and not self.synthesizes_metadata:
             log(
                 self.log_file,
@@ -1158,12 +1160,8 @@ class SimplePackageBuilder(Builder):
         which is how a recipe can carry a fallback without overriding upstream.
 
         Everything under the recipe's `licenses/` directory is collected as well,
-        whatever each file is called. A recipe repackaging a prebuilt binary that
-        ships no notice at all has to supply one per bundled project, and that is a
-        set of files rather than one — a folder keeps them out of the recipe root
-        (next to tests/ and examples/) and out of a meta.yaml list that would go
-        stale on the next bump. The folder name is not part of the destination, so a
-        notice lands at `licenses/<name>` in the wheel rather than doubled.
+        whatever each file is called. The folder name is not part of the destination,
+        so a notice lands at `licenses/<name>` in the wheel rather than doubled.
 
         `about.license_file` (a path, or a list of them) replaces that discovery
         entirely, for the two cases it cannot get right on its own: excluding a notice
@@ -1209,8 +1207,7 @@ class SimplePackageBuilder(Builder):
                     candidate = directory / name
                     if candidate.is_file():
                         # Naming a file inside the recipe's licenses/ explicitly must
-                        # land it where the folder convention would, not at
-                        # licenses/licenses/<name>.
+                        # land it where the folder convention would, not at licenses/licenses/<name>.
                         dest = name
                         if directory == self.package.recipe_path:
                             parts = Path(name).parts
@@ -1257,10 +1254,7 @@ class SimplePackageBuilder(Builder):
                 f"  An upstream that renamed or moved its notice needs it named:\n"
                 f"    about:\n"
                 f"      license_file: path/to/LICENSE      # or a list of paths\n"
-                f"  One that ships no notice at all — a prebuilt binary release, "
-                f"usually — wants the folder instead: drop a file in per bundled "
-                f"project and they all ship, with no list in meta.yaml to go stale.\n"
-                f"  A recipe with genuinely nothing to ship says so explicitly:\n"
+                f"  A recipe with genuinely nothing to ship says so explicitly instead:\n"
                 f"    about:\n"
                 f"      license_file: []                   # deliberately none -- <reason>"
             )
