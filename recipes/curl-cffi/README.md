@@ -350,5 +350,5 @@ and that the CA bundle path is readable. Nothing exercises `Session` or `AsyncSe
 handshake, cookies, proxies, HTTP/2 or HTTP/3, and nothing shows a fingerprint being accepted by a
 real server. An import-and-construct suite passes even where the first request would fail; the
 [`fingerprint-fanout`](examples/fingerprint-fanout) example is the thing to build and install to
-close that gap. The current versions have also not been through a CI run — the established green
-result is for the previous curl-cffi and curl-impersonate pair.
+close that gap. What the green CI run does cover is every Python: these versions built and passed
+on 3.12, 3.13 and 3.14 across all five slices, with the on-device suite run on 3.12.
