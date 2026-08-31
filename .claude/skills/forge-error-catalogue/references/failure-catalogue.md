@@ -122,6 +122,36 @@ If upstream hardcodes `-L/usr/lib/X` somewhere, write a `mobile.patch` to strip 
 
 ---
 
+### iOS `Undefined symbols: _SecTrustEvaluateWithError / _iconv / _uidna_nameToASCII_UTF8 / _kCFTypeArrayCallBacks` linking a prebuilt Apple-built static lib
+
+**Cause:** a prebuilt static archive built for iOS with Apple's native TLS trust store (`USE_APPLE_SECTRUST`) and/or Apple IDN (`USE_APPLE_IDN`) — e.g. curl-impersonate's `libcurl-impersonate.a` — has undefined references into Apple **system** libraries that its objects do NOT carry. When you statically link that `.a` into a Python extension, those symbols surface as `ld: Undefined symbols for architecture arm64`. The symbol → library map:
+
+- `_SecTrust*`, `_SecCertificate*`, `_SecPolicy*` → `-framework Security`
+- `_kCFType*`, `_CFRelease`, `CFString*`, `CFArray*` → `-framework CoreFoundation`
+- `_iconv`, `_iconv_open`, `_iconv_close` → `-liconv`
+- `_uidna_*` (ICU International Domain Names) → `-licucore`
+
+(The real-macOS build of the same package usually does NOT need these — macOS uses a different verify/IDN path — so upstream's link args omit them, and this is iOS-only.)
+
+**Fix:** append the frameworks/libs to the extension's link args, gated to iOS. They resolve from the SDK sysroot (`.tbd` stubs in `usr/lib` + `System/Library/Frameworks`) with no extra `-L`/`-F`. In a cffi recipe this is a `mobile.patch` hunk on the `extra_link_args` list; in a `setup.py`/CMake recipe it can also ride in `script_env` `LDFLAGS`. Precedent: `recipes/curl-cffi/patches/mobile.patch` (branch `curl-cffi`) adds `["-framework","Security","-framework","CoreFoundation","-liconv","-licucore"]` for the iOS slice only.
+
+---
+
+### `source.url` prebuilt tarball unpacks with the top-level files MISSING (`.a`/`.so` gone, only `include/…` present)
+
+**Cause:** forge's `unpack_source` defaults to `strip=1` (`member.path.split("/", 1)[1]`), which assumes a single top-level wrapper directory. A prebuilt **release** tarball often has its files at the archive **root** (`libX.a`, `libX.so`, `include/X/…` with no wrapper dir). At `strip=1` the root-level files have no `/` → `split(...)[1]` IndexErrors → they are silently **dropped**, while `include/x.h` → `x.h`. build.sh then can't find the `.a`.
+
+**Symptoms:** build.sh's own guard (`[ ! -f libX.a ]`) trips, or a downstream link fails with the lib missing, even though the tarball clearly contains it.
+
+**Fix:** set `strip: 0` on the source object so forge extracts verbatim:
+```yaml
+source:
+  url: https://.../libX-<arch>.tar.gz
+  strip: 0
+```
+
+---
+
 ### `ImportError: dlopen failed: library "/abs/path/.../libpython3.12.so" not found` (Android, at runtime)
 
 **Cause:** The Android `libpython3.12.so` from the `flet-dev/python-build` tarball is built without a SONAME (no `-Wl,-soname,libpython3.12.so` at libpython link time). When a recipe uses CMake's `target_link_libraries(... Python::Python)` to link explicitly against libpython (which pyzmq does on Android via `EXTRA_PYTHON_COMPONENT=Development.Embed`), the linker can't use a SONAME and falls back to using the input argument as DT_NEEDED. With `-DPython_LIBRARY=<absolute path>`, that path gets embedded verbatim. At runtime, Android's loader looks for the absolute build-host path and fails.
@@ -2095,6 +2125,43 @@ about:
 
 Note an **unset** `license_file` still means "discover for me" — only an empty **list** is
 the opt-out.
+
+**The prebuilt-repackage case: upstream ships no notice ANYWHERE.** A recipe that repackages
+a third-party *binary* release often gets a tarball holding nothing but the library and its
+headers — no `LICENSE`, no `COPYING`, nothing to point `license_file` at. `[]` is the wrong
+reflex here: the wheel really does contain that object code, so the notice has to come from
+somewhere, and the schema says so — *"or to the recipe directory, for a notice the upstream
+archive doesn't ship"*. **Vendor the notices into `recipes/<name>/licenses/`** — a folder
+alongside `tests/` and `examples/`, whose entire contents ship whatever each file is named:
+
+```
+recipes/flet-libcurl-impersonate/
+  licenses/COPYING.curl  licenses/LICENSE.boringssl  licenses/LICENSE.zstd  ...
+```
+
+```yaml
+about:
+  license: curl AND MIT AND Apache-2.0 AND BSD-3-Clause AND Zlib   # no license_file needed
+```
+
+No `license_file` list: the folder is the list, so it cannot fall out of step on a bump.
+The folder name is stripped from the destination, so notices land at
+`dist-info/licenses/<name>`.
+
+Getting the component list right is the actual work, and a mega-archive will not tell you
+directly: `ar t` on a `ld -r` blob lists one member. Recover it from the symbols the linker
+left behind, then corroborate against upstream's build config:
+
+```bash
+llvm-nm -a libfoo.a | awk '$2=="-"||$2=="f"{print $3}' | sort -u   # STT_FILE syms per project
+strings libfoo.a | grep -oE '/build/deps/src/[a-z0-9-]+' | sort | uniq -c
+```
+
+Two traps when picking each file, both the libiconv trap in different directions: a project's
+`LICENSE` may be a stub redirect (nghttp2's is 12 bytes, "See COPYING"), and a dual-licensed
+project's `COPYING` may be the arm we do *not* take (zstd's is the full GPL-2.0; the BSD arm
+is in `LICENSE`). Fetch every file at the **pinned version tag**, never `main` — the texts
+carry copyright year ranges that drift.
 
 **Related:** `about.license_file` naming a file that isn't there raises too (a typo or a
 moved file, not a preference). Changing licence metadata does not reach pypi.flet.dev until

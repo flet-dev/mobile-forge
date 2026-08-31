@@ -1,0 +1,42 @@
+{% set version = "0.16.2" %}
+
+package:
+  name: curl-cffi
+  version: '{{ version }}'
+  # No upstream curl-impersonate binary exists for 32-bit ARM Android, so the
+  # flet-libcurl-impersonate host_build dep can't be built there either.
+  excluded_arches:
+    - armeabi-v7a
+
+build:
+  number: 1
+  script_env:
+    # flet-libcurl-impersonate stages the prebuilt static mega-archive and
+    # include/curl/ into {platlib}/opt. Point curl-cffi's ffibuilder there so it
+    # links that libcurl-impersonate.a and skips the GitHub download entirely (offline,
+    # deterministic build). IMPERSONATE_FORGE_TARGET is consumed by the mobile.patch
+    # to pick the target arch + link recipe instead of the build host's uname.
+    IMPERSONATE_BUILD_DIR: '{platlib}/opt'
+    IMPERSONATE_LINK_TYPE: static
+# {% if sdk == 'android' %}
+    IMPERSONATE_FORGE_TARGET: android
+# {% else %}
+    IMPERSONATE_FORGE_TARGET: ios
+# {% endif %}
+
+requirements:
+  host_build:
+    # Must equal scripts/build.py::__version__ in the pinned curl-cffi sdist. That
+    # constant normally drives the download URL, so a skew self-corrects; the patch
+    # skips the download, and cdef.c compiles against curl-cffi's own bundled
+    # include/curl/ headers — so a mismatch links a skewed archive and still goes green.
+    - flet-libcurl-impersonate 2.1.1
+# {% if sdk == 'android' %}
+  host:
+    # The extension links -lc++ -> DT_NEEDED libc++_shared.so on Android (iOS
+    # links the system libc++ statically, so this is Android-only).
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
+
+patches:
+  - mobile.patch

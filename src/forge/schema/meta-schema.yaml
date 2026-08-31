@@ -61,6 +61,16 @@ properties:
         properties:
           url:
             type: string
+          strip:
+            type: integer
+            minimum: 0
+            description: >-
+              Number of leading path components to strip when unpacking, like
+              `tar --strip-components`. Defaults to 1 (drop the archive's single
+              top-level wrapper directory, the common case for sdists and source
+              tarballs). Set to 0 for prebuilt release archives whose files sit
+              at the archive root with no wrapper directory, so root-level files
+              (e.g. a static library beside an `include/` dir) are not dropped.
         additionalProperties: false
         description: >-
           Download and unpack an archive from a URL. Use when there is no PyPI
@@ -240,9 +250,15 @@ properties:
           ship), to add to the wheel's .dist-info/licenses/. Any top-level
           file in either directory whose name starts with "LICEN[CS]E",
           "COPYING", "COPYRIGHT" or "NOTICE" (case-insensitive) is included
-          automatically, so most recipes need nothing here. Setting this
-          REPLACES that discovery, which is what you want in the two cases
-          it cannot get right: excluding a notice covering something the
+          automatically, and so is every file in the recipe's `licenses/`
+          directory whatever it is named — so most recipes need nothing here.
+          Prefer that folder when the upstream archive ships no notice at all
+          and the recipe has to supply one per bundled project: the files
+          stay out of the recipe root, and there is no list here to fall out
+          of step with them. Its name is not part of the destination, so a
+          notice lands at .dist-info/licenses/<name>, not doubled.
+          Setting this REPLACES discovery, which is what you want in the two
+          cases it cannot get right: excluding a notice covering something the
           wheel doesn't contain (libiconv's top-level COPYING is the GPL for
           the `iconv` program, not the LGPL library we build), and including
           one below the top level (a bundled library's own notice).

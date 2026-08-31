@@ -102,6 +102,9 @@ class Package:
             except KeyError:
                 pass
 
+        # Whether the recipe actually wrote an `about:` block.
+        self.declares_about = "about" in meta
+
         # Validate the metadata against the schema.
         with_defaults(Validator)(schema).validate(meta)
 

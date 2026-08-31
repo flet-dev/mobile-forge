@@ -689,7 +689,9 @@ So:
 
 Integer in `build:`, schema default **1** (`src/forge/schema/meta-schema.yaml`) — and `1` is the repo convention (start every new recipe there). Bump when the recipe itself changes but the upstream version doesn't — pip prefers higher build numbers for the same version, and the new build gets a distinct filename (`<pkg>-<ver>-N-<tag>.whl`). Important for forcing redeploys when patching.
 
-Don't write `number: 0`: forge only passes `--build-number` when the value is truthy (`build.py`), so `0` produces a wheel with NO build tag — losing the ability to supersede it later without a version bump.
+Don't write `number: 0`: forge only passes `--build-number` when the value is truthy (`build.py`), so `0` produces a wheel with NO build tag — losing the ability to supersede it later without a version bump. It also forfeits a **PEP 427 tie-break you may be relying on**: pypi.flet.dev is an *extra* index, not a replacement, so where upstream publishes its own mobile wheel at the same version (curl-cffi ships `cp313`/`cp314` `android_24_arm64_v8a` on PyPI), an untagged forge wheel is competing with one hand tied. **CI cannot catch any of this** — the mobile test rewrites local wheels' build tag to `9999` before installing, so a `number: 0` recipe still goes green. Only the filename in `dist/` tells you.
+
+On an upstream **version** bump, reset `number` to 1 rather than carrying the old value forward.
 
 ### Source layout
 
