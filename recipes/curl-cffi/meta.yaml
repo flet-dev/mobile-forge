@@ -1,4 +1,4 @@
-{% set version = "0.16.0" %}
+{% set version = "0.16.2" %}
 
 package:
   name: curl-cffi
@@ -9,7 +9,7 @@ package:
     - armeabi-v7a
 
 build:
-  number: 0
+  number: 1
   script_env:
     # flet-libcurl-impersonate stages the prebuilt static mega-archive and
     # include/curl/ into {platlib}/opt. Point curl-cffi's ffibuilder there so it
@@ -27,7 +27,11 @@ build:
 
 requirements:
   host_build:
-    - flet-libcurl-impersonate 2.0.0
+    # Must equal scripts/build.py::__version__ in the pinned curl-cffi sdist. That
+    # constant normally drives the download URL, so a skew self-corrects; the patch
+    # skips the download, and cdef.c compiles against curl-cffi's own bundled
+    # include/curl/ headers — so a mismatch links a skewed archive and still goes green.
+    - flet-libcurl-impersonate 2.1.1
 # {% if sdk == 'android' %}
   host:
     # The extension links -lc++ -> DT_NEEDED libc++_shared.so on Android (iOS

@@ -36,3 +36,17 @@ def test_curl_easy_impersonate_applies_fingerprint():
         assert ret == 0, f"curl_easy_impersonate returned {ret}"
     finally:
         curl.close()
+
+
+def test_default_cacert_resolves_to_a_readable_file():
+    """curl_cffi picks its CA bundle once, at import, and hands the path straight
+    to libcurl. Flet extracts certifi's bundle out of sitepackages.zip and points
+    SSL_CERT_FILE at it, so the path lands on disk — if it ever didn't, every
+    HTTPS request would fail with CURLE_SSL_CACERT_BADFILE instead."""
+    import os
+
+    from curl_cffi.curl import DEFAULT_CACERT
+
+    assert os.path.isfile(DEFAULT_CACERT), DEFAULT_CACERT
+    with open(DEFAULT_CACERT, "rb") as f:
+        assert b"BEGIN CERTIFICATE" in f.read(), DEFAULT_CACERT

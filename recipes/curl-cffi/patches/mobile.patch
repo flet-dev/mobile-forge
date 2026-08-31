@@ -19,8 +19,8 @@ This patch adds a single opt-in lever, IMPERSONATE_FORGE_TARGET (set to "ios" or
   * the link recipe is forced to the target's: Darwin (-force_load + -lc++) for
     iOS, ELF --whole-archive + -lc++ for Android.
 
-  * on iOS (the first-ever curl-cffi iOS build) the extension additionally links
-    the Apple system libraries the curl-impersonate iOS archive depends on:
+  * on iOS the extension additionally links the Apple system libraries the
+    curl-impersonate iOS archive depends on:
     Security + CoreFoundation (USE_APPLE_SECTRUST) and libiconv + libicucore
     (USE_APPLE_IDN). Real-macOS builds don't need these and are untouched.
 
@@ -75,8 +75,8 @@ Upstream behaviour is unchanged whenever IMPERSONATE_FORGE_TARGET is unset.
              "-lc++",
          ]
 +        if _forge_target == "ios":
-+            # First-ever iOS build: curl-impersonate's iOS mega-archive is built
-+            # with USE_APPLE_SECTRUST + USE_APPLE_IDN, so the consuming extension
++            # curl-impersonate's iOS mega-archive is built with
++            # USE_APPLE_SECTRUST + USE_APPLE_IDN, so the consuming extension
 +            # must pull in the matching Apple system libraries (Security +
 +            # CoreFoundation for SecTrust, libiconv + libicucore for Apple IDN).
 +            extra_link_args += [
