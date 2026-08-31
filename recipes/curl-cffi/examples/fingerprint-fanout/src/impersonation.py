@@ -45,10 +45,10 @@ HTTP_NAMES = {
 def known_targets():
     """Ask the linked library which targets it holds fingerprints for, offline.
 
-    curl_easy_impersonate() returns 0 when a target's TLS and HTTP/2 tables are
-    compiled in and 43 when the name is unknown — it does not raise — so this
-    separates "this build does not know that target" from "the request failed"
-    without opening a socket, and goes red on its own if a bump retires one.
+    curl_easy_impersonate() returns 0 when a target's TLS and HTTP/2 tables are compiled
+    in and 43 when the name is unknown — it does not raise — so this separates "this
+    build does not know that target" from "the request failed" without opening a socket,
+    and goes red on its own if a bump retires one.
     """
     verdicts = {}
     for target in TARGETS:
@@ -65,12 +65,11 @@ def known_targets():
 def cacert():
     """Describe the CA bundle curl-cffi resolved at import, and which source won.
 
-    Its _default_cacert() tries SSL_CERT_FILE / CURL_CA_BUNDLE /
-    REQUESTS_CA_BUNDLE, then OpenSSL's compiled-in path, then certifi — and the
-    winner differs between a desktop `flet run` and a phone, so it is read back
-    rather than assumed. On Android certifi's cacert.pem lives inside
-    sitepackages.zip and certifi.where() unpacks it to a temporary file, so the
-    path is a real one either way.
+    Its _default_cacert() tries SSL_CERT_FILE / CURL_CA_BUNDLE / REQUESTS_CA_BUNDLE,
+    then OpenSSL's compiled-in path, then certifi — and the winner differs between a
+    desktop `flet run` and a phone, so it is read back rather than assumed. On Android
+    certifi's cacert.pem lives inside sitepackages.zip and certifi.where() unpacks it to
+    a temporary file, so the path is a real one either way.
     """
     source = "unknown"
     for name in ("SSL_CERT_FILE", "CURL_CA_BUNDLE", "REQUESTS_CA_BUNDLE"):
@@ -129,10 +128,10 @@ async def fanout(on_result):
     """Probe every target at once, calling `on_result(target, reading, error)`.
 
     One task per target under a single gather, so the wall clock is the slowest
-    handshake rather than the sum of five — the shape a search app fanning out
-    to several endpoints needs. Each task catches its own failure, so one
-    unreachable target costs one row. Returns the wall clock in milliseconds,
-    for the caller to compare against the summed per-probe times.
+    handshake rather than the sum of five — the shape a search app fanning out to
+    several endpoints needs. Each task catches its own failure, so one unreachable
+    target costs one row. Returns the wall clock in milliseconds, for the caller to
+    compare against the summed per-probe times.
     """
 
     async def one(target):
@@ -140,7 +139,10 @@ async def fanout(on_result):
         try:
             on_result(target, await probe(target), None)
         except Exception as error:
-            on_result(target, None, f"{type(error).__name__}: {error}")
+            # libcurl tacks 74 characters of docs URL onto every message, which
+            # on five stacked rows is most of the screen.
+            detail = str(error).split(" See https://curl.se/", 1)[0]
+            on_result(target, None, f"{type(error).__name__}: {detail}")
 
     started = time.perf_counter()
     await asyncio.gather(*(one(target) for target in TARGETS))

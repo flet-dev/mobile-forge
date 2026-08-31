@@ -2,11 +2,12 @@
 name = "curl-cffi-fingerprint-fanout"
 version = "1.0.0"
 description = "Probes one endpoint as five browsers at once and compares the fingerprints it reports."
-requires-python = ">=3.10"
+requires-python = "==3.12.*"
 
 dependencies = [
     "flet==0.86.5",
     "curl-cffi==0.16.2",
+    "certifi",
 ]
 
 [dependency-groups]

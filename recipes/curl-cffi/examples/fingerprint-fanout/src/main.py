@@ -18,14 +18,14 @@ MONO = {"font_family": "monospace", "font_family_fallback": ["Courier"]}
 def result_row(target):
     """Build one target's row, and return it with a callback that refills it.
 
-    The five rows are laid out up front in a fixed order rather than appended as
-    probes land, which a fan-out would order at random and make uncomparable.
-    The callback closes over the previous run's values so a hash that moved can
-    be tinted — which is how a second run shows that it is the Chrome targets'
-    raw ja3 that changes from one handshake to the next.
+    The five rows are laid out up front in a fixed order rather than appended as probes
+    land, which a fan-out would order at random and make uncomparable. The callback
+    closes over the previous run's values so a hash that moved can be tinted — which is
+    how a second run shows that it is the Chrome targets' raw ja3 that changes from one
+    handshake to the next.
     """
     status = ft.Text("…", size=11, color=ft.Colors.OUTLINE)
-    failed = ft.Text(size=11, color=ft.Colors.ERROR)
+    failed = ft.Text(size=11, color=ft.Colors.ERROR, max_lines=2)
     # expand sits on a Text inside a Row, never on a direct child of the
     # scrolling Column: there it collapses the whole viewport on iOS.
     values = {
