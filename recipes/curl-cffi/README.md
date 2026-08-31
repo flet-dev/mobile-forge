@@ -40,21 +40,21 @@ full; `arm64` and `x64` are the macOS spellings and Flet rejects them here. Drop
 costs you old hardware rather than current users — 64-bit has been mandatory for Play Store
 uploads since 2019.
 
-**On Python 3.13 and 3.14, Android arm64-v8a can resolve to upstream's own wheel rather than
-this index's.** `flet build` installs with `pip install --upgrade --only-binary :all:
---extra-index-url https://pypi.flet.dev`, so pip sees PyPI too, and upstream publishes exactly
-one mobile wheel per minor there — `cp313` and `cp314`, `android_24_arm64_v8a`, at the same
-version this index carries; no cp312, no x86_64, no armeabi-v7a, no iOS. One Android build can
-therefore carry two different builds of a single version across its ABIs, and a `==` pin cannot
-separate them because the versions agree. They are not the same payload — upstream's arm64-v8a
-wheel is 8.2 MB compressed and 25.2 MB unpacked against 2.7 MB and 6.3 MB here — and which one an
-unpinned resolve prefers was not measured.
+**Upstream publishes an Android wheel of its own, and on `cp313`/`cp314` it competes with this
+one.** `flet build` installs with `--extra-index-url https://pypi.flet.dev`, so pip sees PyPI as
+well; upstream ships `android_24_arm64_v8a` only — no x86_64, no armeabi-v7a, no iOS — and it is a
+different payload, 8.2 MB compressed against 2.7 MB here.
 
-The lever is the **Python** version, not a `curl-cffi` pin: upstream publishes no cp312 mobile wheel
-at all, so building on 3.12 is what settles it. Note `flet build` takes the **highest** stable Python
-your `requires-python` admits, so the common `>=3.10` lands on 3.14 — exactly the range where the
-two builds overlap. Say `requires-python = "==3.12.*"`, or pass `--python-version 3.12`, as the
-[`fingerprint-fanout`](examples/fingerprint-fanout) example does.
+**At the same version this wheel wins**, so nothing needs doing while the version here keeps up.
+pip compares the version first, and only then the tags — where this index carries a build tag and a
+higher `android_24` platform tag against upstream's none, both of which rank it first. What flips
+it is upstream releasing a version this index has not caught up to: pip takes the higher version.
+That is worth knowing because upstream ships only one ABI, so the result is not "their build"
+but a **mixed** one — their arm64-v8a beside this index's x86_64.
+
+Pin `curl-cffi` to the version in [`meta.yaml`](meta.yaml) if you want that settled rather than
+watched, as the [`fingerprint-fanout`](examples/fingerprint-fanout) example does. The Python
+version is not the lever: this index carries `cp312`, `cp313` and `cp314` alike.
 
 ## Examples
 
