@@ -13,10 +13,9 @@ build:
   script_env:
     # flet-libcurl-impersonate stages the prebuilt static mega-archive and
     # include/curl/ into {platlib}/opt. Point curl-cffi's ffibuilder there so it
-    # links that libcurl-impersonate.a and skips the GitHub download entirely
-    # (offline, deterministic build). IMPERSONATE_FORGE_TARGET is consumed by the
-    # mobile.patch to pick the target arch + link recipe instead of the build
-    # host's uname.
+    # links that libcurl-impersonate.a and skips the GitHub download entirely (offline,
+    # deterministic build). IMPERSONATE_FORGE_TARGET is consumed by the mobile.patch
+    # to pick the target arch + link recipe instead of the build host's uname.
     IMPERSONATE_BUILD_DIR: '{platlib}/opt'
     IMPERSONATE_LINK_TYPE: static
 # {% if sdk == 'android' %}

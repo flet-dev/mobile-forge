@@ -250,9 +250,15 @@ properties:
           ship), to add to the wheel's .dist-info/licenses/. Any top-level
           file in either directory whose name starts with "LICEN[CS]E",
           "COPYING", "COPYRIGHT" or "NOTICE" (case-insensitive) is included
-          automatically, so most recipes need nothing here. Setting this
-          REPLACES that discovery, which is what you want in the two cases
-          it cannot get right: excluding a notice covering something the
+          automatically, and so is every file in the recipe's `licenses/`
+          directory whatever it is named — so most recipes need nothing here.
+          Prefer that folder when the upstream archive ships no notice at all
+          and the recipe has to supply one per bundled project: the files
+          stay out of the recipe root, and there is no list here to fall out
+          of step with them. Its name is not part of the destination, so a
+          notice lands at .dist-info/licenses/<name>, not doubled.
+          Setting this REPLACES discovery, which is what you want in the two
+          cases it cannot get right: excluding a notice covering something the
           wheel doesn't contain (libiconv's top-level COPYING is the GPL for
           the `iconv` program, not the LGPL library we build), and including
           one below the top level (a bundled library's own notice).

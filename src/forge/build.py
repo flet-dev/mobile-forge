@@ -41,6 +41,12 @@ if TYPE_CHECKING:
 # ASF-sourced archive (arrow) keeps its attributions there rather than in LICENSE.
 LICENSE_FILE_RE = re.compile(r"^(licen[cs]e|copying|copyright|notice)", re.IGNORECASE)
 
+# A recipe subdirectory whose entire contents are licence notices, alongside tests/
+# and examples/. Everything in it ships, whatever it is named — a recipe supplying
+# notices for a binary that carries none usually has one per bundled project, and
+# those names (COPYING.curl, LICENSE.boringssl) are ours to choose.
+LICENSES_DIR_NAME = "licenses"
+
 
 class Builder(ABC):
     # Whether this builder writes the wheel's METADATA itself (and so is the one that
@@ -1151,6 +1157,14 @@ class SimplePackageBuilder(Builder):
         archive that ships none; a source file shadows a recipe file of the same name,
         which is how a recipe can carry a fallback without overriding upstream.
 
+        Everything under the recipe's `licenses/` directory is collected as well,
+        whatever each file is called. A recipe repackaging a prebuilt binary that
+        ships no notice at all has to supply one per bundled project, and that is a
+        set of files rather than one — a folder keeps them out of the recipe root
+        (next to tests/ and examples/) and out of a meta.yaml list that would go
+        stale on the next bump. The folder name is not part of the destination, so a
+        notice lands at `licenses/<name>` in the wheel rather than doubled.
+
         `about.license_file` (a path, or a list of them) replaces that discovery
         entirely, for the two cases it cannot get right on its own: excluding a notice
         that covers something the wheel does not contain, and including one that lives
@@ -1194,7 +1208,15 @@ class SimplePackageBuilder(Builder):
                 for directory in search_dirs:
                     candidate = directory / name
                     if candidate.is_file():
-                        resolved.append((candidate, name))
+                        # Naming a file inside the recipe's licenses/ explicitly must
+                        # land it where the folder convention would, not at
+                        # licenses/licenses/<name>.
+                        dest = name
+                        if directory == self.package.recipe_path:
+                            parts = Path(name).parts
+                            if parts[:1] == (LICENSES_DIR_NAME,):
+                                dest = str(Path(*parts[1:]))
+                        resolved.append((candidate, dest))
                         break
                 else:
                     raise RuntimeError(
@@ -1214,20 +1236,31 @@ class SimplePackageBuilder(Builder):
                 if candidate.is_file() and LICENSE_FILE_RE.match(candidate.name):
                     found.setdefault(candidate.name, candidate)
 
+        # Then everything the recipe vendored, under any name.
+        licenses_dir = self.package.recipe_path / LICENSES_DIR_NAME
+        if licenses_dir.is_dir():
+            for candidate in sorted(licenses_dir.rglob("*")):
+                if candidate.is_file():
+                    rel = str(candidate.relative_to(licenses_dir))
+                    found.setdefault(rel, candidate)
+
         if not found:
             raise RuntimeError(
                 f"{self.package.name}: no licence file found, so this wheel would ship "
                 f"the library's object code with no notice.\n"
-                f"  searched (top level only):\n"
+                f"  searched, for names starting with LICENSE / LICENCE / COPYING / "
+                f"COPYRIGHT / NOTICE (any case, top level only):\n"
                 f"    {self.build_path}\n"
                 f"    {self.package.recipe_path}\n"
-                f"  for names starting with: LICENSE / LICENCE / COPYING / COPYRIGHT / "
-                f"NOTICE (any case)\n"
-                f"  Fix by pointing at the real file, which is what an upstream that "
-                f"moved or renamed its notice needs:\n"
+                f"  searched, every file whatever its name:\n"
+                f"    {licenses_dir}\n"
+                f"  An upstream that renamed or moved its notice needs it named:\n"
                 f"    about:\n"
                 f"      license_file: path/to/LICENSE      # or a list of paths\n"
-                f"  A recipe with genuinely nothing to ship says so explicitly instead:\n"
+                f"  One that ships no notice at all — a prebuilt binary release, "
+                f"usually — wants the folder instead: drop a file in per bundled "
+                f"project and they all ship, with no list in meta.yaml to go stale.\n"
+                f"  A recipe with genuinely nothing to ship says so explicitly:\n"
                 f"    about:\n"
                 f"      license_file: []                   # deliberately none -- <reason>"
             )

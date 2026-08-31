@@ -32,10 +32,11 @@ source:
 
 
 about:
-  # The release tarballs ship no licence text at all, so the notices are vendored
-  # here. libcurl-impersonate.a is a single `ld -r` blob merging nine upstream
-  # projects, pinned by upstream's CMakeLists.txt at this tag and confirmed in the
-  # archive by symbol probe:
+  # The release tarballs ship no licence text at all, so the notices are vendored in
+  # licenses/ — every file there ships, so there is no list here to fall out of step
+  # with the folder. libcurl-impersonate.a is a single `ld -r` blob merging nine
+  # upstream projects, pinned by upstream's CMakeLists.txt at this tag and confirmed
+  # in the archive by symbol probe:
   #
   #   curl 8.21.0                     curl          COPYING.curl
   #   curl-impersonate patches        MIT           LICENSE.curl-impersonate
@@ -53,16 +54,7 @@ about:
   # (its COPYING is the GPL-2.0 arm of a dual licence; we take the BSD arm).
   #
   # Same set on both platforms — one superbuild, only BoringSSL's asm differs.
-  license_file:
-    - COPYING.curl
-    - LICENSE.curl-impersonate
-    - LICENSE.boringssl
-    - COPYING.nghttp2
-    - COPYING.nghttp3
-    - COPYING.ngtcp2
-    - LICENSE.brotli
-    - LICENSE.zstd
-    - LICENSE.zlib
+  #
   # Deduplicated set of the nine, ANDed because the archive holds all of them at
   # once. zstd's GPL-2.0 alternative is deliberately not expressed: it is a fact
   # about the project, not about this artifact.

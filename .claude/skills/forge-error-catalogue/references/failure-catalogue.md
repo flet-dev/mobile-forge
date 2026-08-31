@@ -2071,16 +2071,22 @@ a third-party *binary* release often gets a tarball holding nothing but the libr
 headers — no `LICENSE`, no `COPYING`, nothing to point `license_file` at. `[]` is the wrong
 reflex here: the wheel really does contain that object code, so the notice has to come from
 somewhere, and the schema says so — *"or to the recipe directory, for a notice the upstream
-archive doesn't ship"*. **Vendor the notices into the recipe directory** and list them:
+archive doesn't ship"*. **Vendor the notices into `recipes/<name>/licenses/`** — a folder
+alongside `tests/` and `examples/`, whose entire contents ship whatever each file is named:
+
+```
+recipes/flet-libcurl-impersonate/
+  licenses/COPYING.curl  licenses/LICENSE.boringssl  licenses/LICENSE.zstd  ...
+```
 
 ```yaml
 about:
-  license_file: [COPYING.curl, LICENSE.boringssl, LICENSE.zstd]   # flet-libcurl-impersonate
-  license: curl AND MIT AND Apache-2.0 AND BSD-3-Clause AND Zlib
+  license: curl AND MIT AND Apache-2.0 AND BSD-3-Clause AND Zlib   # no license_file needed
 ```
 
-Keep them **flat in the recipe dir**, not under a `licenses/` subdir — paths are preserved
-into the wheel, so a subdir yields `dist-info/licenses/licenses/COPYING.curl`.
+No `license_file` list: the folder is the list, so it cannot fall out of step on a bump.
+The folder name is stripped from the destination, so notices land at
+`dist-info/licenses/<name>`.
 
 Getting the component list right is the actual work, and a mega-archive will not tell you
 directly: `ar t` on a `ld -r` blob lists one member. Recover it from the symbols the linker

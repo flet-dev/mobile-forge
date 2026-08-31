@@ -285,7 +285,14 @@ accompany the binary, forge now bundles one automatically: any top-level
 copied into `.dist-info/licenses/` and listed as `License-File`. That covers almost every
 upstream unchanged — so usually you write nothing.
 
-Three cases need a line in `meta.yaml`:
+**When upstream ships no notice at all** — the usual case for a prebuilt-binary
+repackage — put one file per bundled project in `recipes/<name>/licenses/`. Everything in
+that folder ships, under any name, and the folder name is stripped from the destination.
+Prefer it over a `license_file` list and over loose files in the recipe root: the folder
+IS the list, so it cannot go stale on a bump, and the recipe root stays readable.
+Precedent: `recipes/flet-libcurl-impersonate/licenses/` (nine notices, no list).
+
+Three cases still need a line in `meta.yaml`:
 
 - **The notice is not at the top level, or is named something else** — point at it:
   ```yaml
