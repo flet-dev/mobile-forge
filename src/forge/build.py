@@ -905,7 +905,9 @@ class Builder(ABC):
         # `about` drives metadata that only the build.sh path synthesises. A Python
         # package's own build backend already carries upstream's licence through, so
         # setting it there would be a no-op — say so rather than ignoring it silently.
-        if (self.package.meta.get("about") or {}) and not self.synthesizes_metadata:
+        # Test what the recipe DECLARED: schema defaults leave every recipe with a
+        # populated `about` dict, so testing the dict warned on all of them.
+        if self.package.declares_about and not self.synthesizes_metadata:
             log(
                 self.log_file,
                 f"[{self.cross_venv}] WARNING: `about` is only honoured for build.sh "
