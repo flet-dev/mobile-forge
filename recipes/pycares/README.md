@@ -141,7 +141,7 @@ an in-memory query cache per channel and reads no configuration files on either 
 
 Roughly 116–143 KB compressed and 257–445 KB unpacked per slice, essentially all of it the
 one compiled extension with c-ares linked in; `armeabi_v7a` is the smallest. There are no
-data files, and `aiodns` adds about 30 KB of Python.
+data files, and `aiodns` adds a 13 KB pure-Python wheel on top.
 
 ## Things to know
 
