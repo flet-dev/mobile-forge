@@ -8,7 +8,15 @@ source:
   url: https://github.com/rockdaboot/libpsl/releases/download/{{ version }}/libpsl-{{ version }}.tar.gz
 
 build:
-  number: 10
+  number: 11
 
 patches:
   - config.patch
+
+about:
+  # The PSL data is compiled in (builtin is on), which is the MPL-2.0 part, and
+  # the Chromium DAFSA sources are BSD-3-Clause with their own notice.
+  license_file:
+    - COPYING
+    - src/LICENSE.chromium
+  license: MIT AND BSD-3-Clause AND MPL-2.0

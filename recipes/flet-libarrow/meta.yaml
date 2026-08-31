@@ -9,7 +9,7 @@ package:
   # not worth diverging from the flet-lib* convention to skip it.
 
 build:
-  number: 1
+  number: 2
 
 source:
   # Apache Arrow C++ (curated source release; build dir = its cpp/). pyarrow
@@ -26,3 +26,6 @@ requirements:
     # libarrow.so is C++; on Android it links libc++_shared.so.
     - flet-libcpp-shared >=27.2.12479018
 # {% endif %}
+
+about:
+  license: Apache-2.0

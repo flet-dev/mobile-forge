@@ -5,7 +5,10 @@ package:
   version: '{{ version }}'
 
 build:
-  number: 10
+  number: 11
 
 source:
   url: https://github.com/jedisct1/libsodium/releases/download/{{ version }}-RELEASE/libsodium-{{ version }}.tar.gz
+
+about:
+  license: ISC

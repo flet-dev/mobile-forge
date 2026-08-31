@@ -16,3 +16,8 @@ requirements:
 
 patches:
   - config.patch
+
+about:
+  # tif_lzw.c carries a second Berkeley grant that LICENSE.md omits at 4.7.0;
+  # upstream added that section afterwards, so 4.7.1+ ships the full text.
+  license: libtiff AND BSD-4.3TAHOE

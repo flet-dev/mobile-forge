@@ -10,7 +10,14 @@ package:
   platforms: [android]
 
 build:
-  number: 1
+  number: 2
 
 source:
   url: https://ftp.gnu.org/gnu/libiconv/libiconv-{{ version }}.tar.gz
+
+about:
+  # Pinned deliberately: the top-level COPYING is GPL-3.0 covering the `iconv`
+  # program and docs, which build.sh deletes. Only COPYING.LIB applies to the
+  # library this wheel ships, and auto-discovery would bundle both.
+  license_file: COPYING.LIB
+  license: LGPL-2.1-or-later

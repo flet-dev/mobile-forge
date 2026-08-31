@@ -956,6 +956,15 @@ libpython explicitly. But the libpython flags are multi-token and forge's
 `CMAKE_ARGS` is shlex-split, so `-DCMAKE_MODULE_LINKER_FLAGS=… -L… -lpython…` can't
 be passed as separate tokens.
 
+**Also fires with no upstream involvement at all:** the NDK toolchain adds
+`-Wl,--no-undefined` itself, so **any** `add_library(… MODULE …)` hits this on Android even
+when upstream sets no such flag. `nanobind_add_module` builds a MODULE target, which makes
+every nanobind recipe a candidate (soxr 1.1.0: ~20 `undefined symbol: PyExc_…` /
+`_Py_Dealloc` / `PyMem_Malloc` lines, all three ABIs, iOS unaffected). Confirm the target
+type with `grep -n "add_library" <nanobind>/cmake/nanobind-config.cmake` before reaching for
+`CMAKE_SHARED_LINKER_FLAGS` — for a MODULE it is `CMAKE_MODULE_LINKER_FLAGS` that applies,
+and setting the wrong one changes nothing.
+
 **Fix:** fold everything into ONE comma-joined `-Wl` token:
 `-DCMAKE_MODULE_LINKER_FLAGS=-Wl,-z,max-page-size=16384,-L{HOST_PYTHON_HOME}/lib,-lpython{py_version_short}`.
 The linker splits `-Wl` args on commas, dodging the single-token constraint. onnx.
@@ -1123,6 +1132,35 @@ right arch from the NDK toolchain, so it never needs this. opencv-python 5.0.0.9
 
 ---
 
+### iOS: a GREEN wheel that silently lost its SIMD/optimised code path (no `CMAKE_SYSTEM_PROCESSOR`)
+
+**Cause:** the mirror image of the entry above, and far nastier because **nothing fails**.
+CMake leaves `CMAKE_SYSTEM_PROCESSOR` **empty** on the iOS lane (only the NDK toolchain
+presets it), so a vendored library that runs its own CPU probe falls through to its *x86*
+branch, fails to compile the SSE test on arm64, and drops its SIMD sources from the archive.
+The build exits 0, the wheel loads, functional tests pass — it is just slower. libsoxr is the
+worked example: `SetSystemProcessor.cmake` probes only `__x86_64__` / `__i386__` / `__arm__`,
+and iOS arm64 defines `__aarch64__`, matching none of the three; `FindSIMD32` then takes its
+`xmmintrin.h` branch, `WITH_CR32S` becomes 0, and `cr32s`/`pffft32s`/`util32s` vanish.
+Measured cost of the resulting scalar build (`SOXR_USE_SIMD32=0`, 10 s mono 48k→16k, `HQ`,
+macOS arm64): **2.8x**, 0.70 ms → 1.98 ms.
+
+**Fix:** name the processor on the iOS lane, `-DCMAKE_SYSTEM_PROCESSOR={{ arch }}`, and
+**never** on Android. The exact token is library-specific — match it to the vendored
+project's own matcher rather than to a convention: libsoxr's `FindSIMD32` accepts `^arm` OR
+`^aarch64` (so `arm64` works), while opencv needs `aarch64` (entry above). Read the matcher
+before copying either recipe.
+
+**Tell it apart from a healthy build:** grep the configure log for the probe's own success
+line (`-- Found SIMD32:`) — its *absence* is the whole signal, and absence is easy to miss.
+Then confirm in the artifact: `strings <so> | grep -x cr32s`. The durable defence for this
+class is a test asserting the fast path is **compiled in**, not merely that the module
+imports — soxr's `test_simd_engine_compiled_in` asserts `engine() == "cr32s"` on device.
+Generalises to any recipe whose vendored dependency does its own
+`check_c_source_compiles`-style CPU detection. soxr 1.1.0.
+
+---
+
 ### iOS: Rust `error[E0432]: unresolved import 'internal'` / `cannot find module 'os'` (a crate with no `target_os="ios"` backend)
 
 **Cause:** a platform-specific Rust crate (here `mac_address` 1.x, pulled in for v1/v6
@@ -1168,6 +1206,72 @@ the failing package is often a generic build tool that isn't even hosted there.
 **Tell it apart from a real failure:** the traceback ends in `handle_401` /
 `ask_input` / `EOFError`, and the crash is *before* any `Building CXX object` line.
 A real recipe break reproduces on rerun and names a compiler/CMake error.
+
+---
+
+### A recipe flag in `MUPDF_MAKE` / any sub-`make` command line provably has no effect
+
+**Cause:** the upstream build script appends **its own** make arguments *after* the
+string it took from your env var, and `make` lets the **last** command-line
+assignment win. PyMuPDF's `mupdfwrap.py` does exactly this — it honours
+`$MUPDF_MAKE` verbatim and then appends
+`' HAVE_GLUT=no HAVE_PTHREAD=yes verbose=yes barcode=yes'`, so the recipe's
+`barcode=no` was silently overridden and ~16 MB of ZXing C++ shipped in every
+wheel for a feature PyMuPDF exposes no Python API for.
+
+**Fix:** don't trust the flag — **verify the outcome in the built artifact**
+(`strings libmupdf.so | grep -c ZXing`), then patch the appending line itself.
+The recipe already patches the upstream scripts, so this is one more idempotent
+`_mf_edit`: `"verbose=yes barcode=yes"` → `"verbose=yes barcode=no"`. Keep the
+`meta.yaml` flag as well and say in a comment that the two must stay in step.
+Before flipping a feature off, check the C source has a **stub** rather than
+dropping the symbol — MuPDF's `barcode.c` keeps `fz_new_barcode_pixmap` under
+`#if !FZ_ENABLE_BARCODE` and throws, so the generated C++ wrapper still links.
+(From `recipes/pymupdf`.) The general tell: a `meta.yaml` flag that a build-log
+grep shows on the command line *and* whose effect is absent from the binary.
+
+---
+
+### Only one extension in the wheel is missing a link flag forge exports (16 KB alignment, iOS deployment target)
+
+**Cause:** the package links that one library with a build backend that composes
+its own link line and never reads `$LDFLAGS`. PyMuPDF's `pipcl` builds
+`_extra.so` from `linker_command / general_flags / libpaths / libs /
+linker_extra / pythonflags.ldflags / rpath_flag` — forge's `LDFLAGS` is not in
+that list, while the other three libraries get everything through MuPDF's own
+`make`. Two different symptoms, one cause:
+
+- Android — forge's `_check_elf_alignment` *raises* on the 4 KB `PT_LOAD`,
+  failing the wheel.
+- iOS — no failure at all. The linker just writes a legacy
+  `LC_VERSION_MIN_IPHONEOS 7.0` where the siblings carry `LC_BUILD_VERSION` /
+  `minos 13.0`, which only shows up in `otool -l`.
+
+**Fix:** re-add the flags inside the backend, keyed off `CROSS_VENV_SDK`, and
+source the values from the environment forge already exports so they cannot
+drift (`-Wl,-z,max-page-size=16384` on android; on iOS, re-use the
+`-mios-version-min=…` token parsed out of `$CFLAGS`). **Diagnostic:** compare
+the load commands of every native file in the wheel against each other —
+`llvm-readelf -l` / `otool -l | grep -A3 LC_BUILD_VERSION` — an odd one out is
+the one its build backend linked. (From `recipes/pymupdf`.)
+
+---
+
+### The build breaks with no change on your side (unpinned build backend)
+
+**Cause:** the package's `[build-system] requires` names a build backend with
+**no version bound**, and forge installs `pyproject["build-system"]["requires"]`
+as-is, so every build resolves whatever PyPI serves that day. PyMuPDF requires a
+bare `pipcl` — which is simultaneously its PEP 517 backend and the linker for
+`_mupdf`/`_extra`, and which the recipe monkeypatches — and pipcl shipped twelve
+releases in the four months to 2026-07.
+
+**Fix:** pin it in `requirements.build` (`- pipcl 12`). `install_requirements`
+runs before the pyproject requires are installed and targets the same build env,
+and a bare `pipcl` requirement is then already satisfied, so the pin wins with no
+patching. Raise it deliberately, with a build. **Check for this whenever a recipe
+patches or monkeypatches anything in its build backend** — that is the case where
+upstream drift becomes your build break. (From `recipes/pymupdf`.)
 
 ---
 
@@ -1924,6 +2028,48 @@ builds that sdist for the target at package time. Decision tree: sdist-only + pu
 python → `source_packages`; sdist-only + native code → recipe. (Check the sdist
 really is pure — an opt-in C extension gated behind an env var, like insightface's
 face3d, still counts as pure.)
+
+---
+
+### `<pkg>: no licence file found, so this wheel would ship the library's object code with no notice`
+
+**Cause:** a `build.sh` recipe's wheel is synthesised by forge, so nothing carries a
+licence into it unless forge finds one. It looks for a **top-level** file in the source
+or recipe directory whose name starts with `LICEN[CS]E` / `COPYING` / `COPYRIGHT` /
+`NOTICE` (any case) and, finding none, **fails the build**. Every licence in this tree
+requires its notice to accompany the binary, and a warning here proved worthless — it sat
+unread in a thousand-line log on a job that exits 0, which is how every `flet-lib*` wheel
+shipped with no notice at all for years while CI stayed green.
+
+**You will almost always hit this on a VERSION BUMP**, not a new recipe: upstream renamed
+or relocated its notice (`LICENSE` → `LICENSES/`, or into a subdirectory). That is exactly
+the moment worth stopping, because the alternative is silently shipping a violation.
+
+**Fix:** point at the real file — a path, or a list of them, resolved against the source
+then the recipe directory:
+
+```yaml
+about:
+  license_file: docs/FTL.TXT          # or: [COPYING, modules/oniguruma/COPYING]
+```
+
+Setting it **replaces** auto-discovery, which is also how you *exclude* a notice covering
+something the wheel doesn't contain (libiconv's top-level `COPYING` is the GPL for the
+`iconv` program build.sh deletes; only `COPYING.LIB` applies to the library). A recipe with
+genuinely nothing to ship opts out explicitly, next to a comment saying why:
+
+```yaml
+about:
+  license_file: []                    # deliberately none -- <reason>
+```
+
+Note an **unset** `license_file` still means "discover for me" — only an empty **list** is
+the opt-out.
+
+**Related:** `about.license_file` naming a file that isn't there raises too (a typo or a
+moved file, not a preference). Changing licence metadata does not reach pypi.flet.dev until
+the recipe's **build number is bumped** — see `forge-ci` § Deploying, "Bump before
+republishing". Full authoring guidance in `new-mobile-recipe` § 3.5b.
 
 ---
 

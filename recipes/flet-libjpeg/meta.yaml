@@ -8,8 +8,12 @@ source:
   url: https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/{{ version }}/libjpeg-turbo-{{ version }}.tar.gz
 
 build:
-  number: 10
+  number: 11
 
 requirements:
   build:
     - cmake
+
+about:
+  # TurboJPEG is BSD-3-Clause and the SIMD sources are zlib-licensed; both build.
+  license: IJG AND BSD-3-Clause AND Zlib

@@ -1,0 +1,16 @@
+[project]
+name = "pymupdf-render-and-read"
+version = "1.0.0"
+description = "Builds a PDF with PyMuPDF, renders it to an image and searches its text."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==0.86.5",
+    "pymupdf==1.27.2.3",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

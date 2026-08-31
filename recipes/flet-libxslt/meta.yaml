@@ -1,3 +1,8 @@
+# No `about.license`, deliberately: both Copyright blocks are Expat plus a
+# name-in-advertising clause, so not verbatim MIT; X11 is the exact structural
+# match but matches no downstream convention, and upstream makes no declaration
+# of its own. MIT vs X11 is a policy call, not a reading. The Copyright file
+# ships either way.
 # {% set version = "1.1.45" %}
 # {% if version == "1.1.32" %}
 # {%   set libxml2_version = "2.9.8" %}
@@ -12,7 +17,7 @@ package:
   version: '{{ version }}'
 
 build:
-  number: 10
+  number: 11
 
 source:
   url: https://download.gnome.org/sources/libxslt/{{ version.rsplit('.', 1)[0] }}/libxslt-{{ version }}.tar.xz

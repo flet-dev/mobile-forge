@@ -42,8 +42,8 @@ cp dist/<recipe>-*-android_24_arm64_v8a.whl /tmp/rt_dist/   # forge's dist/ whee
 rm -rf tests/recipe-tester/build/site-packages tests/recipe-tester/build/.hash
 cd tests/recipe-tester
 PIP_FIND_LINKS=/tmp/rt_dist \
-  uvx --prerelease allow --default-index https://pypi.flet.dev --index https://pypi.org/simple \
-    --from flet-cli flet build apk --arch arm64-v8a --yes --python-version 3.12
+  uvx --prerelease allow --with 'flet-cli' --with 'flet' \
+    flet build apk --arch arm64-v8a --yes --python-version 3.12
 cd "$REPO"
 
 # 4. Boot the rootable AVD (gotcha #4/#5), install, launch
@@ -75,8 +75,8 @@ forge iphoneos:arm64 <recipe> ; forge iphonesimulator:arm64 <recipe> ; forge iph
 rm -rf tests/recipe-tester/build/site-packages tests/recipe-tester/build/.hash
 cd tests/recipe-tester
 PIP_FIND_LINKS="$(realpath ../../dist)" \
-  uvx --prerelease allow --default-index https://pypi.flet.dev --index https://pypi.org/simple \
-    --from flet-cli flet build ios-simulator --yes --python-version 3.12   # 0.86 pin — gotcha #13
+  uvx --prerelease allow --with 'flet-cli' --with 'flet' \
+    flet build ios-simulator --yes --python-version 3.12   # 0.86 pin — gotcha #13
 
 # 3. Boot any available iPhone sim, install, launch — ALWAYS by explicit UDID
 #    (gotcha #11: `booted` is ambiguous the moment two sims are booted)
@@ -137,8 +137,6 @@ for i in $(seq 1 30); do grep EXIT "$DATA/Library/Caches/console.log" 2>/dev/nul
 11. **Two booted simulators make `simctl booted` ambiguous.** With more than one sim booted, `simctl install booted …` targets one device and your subsequent `get_app_container booted …` may query the OTHER — the app "isn't installed" / the container is empty despite a successful install. Use the explicit `$UDID` for every simctl call (as the loop above does); never rely on `booted` unless you've verified exactly one device is booted (`xcrun simctl list devices | grep -c Booted`).
 
 12. **Verify the staged tests + the on-device test COUNT — staging can fail silently.** `stage_recipe.sh` wipes and re-stages `recipe_tests/`; if the invocation ever fails without you noticing (a scripted loop with a bad variable — zsh does NOT word-split unquoted `$VAR` like bash, so a `for r in $RECIPES`-style loop can pass the whole list as ONE argument), the PREVIOUS recipe's tests are still staged and run happily, reporting "N passed" for the wrong package. Two cheap checks after staging: `ls tests/recipe-tester/recipe_tests/` shows YOUR test files, and the "N passed" in console.log matches your recipe's test count. (Bit during the h5py→keras loop: the same 4 stale h5py tests "passed" three times.) **Stronger still — verify the built APK's CONTENTS, not just `recipe_tests/`:** a build that *fails* can leave a STALE `build/apk/recipe-tester.apk` that installs the wrong app entirely. `unzip -l build/apk/recipe-tester.apk` should show your recipe's test `.py` inside `app.zip` AND (for a native recipe) `lib/<abi>/lib*.so` for its libs. Caught an opaque run that silently installed a stale pysodium APK and reported "2 passed" for the wrong package. When in doubt nuke `build/apk` too, not just `build/site-packages`.
-
-13. **The recipe-tester now targets Flet 0.86 (since flet#104), which isn't on PyPI.** Plain `uvx --with flet-cli flet build` pulls 0.85 from PyPI — the OLD packaging model (extracted site-packages), so you'd test the wrong thing. Pull 0.86 from pypi.flet.dev with a prerelease pin: `uvx --prerelease allow --default-index https://pypi.flet.dev --index https://pypi.org/simple --from flet-cli flet build apk … --python-version 3.12`. 0.86 ships site-packages as `sitepackages.zip` and relocates native `.so` to jniLibs — a whole class of on-device loader/data-file failures lives there (`forge-error-catalogue` § the `sitepackages.zip` class).
 
 ## Model assets & test-only deps
 
