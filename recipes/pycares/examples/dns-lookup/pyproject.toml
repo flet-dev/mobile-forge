@@ -1,0 +1,17 @@
+[project]
+name = "pycares-dns-lookup"
+version = "1.0.0"
+description = "Resolves DNS records with aiodns, against the system resolver or a public one."
+requires-python = ">=3.12"
+
+dependencies = [
+    "flet==0.86.5",
+    "aiodns==4.0.4",
+    "pycares==5.0.1",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

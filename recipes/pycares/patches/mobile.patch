@@ -1,0 +1,32 @@
+Cross-compile the vendored c-ares.
+
+pycares' setup.py builds deps/c-ares with CMake before compiling the CFFI
+extension, but its cmake_args list is hardcoded and configures for the build
+host — a mobile-forge build would fold a macOS libcares.a into an Android/iOS
+_cares*.so. Append FORGE_CMAKE_ARGS (set by the recipe) so the vendored library
+is configured for the target.
+
+diff -ruN a/setup.py b/setup.py
+--- a/setup.py	2026-01-01 13:01:25
++++ b/setup.py	2026-08-31 11:53:32
+@@ -2,6 +2,7 @@
+ # -*- coding: utf-8 -*-
+ 
+ import os
++import shlex
+ import shutil
+ import subprocess
+ import sys
+@@ -77,6 +78,12 @@
+                     if '/MT' in str(flag):
+                         cmake_args.append('-DCARES_MSVC_STATIC_RUNTIME=ON')
+                         break
++
++        # Cross-compilation (mobile-forge): the vendored c-ares must be configured
++        # for the target, not for the build host. The recipe supplies the toolchain
++        # file / sysroot / architecture args here; being last, they win over the
++        # host defaults set above.
++        cmake_args.extend(shlex.split(os.environ.get('FORGE_CMAKE_ARGS', '')))
+ 
+         # Run CMake configure
+         print(f"Configuring c-ares with CMake in {build_temp}")
