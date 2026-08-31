@@ -9,9 +9,10 @@ its callers by [JA3/JA4](https://github.com/FoxIO-LLC/ja4) or by frame shape see
 for it in a Flet app when an API or page you need answers an ordinary client with a challenge
 page, a 403 or a silent block.
 
-The API is `requests`-shaped and everything is re-exported at the top level:
+The API is [`requests`-shaped](https://curl-cffi.readthedocs.io/en/latest/vs-requests.html)
+and everything is re-exported at the top level:
 [`curl_cffi.get(url, ...)`](https://curl-cffi.readthedocs.io/en/latest/quick_start.html) for a
-one-shot, `Session` or
+one-shot, [`Session`](https://curl-cffi.readthedocs.io/en/latest/api.html#curl_cffi.requests.Session) or
 [`AsyncSession`](https://curl-cffi.readthedocs.io/en/latest/asyncio.html) when you want the
 connection pool and the cookie jar to survive between calls, and
 [`WebSocket`](https://curl-cffi.readthedocs.io/en/latest/websockets.html) for a socket.
@@ -95,8 +96,8 @@ user expects to keep belongs in
 [`FLET_APP_STORAGE_DATA`](https://flet.dev/docs/reference/environment-variables/#flet_app_storage_data),
 which is never auto-deleted.
 
-Two paths the library picks for itself. The first is the response cache: `FileCacheBackend`
-defaults to `tempfile.gettempdir() / "curl_cffi_cache"`, wherever the stdlib puts that on device.
+Two paths the library picks for itself. The first is the response cache:
+[`FileCacheBackend`](https://curl-cffi.readthedocs.io/en/latest/api.html#curl_cffi.requests.FileCacheBackend) defaults to `tempfile.gettempdir() / "curl_cffi_cache"`, wherever the stdlib puts that on device.
 Point it somewhere you chose:
 
 ```python
@@ -158,7 +159,8 @@ shape to copy.
 
 curl-cffi resolves one CA bundle at **import** time and hands the path to libcurl at request
 time. It tries `SSL_CERT_FILE`, `CURL_CA_BUNDLE` and `REQUESTS_CA_BUNDLE` in that order, then
-OpenSSL's built-in path, then `certifi.where()` — and on device the first step wins, because
+OpenSSL's built-in path, then [`certifi.where()`](https://github.com/certifi/python-certifi)
+— and on device the first step wins, because
 Flet's generated startup code sets `SSL_CERT_FILE` and `REQUESTS_CA_BUNDLE` to `certifi.where()`
 before your module runs (read out of the `lib/python.dart` a `flet build` generates). So the
 bundle is certifi's on both platforms, and `tests/` asserts on device that the resolved path is a
@@ -169,7 +171,8 @@ Two things follow. Overriding the bundle means setting `SSL_CERT_FILE` **above**
 naming a file that does not exist is skipped silently. And **the trust anchors on device are only
 certifi's**, so a corporate root or an intercepting debug proxy such as mitmproxy, which a
 desktop `flet run` picks up out of the machine's own trust store, fails on the phone with a
-`CertificateVerifyError` against a host the browser is perfectly happy with. Ship your own PEM in
+[`CertificateVerifyError`](https://curl-cffi.readthedocs.io/en/latest/api.html#curl_cffi.requests.exceptions.CertificateVerifyError)
+against a host the browser is perfectly happy with. Ship your own PEM in
 `src/assets/` and name it per session or per request:
 
 ```python
@@ -189,10 +192,11 @@ release rather than by you; a versioned name such as `impersonate="chrome131_and
 only complete list.
 
 **The built-in targets are compiled into the wheel, so that list is fixed at build time**, and
-checkable offline: `Curl().impersonate(name)` returns `0` when that name's fingerprint tables are
+checkable offline: [`Curl()`](https://curl-cffi.readthedocs.io/en/latest/api.html#curl_cffi.Curl)`.impersonate(name)` returns `0` when that name's fingerprint tables are
 present and a non-zero code when they are not, without raising — which separates "this build does
 not know that target" from "the request failed" on a device with no connectivity. Through a
-`Session` the same miss surfaces as `ImpersonateError` instead.
+`Session` the same miss surfaces as
+[`ImpersonateError`](https://curl-cffi.readthedocs.io/en/latest/api.html#curl_cffi.requests.exceptions.ImpersonateError) instead.
 
 That list is not the whole story: a name the wheel does not carry natively is looked up in
 `fingerprints.json` under the directory in [Storage](#storage) and applied from Python, so extra
@@ -277,10 +281,6 @@ against your own backend, on a device, is the thing to validate.
   screen your app has. Flagging it, not advising you — we are not lawyers.
 
 ## Build notes (maintainers)
-
-`patches/mobile.patch` explains its own hunks in its preamble, and `meta.yaml` justifies
-`excluded_arches`, the `IMPERSONATE_*` environment and the host pins inline in both recipes. What
-is left is shape, hazards, and what a green run does not prove.
 
 ### Recipe shape
 
