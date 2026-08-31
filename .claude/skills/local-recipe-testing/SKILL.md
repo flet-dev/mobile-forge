@@ -177,7 +177,15 @@ Upstream packages now publish cibuildwheel-built iOS/Android wheels to PyPI (cp3
 only). They are live pip candidates in every 0.86 build, **but while a forge recipe
 exists on pypi.flet.dev it deterministically shadows them** — pip's sort at equal
 versions is tag-priority (forge `android_24` > official `android_21`) then build tag
-(forge `-1-` > none). To force the official wheel on-device without touching the index:
+(forge `-1-` > none). **Only at equal versions.** Version is compared before any tag, so
+an upstream release the recipe has not caught up to wins outright — and since upstream
+publishes arm64-v8a alone, the result is a MIXED app: their arm64 beside forge's x86_64,
+one version apart. A stale recipe is the failure mode here, not a resolution quirk.
+Measured 2026-08-31 with `pip download --only-binary :all: --platform
+android_24_arm64_v8a --python-version 313` against both indexes: `pyzmq==27.1.0` (same
+platform tag, build tag alone between them) and `lru-dict==1.4.1` (`android_24` vs
+`android_21`) both resolve to the forge wheel; unpinned `pyzmq` resolves to upstream's
+newer 27.2.0. To force the official wheel on-device without touching the index:
 retag a downloaded copy into a find-links dir with a HIGH build tag — and on Android
 also lift the platform tag past forge's —
 
