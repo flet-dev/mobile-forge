@@ -138,6 +138,15 @@ for i in $(seq 1 30); do grep EXIT "$DATA/Library/Caches/console.log" 2>/dev/nul
 
 12. **Verify the staged tests + the on-device test COUNT — staging can fail silently.** `stage_recipe.sh` wipes and re-stages `recipe_tests/`; if the invocation ever fails without you noticing (a scripted loop with a bad variable — zsh does NOT word-split unquoted `$VAR` like bash, so a `for r in $RECIPES`-style loop can pass the whole list as ONE argument), the PREVIOUS recipe's tests are still staged and run happily, reporting "N passed" for the wrong package. Two cheap checks after staging: `ls tests/recipe-tester/recipe_tests/` shows YOUR test files, and the "N passed" in console.log matches your recipe's test count. (Bit during the h5py→keras loop: the same 4 stale h5py tests "passed" three times.) **Stronger still — verify the built APK's CONTENTS, not just `recipe_tests/`:** a build that *fails* can leave a STALE `build/apk/recipe-tester.apk` that installs the wrong app entirely. `unzip -l build/apk/recipe-tester.apk` should show your recipe's test `.py` inside `app.zip` AND (for a native recipe) `lib/<abi>/lib*.so` for its libs. Caught an opaque run that silently installed a stale pysodium APK and reported "2 passed" for the wrong package. When in doubt nuke `build/apk` too, not just `build/site-packages`.
 
+12a. **zsh eats `:` after a bare `$var` — `"$ref:path"` is a git-query landmine.** zsh applies
+    history-style modifiers to an unbraced parameter, so `"$r:recipes/foo/meta.yaml"` parses `:r`
+    (remove-extension) and expands to `refs/heads/my-branchecipes/foo/meta.yaml`. `git show` on
+    that returns nothing, exits non-zero, and a `2>/dev/null` loop reports a confident, wrong
+    **negative** across every ref. Always brace it: `"${r}:path"`. This produced a false "that
+    fix exists on no branch" claim about work that was sitting on `examples-and-docs`. General
+    rule: **a search that returns a surprising negative is a bug until proven otherwise** — spot-check
+    one case you are certain about before reporting the absence as evidence.
+
 ## Model assets & test-only deps
 
 `stage_recipe.sh` copies **every** file in `recipes/<pkg>/tests/` into the app (`cp -r tests/. recipe_tests/`), so a model dropped next to the test file becomes an app asset. Two tiers:
