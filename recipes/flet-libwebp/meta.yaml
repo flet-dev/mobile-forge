@@ -1,0 +1,22 @@
+{% set version = "1.6.0" %}
+
+package:
+  name: flet-libwebp
+  version: '{{ version }}'
+
+build:
+  number: 1
+
+source:
+  url: https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-{{ version }}.tar.gz
+
+patches:
+  - config.patch
+
+about:
+  # PATENTS is the "additional intellectual property rights grant" every source
+  # header points at; it is not matched by the automatic COPYING/LICENSE search.
+  license_file:
+    - COPYING
+    - PATENTS
+  license: BSD-3-Clause

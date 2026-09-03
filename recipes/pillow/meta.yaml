@@ -7,6 +7,7 @@ requirements:
     # PNG support is internal: libpng is not used.
     - flet-libjpeg 3.0.90
     - flet-libfreetype 2.13.3
+    - flet-libwebp 1.6.0
 
 # {% if not version or version >= (12,0,0) %}
 # pillow >= 12.x  (12.x drops `self.add_imaging_libs = ""` from
@@ -25,7 +26,7 @@ patches:
 # {% endif %}
 
 build:
-  number: 1
+  number: 2
   script_env:
 # {% if sdk == 'android' %}
     # pillow's setup.py manually probes `self.compiler.{include,library}_dirs`

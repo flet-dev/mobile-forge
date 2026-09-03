@@ -1,0 +1,16 @@
+config.sub 2024-05-27 knows `*-apple-ios` but rejects the simulator triplets forge
+uses (`arm64-apple-ios-simulator`, `x86_64-apple-ios-simulator`) at its final
+kernel/OS consistency check. Accept `ios-simulator` there, as flet-libtiff does.
+
+diff -ruN a/config.sub b/config.sub
+--- a/config.sub	2025-07-09 22:53:34
++++ b/config.sub	2026-09-01 00:48:59
+@@ -2259,6 +2259,8 @@
+ 	--*)
+ 		# Blank kernel and OS with real machine code file format is always fine.
+ 		;;
++	ios-simulator*-)
++		;;
+ 	*-*-*)
+ 		echo "Invalid configuration '$1': Kernel '$kernel' not known to work with OS '$os'." 1>&2
+ 		exit 1
