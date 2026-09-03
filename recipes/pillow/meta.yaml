@@ -3,11 +3,26 @@ package:
   version: "12.2.0"
 
 requirements:
+  # PNG support is internal: libpng is not used.
+  #
+  # All three are linked STATICALLY into the extensions on iOS and dynamically on
+  # Android, so where they belong differs by platform. Under `host` they become a
+  # runtime Requires-Dist and every consuming app installs the wheel; on iOS that
+  # is ~16 MB of .a already folded into _imaging.so / _webp.so and unloadable at
+  # runtime. `host_build` extracts them for the link without putting them in the
+  # metadata. Android keeps `host`: there the payload is a real .so the extensions
+  # carry as DT_NEEDED, and flet stages it into jniLibs.
+# {% if sdk == 'android' %}
   host:
-    # PNG support is internal: libpng is not used.
     - flet-libjpeg 3.0.90
     - flet-libfreetype 2.13.3
     - flet-libwebp 1.6.0
+# {% else %}
+  host_build:
+    - flet-libjpeg 3.0.90
+    - flet-libfreetype 2.13.3
+    - flet-libwebp 1.6.0
+# {% endif %}
 
 # {% if not version or version >= (12,0,0) %}
 # pillow >= 12.x  (12.x drops `self.add_imaging_libs = ""` from

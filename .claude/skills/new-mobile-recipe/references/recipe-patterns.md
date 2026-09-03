@@ -648,6 +648,50 @@ see the `forge-ci` skill.
 
 ## Cross-cutting conventions
 
+### `host` vs `host_build` is a PER-PLATFORM question
+
+`host` promotes the dep to a runtime `Requires-Dist`, so every consuming app installs that
+wheel. `host_build` puts it in the cross env for the link and leaves the metadata alone. Both
+install into the SAME `opt/` tree, so header/lib probing is identical either way — the only
+difference is the wheel's metadata.
+
+**The test is the payload, not the recipe, and the answer usually differs per SDK:**
+
+| `opt/lib` holds | verdict |
+| --- | --- |
+| `.a` only | `host_build` — absorbed at link time, unloadable at runtime |
+| `.so` / `.dylib` | `host` — a real runtime dep; flet stages it into jniLibs |
+| both | `host`, and delete the dead `.a` in build.sh |
+
+Most `flet-lib*` build **shared on Android and static on iOS**, so the same lib needs both. Guard
+the KEY, not the list item:
+
+```yaml
+requirements:
+# {% if sdk == 'android' %}
+  host:
+    - flet-libjpeg 3.0.90
+# {% else %}
+  host_build:
+    - flet-libjpeg 3.0.90
+# {% endif %}
+```
+
+Confirm before moving anything, per platform:
+
+```bash
+llvm-readelf -d <ext>.so | grep NEEDED        # android: lib listed => runtime => host
+nm -u <ext>.so | grep -ci <libsym>            # ios: 0 undefined => absorbed => host_build
+```
+
+An audit that checks only Android will clear libs that are archives-only on iOS — that mistake
+is already recorded in AGENTS.md's sweep, which cleared flet-libjpeg/libxml2/libgeos/libfreetype
+as "runtime .so payloads". True there, false on iOS. `pillow` (all three of its libs), `pymssql`
+and `scipy` are the fixed precedents.
+
+Getting it wrong the safe way costs a download; getting it wrong the unsafe way — moving a lib
+something actually `dlopen`s — is a runtime crash on device, so verify per consumer.
+
 ### Version specifiers in requirements
 
 Forge parses `requirements.host` / `requirements.build` strings per `build.py:67-78`:
