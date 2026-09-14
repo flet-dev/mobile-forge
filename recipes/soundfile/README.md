@@ -64,19 +64,39 @@ file, so it is how you check a samplerate or duration before deciding to decode.
 ### Reading audio the user picked
 
 [`FilePicker`](https://flet.dev/docs/controls/filepicker/) hands back a path on both
-platforms, and `sf.read()` takes it directly. Where the platform gives you bytes instead —
-a download, an `assets/` file read through `importlib.resources` — wrap them, because
-`soundfile` accepts any file object:
+platforms, and `sf.read()` takes it directly. **A real path is the only form that works
+everywhere** — see the iOS note below.
+
+Where you hold bytes instead (a download, a file read out of `assets/`), `soundfile` does
+accept any file object, and on Android that works:
 
 ```python
 import io
 
-data, sr = sf.read(io.BytesIO(raw_bytes))
+data, sr = sf.read(io.BytesIO(raw_bytes))     # Android and desktop only
 ```
 
-That path goes through libsndfile's virtual I/O rather than `fopen`, which also makes it the
-way to read audio bundled in an app's `assets/` on Android, where packaged files are not
-always real files on disk.
+**On iOS this raises `MemoryError`,** and no version of the package will fix it. That path
+uses libsndfile's virtual I/O, which means handing the C library a `ffi.callback()`; cffi
+writes that trampoline into memory at runtime, and iOS refuses write+execute pages to an
+app without the JIT entitlement. The message names the cause:
+
+    MemoryError: Cannot allocate write+execute memory for ffi.callback().
+
+Write the bytes to a file and read that instead — it costs one write, needs no
+per-platform branch, and is the recommended form on both platforms:
+
+```python
+import os
+
+path = os.path.join(os.getenv("FLET_APP_STORAGE_TEMP"), "clip.wav")
+with open(path, "wb") as f:
+    f.write(raw_bytes)
+data, sr = sf.read(path)
+```
+
+Only the *file-object* form is affected. Paths, and integer file descriptors (which go
+through `sf_open_fd`), use no callbacks and work normally on iOS.
 
 ### Storage
 
@@ -124,6 +144,10 @@ device, which is not something you can assume for every package.
   `float64` and 63 MB as `float32`. On a phone that is the difference between working and
   being killed by the OS. Pass `dtype="float32"` unless you specifically need the precision,
   and prefer `blocks()` over reading whole files.
+
+- **iOS cannot read audio from a file object.** Repeating it here because it is the one
+  thing that behaves differently between the two platforms, and it fails at the point of
+  use rather than at import. `io.BytesIO` in, `MemoryError` out; write a file first.
 
 - **Opus only encodes at 48 kHz.** libsndfile will not resample for you; `sf.write(...,
   format="OGG", subtype="OPUS")` at any other rate raises. Resample first — [`soxr`](../soxr)
@@ -220,8 +244,9 @@ download six wheels whose contents already live inside `libsndfile.so`.
 ### Coverage gaps
 
 The device tests cover loading the library, WAV round trips in three subtypes, every
-container and codec, virtual I/O from `BytesIO`, block reads with seeking, and the format
-registry. They do not cover: writing to `FLET_APP_STORAGE_*` (a path question, not a
+container and codec, virtual I/O from `BytesIO` (Android) and its `MemoryError` on iOS,
+the write-a-file workaround, block reads with seeking, and the format registry. They do not
+cover: writing to `FLET_APP_STORAGE_*` (a path question, not a
 libsndfile one), any real recorded audio file, `sf.info()`, the `RAW` format's manual
 `samplerate`/`channels`/`subtype` arguments, or multi-threaded decoding. The security
 backports are compile-verified only — there are no regression tests for the five fixes, since

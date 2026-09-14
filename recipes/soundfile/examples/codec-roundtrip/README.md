@@ -18,9 +18,12 @@ What it demonstrates:
 - **Lossless is not lossy-free.** FLAC and ALAC come back with a small error rather than
   zero, because both are 16-bit integer formats and the source is float64. It is
   quantisation, not codec loss — a distinction worth seeing once.
-- **Encoding in memory, with no file at all.** Every round trip goes through
-  `io.BytesIO`, which exercises libsndfile's virtual I/O. That is the path an app takes for
-  audio it downloaded or bundled as an asset, where there may be no real file to open.
+- **Writing into Flet's storage.** Each round trip writes a real file under
+  [`FLET_APP_STORAGE_TEMP`](https://flet.dev/docs/reference/environment-variables#flet_app_storage_temp)
+  and deletes it again. Files rather than `io.BytesIO` deliberately: a file object routes
+  through libsndfile's virtual I/O, which needs a cffi callback, which needs write+execute
+  memory that iOS refuses — so the file-object form works on Android and raises
+  `MemoryError` on iOS. A path works on both.
 - **Compute off the UI thread.** The sweep runs in
   [`page.run_thread(...)`](https://flet.dev/docs/controls/page/#flet.Page.run_thread) with a
   spinner up, ending in the explicit
@@ -30,6 +33,9 @@ What it demonstrates:
 The two waveform strips are peak envelopes: the generated source, and the audio recovered
 from the MP3 — near enough to look identical at this scale, which is the point of a lossy
 codec.
+
+The `time` column includes the file write and read, so it is a whole-round-trip figure
+rather than a codec benchmark.
 
 The audio is generated rather than bundled, so the example ships no asset.
 

@@ -1,4 +1,5 @@
 import io
+import sys
 
 import numpy as np
 import pytest
@@ -84,16 +85,49 @@ def test_container_roundtrip(tmp_path, fmt, ext, subtype, lossy):
         assert np.max(np.abs(y - x)) <= 2**-15
 
 
+@pytest.mark.skipif(sys.platform == "ios", reason="no W+X memory for ffi.callback()")
 def test_read_from_file_object():
     """sf.read() works on an in-memory binary stream via libsndfile's virtual I/O —
-    the path an app takes for audio bundled as an asset or fetched over the
-    network, where there may be no real file to open."""
+    the path an app takes for audio fetched over the network, where there may be
+    no real file to open. Android only; see the iOS counterpart below."""
     buf = io.BytesIO()
     x = _tone()
     sf.write(buf, x, SR, format="WAV", subtype="DOUBLE")
 
     buf.seek(0)
     y, sr = sf.read(buf)
+    assert sr == SR
+    np.testing.assert_array_equal(y, x)
+
+
+@pytest.mark.skipif(sys.platform != "ios", reason="iOS-only limitation")
+def test_file_object_is_unavailable_on_ios():
+    """Passing a file object on iOS raises MemoryError, and this is permanent: virtual
+    I/O hands libsndfile a `ffi.callback()`, cffi writes that trampoline at runtime, and
+    iOS refuses write+execute pages to an app without the JIT entitlement. Asserted
+    rather than skipped so the README's "write it to a file first" guidance is checked,
+    and so a future cffi or OS change that lifts it does not go unnoticed."""
+    buf = io.BytesIO()
+    with pytest.raises(MemoryError, match="write.execute"):
+        sf.write(buf, _tone(), SR, format="WAV", subtype="DOUBLE")
+
+
+def test_path_roundtrip_is_the_ios_workaround(tmp_path):
+    """The replacement for the file-object path: spill the bytes to a real file and read
+    it back. Works on every platform, so an app needs no per-platform branch."""
+    raw = io.BytesIO()
+    x = _tone()
+    try:
+        sf.write(raw, x, SR, format="WAV", subtype="DOUBLE")
+        encoded = raw.getvalue()
+    except MemoryError:  # iOS: produce the same bytes without virtual I/O
+        staged = str(tmp_path / "staged.wav")
+        sf.write(staged, x, SR, subtype="DOUBLE")
+        encoded = open(staged, "rb").read()
+
+    path = tmp_path / "from_bytes.wav"
+    path.write_bytes(encoded)
+    y, sr = sf.read(str(path))
     assert sr == SR
     np.testing.assert_array_equal(y, x)
 

@@ -1,7 +1,8 @@
 """Encode a generated signal to every container this wheel supports, decode it back,
 and report what each one cost. No soundfile object escapes: callers get plain values."""
 
-import io
+import os
+import tempfile
 import time
 
 import numpy as np
@@ -33,21 +34,30 @@ def signal(rate=RATE, seconds=SECONDS):
 
 
 def roundtrip(label, fmt, subtype, rate):
-    """Encode to an in-memory container and decode it back.
+    """Encode to a container on disk and decode it back.
 
     Returns the label, encoded size in bytes, encode+decode time in seconds, and the
-    RMS difference from the source — 0 for the lossless formats, small for the lossy
-    ones. Returns an `error` string instead if the format is not compiled in.
+    RMS difference from the source — quantisation-limited for the integer formats,
+    audible-codec-sized for the lossy ones. Returns an `error` string instead if the
+    format is not compiled in.
+
+    Files, not io.BytesIO: a file object would route through libsndfile's virtual I/O,
+    which needs a cffi callback, which needs write+execute memory that iOS refuses.
     """
     source = signal(rate)
-    buf = io.BytesIO()
+    # FLET_APP_STORAGE_TEMP on device; tempfile's default elsewhere.
+    directory = os.getenv("FLET_APP_STORAGE_TEMP") or tempfile.gettempdir()
+    path = os.path.join(directory, f"roundtrip-{subtype.lower()}.{fmt.lower()}")
     started = time.monotonic()
     try:
-        sf.write(buf, source, rate, format=fmt, subtype=subtype)
-        encoded = buf.getvalue()
-        decoded, out_rate = sf.read(io.BytesIO(encoded))
+        sf.write(path, source, rate, format=fmt, subtype=subtype)
+        size = os.path.getsize(path)
+        decoded, out_rate = sf.read(path)
     except Exception as exc:  # unsupported subtype, missing codec, ...
         return {"label": label, "error": str(exc)}
+    finally:
+        if os.path.exists(path):
+            os.remove(path)
     elapsed = time.monotonic() - started
 
     # Lossy codecs add leading silence and pad the tail, so compare the overlap.
@@ -56,8 +66,8 @@ def roundtrip(label, fmt, subtype, rate):
 
     return {
         "label": label,
-        "bytes": len(encoded),
-        "ratio": (source.nbytes / len(encoded)),
+        "bytes": size,
+        "ratio": (source.nbytes / size),
         "seconds": elapsed,
         "rms_error": rms,
         "frames": len(decoded),

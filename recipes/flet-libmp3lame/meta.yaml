@@ -11,7 +11,13 @@ build:
   number: 1
 
 source:
-  url: https://downloads.sourceforge.net/project/lame/lame/{{ version }}/lame-{{ version }}.tar.gz
+  # Debian's pool copy, not SourceForge's. `downloads.sourceforge.net` bounces
+  # through a randomly chosen mirror and timed out its TLS handshake on two of
+  # six CI legs (run 34892127701); this host is stable and serves the same
+  # bytes -- both downloads are 1524133 B, sha256
+  # ddfe36cab873794038ae2c1210557ad34857a4b6bdc515785d1da9e175b1da1e.
+  # Upstream remains https://sourceforge.net/projects/lame/files/lame/{{ version }}/.
+  url: https://deb.debian.org/debian/pool/main/l/lame/lame_{{ version }}.orig.tar.gz
 
 about:
   # COPYING is the LGPL v2 text; every source header adds "or (at your option)
