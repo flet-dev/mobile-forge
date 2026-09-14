@@ -1732,6 +1732,48 @@ iOS doesn't need this — Apple's clang resolves the C++ runtime to system libc+
 
 ---
 
+### A **cffi** ABI-mode wrapper cannot open a `flet-lib*` on iOS — `ffi.dlopen` is not `.fwork`-aware
+
+**Symptom:** a pure-Python package that does `ffi.dlopen(...)` (cffi *ABI* mode —
+`ffibuilder.set_source("_x", None)`, no compiled extension anywhere) fails at import on
+iOS even though the `flet-lib*` wheel is bundled and the same recipe works on Android.
+cffi's error helpfully appends `Additionally, ctypes.util.find_library() did not manage to
+locate a library called '<name>.fwork'`, which sends you chasing `find_library` instead of
+the real cause.
+
+**Cause.** serious-python *moves* the real binary into an embedded framework and leaves a
+`.fwork` ASCII **text** stub at the old `opt/lib/` path. The dereference of that stub lives
+**only** in iOS CPython's patched `Lib/ctypes/__init__.py` — `CDLL.__init__` rewrites a
+`*.fwork` name to `os.path.join(dirname(sys.executable), <file contents>)` before
+`_dlopen`, then stores it in `self._name`. Nothing below ctypes knows about `.fwork`:
+`_ctypes` doesn't, dyld doesn't, and `cffi`'s `ffi.dlopen` is a raw `dlopen(3)`.
+(`importlib`'s `AppleFrameworkLoader` maps `.so`→`.fwork` for module **imports** only,
+never for data libraries.) So on iOS the old path is gone and the `.fwork` path is not
+Mach-O — both fail.
+
+**Fix — let ctypes resolve, then hand cffi the path it settled on:**
+
+```python
+path = _ctypes_find_library(name)
+if path is None and _sys.platform in ('android', 'ios'):
+    import ctypes as _ctypes
+    optlib = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'opt', 'lib')
+    for candidate in (f'lib{name}.so',                              # Android jniLibs, by soname
+                      os.path.join(optlib, f'lib{name}.fwork'),     # iOS embedded framework
+                      os.path.join(optlib, f'lib{name}.so')):       # not relocated
+        try:
+            return _ctypes.CDLL(candidate)._name                    # resolved absolute path
+        except OSError:
+            continue
+```
+
+Wrapping `ctypes.util.find_library` (rather than rewriting the package's loader) keeps
+everything downstream upstream's. Worked example: `recipes/soundfile/patches/mobile.patch`.
+
+**Pure-ctypes wrappers need none of this** — `CDLL('lib<name>.fwork')` just works
+(pyzbar, pysodium, python-magic all rely on it). The problem is specific to cffi, and to
+anything else calling `dlopen` below the Python level.
+
 ### `ImportError: Unable to find <name> shared library` (ctypes wrapper, at import)
 
 **Cause:** a pure-Python `ctypes` wrapper called `ctypes.util.find_library()`,
@@ -2090,6 +2132,36 @@ really is pure — an opt-in C extension gated behind an env var, like insightfa
 face3d, still counts as pure.)
 
 ---
+
+### `error: conflicting types for 'fseek'` / `'ftell'` from a project's own `compat.h` (Android **32-bit only**)
+
+```
+sysroot/usr/include/stdio.h:216:5: error: conflicting types for 'fseek'
+  216 | int fseeko(FILE*, off_t, int) __RENAME(fseeko64) __INTRODUCED_IN(24);
+compat.h:67:16: note: expanded from macro 'fseeko'
+   67 | #define fseeko fseek
+```
+
+**Cause — a CMake project reading the Android API level from `CMAKE_SYSTEM_VERSION`.**
+The NDK's own `android.toolchain.cmake` pins `CMAKE_SYSTEM_VERSION` to **1** and reports
+the real level in **`ANDROID_PLATFORM_LEVEL`**; only CMake's *built-in* Android support
+(no toolchain file) puts the API level in `CMAKE_SYSTEM_VERSION`. Every recipe here uses
+the toolchain file, so a `CMAKE_SYSTEM_VERSION VERSION_LESS 24` test is **always true**.
+The project then concludes fseeko is unavailable and defines `fseeko`→`fseek`, which
+rewrites bionic's own LFS *declaration* — and `off_t` is 64-bit (forge compiles with
+`_FILE_OFFSET_BITS=64`) while `long` is 32-bit, so the two prototypes disagree.
+
+**Why only armeabi-v7a (and x86):** 64-bit ABIs have `off_t == long`, and such guards are
+usually also gated on `CMAKE_SYSTEM_PROCESSOR MATCHES "i686|armv7-a"`, so arm64/x86_64
+escape and the recipe looks fine until the 32-bit slice.
+
+**Fix:** patch the condition to prefer `ANDROID_PLATFORM_LEVEL` when defined. Passing
+`-DCMAKE_SYSTEM_VERSION=$SDK_VERSION` does **not** work — the toolchain file overwrites
+it with a normal (non-cache) `set()`, which shadows your cache entry. Worked example:
+`recipes/flet-libflac/patches/android-api-level.patch`.
+
+**Generalise the tell:** any CMake project inspecting `CMAKE_SYSTEM_VERSION` for Android
+is reading `1`. Grep a new native recipe for it before trusting a green 64-bit build.
 
 ### `<pkg>: no licence file found, so this wheel would ship the library's object code with no notice`
 

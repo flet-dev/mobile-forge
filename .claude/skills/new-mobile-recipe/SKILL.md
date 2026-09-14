@@ -77,6 +77,7 @@ Match the package to one of these shapes. Each maps to a template in `templates/
 | C-ext consuming an existing flet-lib       | Already-built `flet-libX` covers the C dep (libxml2, libcurl, libssl via openssl, etc.)                 | Adapt `templates/meta-with-patches.yaml` + add `requirements.host` |
 | Native library itself (flet-lib*), **static** | New C library a Python C-extension links at build time (libxml2, libcurl, libgeos…)                  | `templates/meta-flet-lib.yaml` + `templates/build-flet-lib.sh`     |
 | Native library, **ctypes-loaded (shared)** | A pure-Python wrapper `dlopen`s the lib at runtime via `ctypes` (pyzbar→libzbar, python-magic→libmagic) | `templates/meta-flet-lib.yaml` + `templates/build-flet-lib-shared.sh`; see Pattern H |
+| Native library, **cffi-loaded (shared)** | Same, but the wrapper is **cffi ABI mode** (`ffibuilder.set_source(name, None)` → `ffi.dlopen`, no compiled extension anywhere) (soundfile→libsndfile) | As Pattern H, plus a loader patch that resolves through ctypes — `ffi.dlopen` is a raw `dlopen(3)` and cannot follow an iOS `.fwork`; copy `recipes/soundfile/` |
 | Cython-accelerated pure-Python (poetry-core build script) | `build-backend = "poetry.core.masonry.api"` + `[tool.poetry.build] script` that cythonizes the runtime `.py` files themselves (zeroconf; the Home-Assistant-ecosystem idiom). Forge's PEP 517 path handles poetry-core unchanged | No template — copy `recipes/zeroconf/` (branch `zeroconf`): `script_env REQUIRE_CYTHON: "1"` + a fail-loud patch (upstream swallows compile errors → silent pure-py wheel), test asserts the modules are real extensions |
 | C-ext that links a lib via a `*-config` tool | Compiled C-ext whose `setup.py` shells out to `pg_config`/`mysql_config`/… (psycopg2→libpq, mysqlclient→libmysqlclient) | A **static+PIC** `flet-lib*` (`build-flet-lib.sh` + `-fPIC`) shipping a config-shim, + consumer `script_env`/patch; see Pattern I |
 | **setup.py that drives CMake itself** for a vendored native lib | An sdist that vendors a C library and builds it with its own `subprocess` CMake call inside `build_ext`, then links the static result via `extra_objects` (pycares→c-ares). Not scikit-build-core — the arg list is hardcoded in `setup.py` | No template — copy `recipes/pycares/`: one patch appends `shlex.split(os.environ['FORGE_CMAKE_ARGS'])` to the arg list, `requirements.build: [cmake]`; see "vendored-CMake" deep-dive below |
@@ -155,6 +156,38 @@ The shape that works — a `flet-lib*` prebuilt-repackage dep + a small opt-in p
 3. **A minimal `mobile.patch` adds ONE opt-in lever** (an env var the recipe's `script_env` sets, e.g. `IMPERSONATE_FORGE_TARGET: ios|android`) that (a) makes the arch-detect return a synthesized target entry instead of scanning `uname`, and (b) forces the target's static-link recipe (Apple `-force_load`+`-lc++` for iOS, ELF `--whole-archive`+`-lc++` for Android — the Android branch is the one the macOS host gets wrong). Guard it so upstream behaviour is unchanged when the var is unset. **iOS extra:** a static archive built with Apple SecTrust / Apple IDN needs the consuming extension to link `-framework Security -framework CoreFoundation -liconv -licucore` (see `forge-error-catalogue` § iOS undefined `_SecTrust*`/`_iconv`/`_uidna_*`).
 
 **Real example:** branch `curl-cffi` — `recipes/flet-libcurl-impersonate/` (build.sh, `source.strip: 0`) + `recipes/curl-cffi/` (`patches/mobile.patch`, 3 hunks). World-first curl-cffi iOS wheels; on-device 4/4 both platforms, and a real impersonated HTTPS request returns 200 on each. Needed one forge-core change: exposing `source.strip` in `src/forge/schema/meta-schema.yaml` (the code already honored it).
+
+### Shape deep-dive: cffi ABI-mode wrapper of a shared flet-lib (soundfile -> libsndfile)
+
+**When:** the package has **no compiled extension at all** — `soundfile_build.py` does
+`ffibuilder.set_source("_soundfile", None)`, so cffi emits a pure-Python `_soundfile.py`
+and the library is reached entirely through `ffi.dlopen(...)`. PyPI ships a
+`py2.py3-none-any` wheel plus platform wheels that differ only by a bundled `.so`.
+
+It looks like Pattern H and mostly is, with three differences that each cost a cycle:
+
+1. **`ffi.dlopen` is a raw `dlopen(3)`.** It cannot dereference the iOS `.fwork` stub —
+   that lives only in iOS CPython's patched `ctypes/__init__.py`. Resolve through ctypes
+   and hand cffi `CDLL(candidate)._name`. Full mechanism and patch shape in the
+   `forge-error-catalogue`, "A **cffi** ABI-mode wrapper cannot open a `flet-lib*` on iOS".
+2. **A recipe is still required even though nothing compiles**, because the loader's
+   `sys.platform` dispatch (darwin/win32/linux) ends in a bare `raise` on `android`/`ios`.
+   forge's `fix_wheel` retags the pure wheel `cp3XX-cp3XX-<platform>`, which is what makes
+   the patched copy outrank PyPI's `any` wheel at the same version — do not "fix" upstream's
+   own tagging in a patch.
+3. **Build it for the Python `flet build` actually bundles.** A cp312-only wheel loses to
+   PyPI's `py2.py3-none-any` on a 3.14 app with no resolution error at all; the tell is the
+   app's staged `METADATA` missing the `flet-lib*` `Requires-Dist`. See `local-recipe-testing`.
+
+**Optional sub-libraries:** where the native library has them (libsndfile's
+FLAC/Ogg/Vorbis/Opus/mpg123/LAME), build each as a **static PIC** `flet-lib*` and declare
+them `requirements.host_build` of the shared one, which absorbs them into a single `.so`.
+`host` would promote six wheels into every consuming app whose contents already ride inside
+that `.so`. Restrict the iOS export list to the public prefix
+(`-Wl,-exported_symbol,'_sf_*'`) so the absorbed symbols stay hidden the way libsndfile's
+own version script already keeps them on Android — jniLibs is a flat namespace shared with
+every other native wheel. And keep `-Wl,-headerpad_max_install_names` on any hand-linked
+iOS shared image: CMake adds it automatically, a hand `$CC -shared` does not.
 
 ### Naming
 
