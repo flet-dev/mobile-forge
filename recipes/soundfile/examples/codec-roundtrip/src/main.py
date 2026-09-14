@@ -60,39 +60,35 @@ def row_for(result):
 
 def main(page: ft.Page):
     def encode_all():
-        """Run the whole sweep off the UI thread; soundfile releases the GIL."""
+        """The whole sweep. Runs on a worker thread; soundfile releases the GIL."""
+        button.disabled = True
+        spinner.visible = True
+        page.update()
 
-        def work():
-            button.disabled = True
-            spinner.visible = True
-            page.update()
+        results = run_all()
+        table.controls = [
+            ft.Row(
+                controls=[
+                    cell("", 110),
+                    cell("size", 62),
+                    cell("vs raw", 40),
+                    cell("time", 55),
+                    cell("rms err", 55),
+                ]
+            ),
+            ft.Divider(height=1),
+            *(row_for(r) for r in results),
+        ]
 
-            results = run_all()
-            table.controls = [
-                ft.Row(
-                    controls=[
-                        cell("", 110),
-                        cell("size", 62),
-                        cell("vs raw", 40),
-                        cell("time", 55),
-                        cell("rms err", 55),
-                    ]
-                ),
-                ft.Divider(height=1),
-                *(row_for(r) for r in results),
-            ]
+        lossy = next(r for r in results if r["label"] == "MP3" and "waveform" in r)
+        decoded.controls = [
+            ft.Text("decoded MP3", size=11),
+            bars(envelope(lossy["waveform"], BARS), ft.Colors.ORANGE),
+        ]
 
-            lossy = next(r for r in results if r["label"] == "MP3" and "waveform" in r)
-            decoded.controls = [
-                ft.Text("decoded MP3", size=11),
-                bars(envelope(lossy["waveform"], BARS), ft.Colors.ORANGE),
-            ]
-
-            button.disabled = False
-            spinner.visible = False
-            page.update()  # auto-update does not reach background threads
-
-        page.run_thread(work)
+        button.disabled = False
+        spinner.visible = False
+        page.update()  # auto-update does not reach background threads
 
     page.appbar = ft.AppBar(title=ft.Text("soundfile round-trip"), center_title=True)
     page.add(
@@ -108,7 +104,10 @@ def main(page: ft.Page):
                     bars(envelope(signal(), BARS), ft.Colors.BLUE),
                     ft.Row(
                         controls=[
-                            button := ft.Button("Re-encode", on_click=encode_all),
+                            button := ft.Button(
+                                "Re-encode",
+                                on_click=lambda: page.run_thread(encode_all),
+                            ),
                             spinner := ft.ProgressRing(
                                 visible=False, width=18, height=18
                             ),
@@ -123,7 +122,7 @@ def main(page: ft.Page):
             ),
         )
     )
-    encode_all()
+    page.run_thread(encode_all)
 
 
 ft.run(main)
