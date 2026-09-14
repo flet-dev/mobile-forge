@@ -1,0 +1,42 @@
+{% set version = "1.2.2" %}
+
+package:
+  name: flet-libsndfile
+  version: '{{ version }}'
+
+build:
+  number: 1
+
+source:
+  url: https://github.com/libsndfile/libsndfile/releases/download/{{ version }}/libsndfile-{{ version }}.tar.xz
+
+requirements:
+  build:
+    - cmake
+  host_build:
+    # The codec libraries, as static PIC archives folded into libsndfile.so.
+    # host_build, not host: they are link-time only, so consuming apps must not
+    # also download six wheels whose contents already live inside our .so.
+    - flet-libogg 1.3.6
+    - flet-libvorbis 1.3.7
+    - flet-libflac 1.5.0
+    - flet-libopus 1.5.2
+    - flet-libmpg123 1.33.7
+    - flet-libmp3lame 3.100
+
+patches:
+  - security-backports.patch
+
+about:
+  # libsndfile itself is LGPL-2.1-or-later and ships as a replaceable shared
+  # library, which is what keeps that workable for a closed app. The absorbed
+  # archives are all BSD-3-Clause, plus the bundled Apple ALAC codec
+  # (Apache-2.0, src/ALAC/) and the GSM 06.10 codec (src/GSM610/COPYRIGHT,
+  # a bespoke permissive notice with no SPDX identifier -- hence no `AND`
+  # clause for it; the file itself ships). ALAC carries its Apache notice only
+  # in per-file headers, so the licence text is vendored in licenses/.
+  license_file:
+    - COPYING
+    - src/GSM610/COPYRIGHT
+    - licenses/LICENSE.ALAC
+  license: LGPL-2.1-or-later AND BSD-3-Clause AND Apache-2.0

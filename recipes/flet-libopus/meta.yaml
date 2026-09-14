@@ -1,0 +1,20 @@
+{% set version = "1.5.2" %}
+
+package:
+  name: flet-libopus
+  version: '{{ version }}'
+  # Static PIC libopus for flet-libsndfile's Ogg Opus support. Link-time only
+  # -- nothing ships to the device.
+
+build:
+  number: 1
+
+source:
+  url: https://github.com/xiph/opus/releases/download/v{{ version }}/opus-{{ version }}.tar.gz
+
+requirements:
+  build:
+    - cmake
+
+about:
+  license: BSD-3-Clause

@@ -1,0 +1,19 @@
+{% set version = "3.100" %}
+
+package:
+  name: flet-libmp3lame
+  version: '{{ version }}'
+  # Static PIC libmp3lame -- the MP3 *encoder* half of flet-libsndfile's MP3
+  # support (mpg123 is the decoder half; libsndfile needs both or neither).
+  # Link-time only -- nothing ships to the device.
+
+build:
+  number: 1
+
+source:
+  url: https://downloads.sourceforge.net/project/lame/lame/{{ version }}/lame-{{ version }}.tar.gz
+
+about:
+  # COPYING is the LGPL v2 text; every source header adds "or (at your option)
+  # any later version".
+  license: LGPL-2.0-or-later
