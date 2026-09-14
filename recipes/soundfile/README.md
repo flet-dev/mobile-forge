@@ -20,9 +20,6 @@ dependencies = [
 ]
 ```
 
-`numpy` and `cffi` come along as dependencies of `soundfile` itself, and `flet-libsndfile`
-as a dependency of our build. Nothing else to declare, and no `source_packages` entry.
-
 ## Examples
 
 See runnable Flet apps in [`examples/`](examples):

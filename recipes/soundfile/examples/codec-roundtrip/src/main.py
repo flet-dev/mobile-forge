@@ -59,9 +59,7 @@ def row_for(result):
 
 
 def main(page: ft.Page):
-    """Round-trip the generated chord through every container and show the cost."""
-
-    def encode_all(_=None):
+    def encode_all():
         """Run the whole sweep off the UI thread; soundfile releases the GIL."""
 
         def work():
@@ -96,11 +94,6 @@ def main(page: ft.Page):
 
         page.run_thread(work)
 
-    button = ft.Button("Re-encode", on_click=encode_all)
-    spinner = ft.ProgressRing(visible=False, width=18, height=18)
-    table = ft.Column(spacing=2)
-    decoded = ft.Column(spacing=2)
-
     page.appbar = ft.AppBar(title=ft.Text("soundfile round-trip"), center_title=True)
     page.add(
         ft.SafeArea(
@@ -113,10 +106,17 @@ def main(page: ft.Page):
                         size=11,
                     ),
                     bars(envelope(signal(), BARS), ft.Colors.BLUE),
-                    ft.Row(controls=[button, spinner]),
-                    table,
+                    ft.Row(
+                        controls=[
+                            button := ft.Button("Re-encode", on_click=encode_all),
+                            spinner := ft.ProgressRing(
+                                visible=False, width=18, height=18
+                            ),
+                        ]
+                    ),
+                    table := ft.Column(spacing=2),
                     ft.Divider(),
-                    decoded,
+                    decoded := ft.Column(spacing=2),
                     ft.Divider(),
                     ft.Text(f"libsndfile {sf.__libsndfile_version__}", size=11),
                 ],

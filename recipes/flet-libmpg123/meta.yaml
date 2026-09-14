@@ -1,11 +1,11 @@
 {% set version = "1.33.7" %}
 
+# Static PIC libmpg123 -- the MPEG Audio *decoder* half of flet-libsndfile's
+# MP3 support (mp3lame is the encoder half; libsndfile needs both or neither).
+# Link-time only -- nothing ships to the device.
 package:
   name: flet-libmpg123
   version: '{{ version }}'
-  # Static PIC libmpg123 -- the MPEG Audio *decoder* half of flet-libsndfile's
-  # MP3 support (mp3lame is the encoder half; libsndfile needs both or neither).
-  # Link-time only -- nothing ships to the device.
 
 build:
   number: 1

@@ -1,10 +1,10 @@
 {% set version = "1.5.0" %}
 
+# Static PIC libFLAC for flet-libsndfile's FLAC support (native .flac and
+# Ogg-FLAC). Link-time only -- nothing ships to the device.
 package:
   name: flet-libflac
   version: '{{ version }}'
-  # Static PIC libFLAC for flet-libsndfile's FLAC support (native .flac and
-  # Ogg-FLAC). Link-time only -- nothing ships to the device.
 
 build:
   number: 1
