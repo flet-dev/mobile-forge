@@ -1,0 +1,35 @@
+# {% set version = "8.1.2" %}
+package:
+  name: flet-libffmpeg
+  version: '{{ version }}'
+
+build:
+  number: 1
+
+source:
+  # FFmpeg's libav* as SHARED libraries, for the `av` (PyAV) recipe. PyAV 18.x
+  # supports the FFmpeg 8.x ABI and upstream's own wheels are built against
+  # 8.1.2, so the pair is the combination upstream tests.
+  url: https://ffmpeg.org/releases/ffmpeg-{{ version }}.tar.xz
+
+about:
+  # Built WITHOUT --enable-gpl / --enable-nonfree / --enable-version3, so the bulk
+  # of this wheel is LGPL-2.1-or-later. Discovery would also bundle
+  # COPYING.GPLv2/GPLv3/LGPLv3 — notices for code this build does not contain — so
+  # the list is pinned: the LGPL text, LICENSE.md (upstream's own account of which
+  # parts carry which terms), and COPYING.IJG, which build.sh extracts from
+  # libavcodec/jrevdct.c.
+  #
+  # AND IJG, not plain LGPL: libavcodec's jrevdct.c / jfdctfst.c /
+  # jfdctint_template.c are Independent JPEG Group code and are genuinely compiled
+  # in (the MJPEG codec pulls them). LICENSE.md concludes "in combination the LGPL
+  # v2.1+ applies", but the IJG grant adds a condition that survives the
+  # combination and lands on whoever ships the binary — condition (2): an app that
+  # distributes only executables must say in its documentation that it is "based
+  # in part on the work of the Independent JPEG Group". recipes/av/README.md tells
+  # consumers so; the expression is what makes it discoverable from the wheel.
+  license: LGPL-2.1-or-later AND IJG
+  license_file:
+    - COPYING.LGPLv2.1
+    - LICENSE.md
+    - COPYING.IJG

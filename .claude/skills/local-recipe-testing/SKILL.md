@@ -1,6 +1,6 @@
 ---
 name: local-recipe-testing
-description: Run a mobile-forge recipe's wheel ON-DEVICE locally — Android emulator and/or iOS simulator — instead of waiting ~1 hour for a CI mobile-test cycle. Covers the recipe-tester app loop (build wheel → stage → flet build → install → read console.log), and the non-obvious gotchas that each cost a wasted cycle: use forge's stripped dist/ wheel, build the recipe against the SAME Python flet bundles, clear flet's build cache between rebuilds, use a rootable (google_apis, not playstore) arm64 AVD to read the app-private console.log (it's in the app's cache/ dir), give the emulator enough RAM/disk, build ALL THREE iOS slices before `flet build ios-simulator`, use explicit simulator UDIDs when more than one sim is booted, and verify the staged-test COUNT so a silently-failed staging can't replay stale tests as false passes. Also covers forge slice syntax, bundling model assets next to recipe tests, test-only deps via the meta.yaml test.requires field, desktop pre-validation via a sys.modules alias shim, and consumer verify-apps for beyond-pytest validation. USE THIS SKILL when iterating on a recipe's on-device behaviour (import works? functions run? crashes?), reproducing or debugging a CI mobile-test failure locally, or whenever someone says the CI mobile test is too slow to iterate on. Sibling of `new-mobile-recipe` (authoring), `forge-ci` (CI runs), `forge-error-catalogue` (build errors), and `native-recipe-bumps` (version bumps); this one is specifically the fast on-device validation loop. macOS + Apple Silicon assumed (the host this was developed on).
+description: Run a mobile-forge recipe's wheel ON-DEVICE locally — Android emulator and/or iOS simulator — instead of waiting ~1 hour for a CI mobile-test cycle. Covers the recipe-tester app loop (build wheel → stage → flet build → install → read console.log), and the non-obvious gotchas that each cost a wasted cycle: use forge's stripped dist/ wheel, build the recipe against the SAME Python flet bundles, clear flet's build cache between rebuilds, use a rootable (google_apis, not playstore) arm64 AVD to read the app-private console.log (it's in the app's cache/ dir), give the emulator enough RAM/disk, build ALL THREE iOS slices before `flet build ios-simulator`, use explicit simulator UDIDs when more than one sim is booted, verify the staged-test COUNT so a silently-failed staging can't replay stale tests as false passes, and check the built iOS `.app` actually carries your package (a failed site-packages sync still exits 0). Also covers forge slice syntax, bundling model assets next to recipe tests, test-only deps via the meta.yaml test.requires field, desktop pre-validation via a sys.modules alias shim, and consumer verify-apps for beyond-pytest validation. USE THIS SKILL when iterating on a recipe's on-device behaviour (import works? functions run? crashes?), reproducing or debugging a CI mobile-test failure locally, or whenever someone says the CI mobile test is too slow to iterate on. Sibling of `new-mobile-recipe` (authoring), `forge-ci` (CI runs), `forge-error-catalogue` (build errors), and `native-recipe-bumps` (version bumps); this one is specifically the fast on-device validation loop. macOS + Apple Silicon assumed (the host this was developed on).
 ---
 
 # Testing a mobile-forge recipe locally
@@ -37,8 +37,6 @@ cp dist/<recipe>-*-android_24_arm64_v8a.whl /tmp/rt_dist/   # forge's dist/ whee
 ./tests/recipe-tester/stage_recipe.sh <recipe> <version>
 
 # 3. Clear flet's stale bundle (gotcha #3), then build the app.
-#    The recipe-tester targets Flet 0.86 (only there since flet#104), which is NOT
-#    on PyPI yet — pull it from pypi.flet.dev and pin the prerelease (gotcha #13).
 rm -rf tests/recipe-tester/build/site-packages tests/recipe-tester/build/.hash
 cd tests/recipe-tester
 PIP_FIND_LINKS=/tmp/rt_dist \
@@ -76,7 +74,7 @@ rm -rf tests/recipe-tester/build/site-packages tests/recipe-tester/build/.hash
 cd tests/recipe-tester
 PIP_FIND_LINKS="$(realpath ../../dist)" \
   uvx --prerelease allow --with 'flet-cli' --with 'flet' \
-    flet build ios-simulator --yes --python-version 3.12   # 0.86 pin — gotcha #13
+    flet build ios-simulator --yes --python-version 3.12   # 0.86+ — gotcha #13
 
 # 3. Boot any available iPhone sim, install, launch — ALWAYS by explicit UDID
 #    (gotcha #11: `booted` is ambiguous the moment two sims are booted)
@@ -87,7 +85,9 @@ xcrun simctl install "$UDID" build/ios-simulator/recipe-tester.app
 xcrun simctl launch "$UDID" com.flet.recipe-tester
 # NB bundle id: iOS uses a DASH (com.flet.recipe-tester); android package an UNDERSCORE (com.flet.recipe_tester)
 
-# 4. Poll for the sentinel — the container is host-readable, no fixed sleep needed
+# 4. Confirm the bundle really carries your package (gotcha #14), then poll for the
+#    sentinel — the container is host-readable, no fixed sleep needed
+ls build/ios-simulator/recipe-tester.app/serious_python_darwin_serious_python_darwin.bundle/site-packages
 DATA=$(xcrun simctl get_app_container "$UDID" com.flet.recipe-tester data)
 for i in $(seq 1 30); do grep EXIT "$DATA/Library/Caches/console.log" 2>/dev/null && break; sleep 5; done
 ```
@@ -148,6 +148,14 @@ for i in $(seq 1 30); do grep EXIT "$DATA/Library/Caches/console.log" 2>/dev/nul
     fix exists on no branch" claim about work that was sitting on `examples-and-docs`. General
     rule: **a search that returns a surprising negative is a bug until proven otherwise** — spot-check
     one case you are certain about before reporting the absence as evidence.
+
+13. **`--python-version` only exists in flet-cli 0.86+, and `uvx` can hand you 0.85.**
+
+14. **After an iOS build, check the `.app`'s bundled site-packages actually contains your package.** `flet build ios-simulator` reports success and exits 0 even when serious_python's site-packages sync **aborted**, because the failure is not propagated. The plugin's `dist_ios` lives in the shared pub cache, so the SwiftPM resource bundle then ships whatever the last *successful* build of any project left there — an app carrying a different recipe's packages entirely, which on device is an ordinary-looking `ModuleNotFoundError`. One line, worth it every time:
+    ```bash
+    ls build/ios-simulator/<app>.app/serious_python_darwin_serious_python_darwin.bundle/site-packages
+    ```
+    The known cause is an extension linked without `-Wl,-headerpad_max_install_names` (see the `forge-error-catalogue` skill), but the check is cheap and catches the whole class. The Android twin is gotcha #12's `unzip -l build/apk/…`.
 
 ## Model assets & test-only deps
 

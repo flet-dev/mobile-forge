@@ -1,0 +1,16 @@
+[project]
+name = "av-clip-roundtrip"
+version = "1.0.0"
+description = "Encode an MP4 with PyAV, read it back, and show the frames."
+requires-python = ">=3.11"
+
+dependencies = [
+    "flet==0.86.5",
+    "av==18.1.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

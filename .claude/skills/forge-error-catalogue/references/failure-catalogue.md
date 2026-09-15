@@ -330,6 +330,46 @@ flet build ios-simulator --python-version 3.12`) not `uvx` (else
 
 ---
 
+### iOS: `flet build` reports SUCCESS but the `.app` carries **another project's** site-packages (or none) — `reconcile_framework_install_names … larger updated load commands do not fit`
+
+**Symptom:** the build prints "Successfully built your .app bundle" and exits 0, but
+on device the app dies with `ModuleNotFoundError` for the recipe under test. Unpack
+the bundle and its Python tree is from a *different* build entirely:
+
+    <app>.app/serious_python_darwin_serious_python_darwin.bundle/site-packages/
+      -> bitarray/, msgpack/ …   # a previous recipe's packages
+      -> no <your package>/, no _pytest/
+
+`<app>.app/Frameworks/` has the stdlib frameworks but none for your extension
+modules. Found while validating `av` (49 extension modules × 7 FFmpeg dylibs).
+
+**Cause:** `install_name_tool` cannot grow a Mach-O load command in place. serious_python
+rewrites every `@rpath/libavformat.dylib` to `@rpath/opt.lib.libavformat.framework/opt.lib.libavformat`
+— **30 bytes longer** — and setuptools links extensions with no header padding, so it
+fails with `changing install names or rpaths can't be redone … because larger updated
+load commands do not fit`. `reconcile_framework_install_names` correctly treats that as
+fatal (`|| exit 1` in `sync_site_packages.sh`), which aborts the sync **before** it
+writes `dist_ios/site-packages`. That directory lives in the plugin's **shared pub
+cache** (`~/.pub-cache/hosted/pub.dev/serious_python_darwin-<v>/darwin/dist_ios`), so
+SwiftPM then packages whatever the *last successful* build of any project left there.
+`flet build` does not propagate the failure, so nothing is red until the app runs.
+
+**Fix (per-recipe):** link with `-Wl,-headerpad_max_install_names` on the iOS lanes.
+For a PEP 517 / setuptools recipe that is `build.script_env.LDFLAGS` (forge appends to
+LDFLAGS, and distutils' `customize_compiler` appends it to `LDSHARED`); for a `build.sh`
+native lib it goes in the link flags the upstream build system takes (`--extra-ldflags`
+for FFmpeg's configure). CMake recipes add it themselves on Apple platforms, which is
+why pyarrow never hit this. Rule of thumb: **a non-CMake iOS recipe whose extensions
+link more than a couple of bundled dylibs needs the flag.**
+
+**Confirming it is this and not something else:** grep the `-vv` build log for
+`reconcile_framework_install_names` — the failure is printed there in full, tens of
+thousands of lines above the cheerful success banner. And after any iOS build, check
+`ls <app>.app/serious_python_darwin_serious_python_darwin.bundle/site-packages` really
+contains your package before trusting a green build.
+
+---
+
 ### iOS: app builds + launches but **SIGSEGV at launch** in `dyld … runInitializers`, 0-byte `console.log` — an extension runs the Python C-API in a C++ **static initializer**
 
 **Symptom:** same 0-byte `console.log` / crash-before-Python signature as the #223

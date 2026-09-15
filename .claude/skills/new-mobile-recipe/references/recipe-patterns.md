@@ -692,6 +692,51 @@ and `scipy` are the fixed precedents.
 Getting it wrong the safe way costs a download; getting it wrong the unsafe way — moving a lib
 something actually `dlopen`s — is a runtime crash on device, so verify per consumer.
 
+### A `flet-lib*` consumed through `pkg-config` needs relocatable `.pc` files
+
+forge already puts `<cross site-packages>/opt/lib/pkgconfig` on both `PKG_CONFIG_PATH`
+and `PKG_CONFIG_LIBDIR` (`compile_env()` in `build.py`), so a consumer whose `setup.py`
+shells out to `pkg-config` needs **no `script_env` at all** — provided the `flet-lib*`
+ships its `.pc` files and they are relocatable. Most build systems bake absolute paths
+from the staging prefix into all three of `prefix=`, `libdir=` and `includedir=`
+(FFmpeg writes the latter two out in full rather than deriving them), and that prefix
+no longer exists when the wheel is unpacked. Rewrite them in `build.sh`:
+
+```bash
+for pc in "$PREFIX"/lib/pkgconfig/*.pc; do
+    sed -E -e 's|^prefix=.*|prefix=${pcfiledir}/../..|' \
+           -e 's|^libdir=.*|libdir=${prefix}/lib|' \
+           -e 's|^includedir=.*|includedir=${prefix}/include|' \
+           "$pc" > "$pc.tmp" && mv "$pc.tmp" "$pc"
+done
+```
+
+Note this contradicts the usual `flet-lib*` cleanup advice to delete `lib/pkgconfig` —
+delete it only when nothing downstream reads it. **Real example:**
+`recipes/flet-libffmpeg/` → `recipes/av/`.
+
+### iOS: extensions binding several bundled dylibs need `-Wl,-headerpad_max_install_names`
+
+serious_python relocates every bundled dylib into a framework and rewrites each
+`@rpath/lib<X>.dylib` reference to the much longer
+`@rpath/opt.lib.lib<X>.framework/opt.lib.lib<X>`. `install_name_tool` cannot grow a
+load command that has no padding, and the resulting failure aborts the sync **while
+`flet build` still reports success** — see the `forge-error-catalogue` skill for the
+full symptom. CMake adds the flag itself on Apple platforms; setuptools and plain
+`configure` do not, so pass it explicitly on the iOS lanes:
+
+```yaml
+build:
+# {% if sdk != 'android' %}
+  script_env:
+    LDFLAGS: -Wl,-headerpad_max_install_names
+# {% endif %}
+```
+
+and, for the `flet-lib*` underneath, in whatever the upstream build calls its link
+flags (`--extra-ldflags` for FFmpeg). **Real example:** `recipes/av/` +
+`recipes/flet-libffmpeg/`.
+
 ### Version specifiers in requirements
 
 Forge parses `requirements.host` / `requirements.build` strings per `build.py:67-78`:

@@ -1,0 +1,78 @@
+mobile.patch — iOS: preload the FFmpeg dylibs before the first extension import
+
+flet relocates PyAV's 49 extension modules (av/**/*.so) into per-module
+*.framework bundles, but the seven FFmpeg libraries they link via @rpath ship as
+plain dylibs in site-packages/opt/lib, and nothing on an extension module's rpath
+resolves them. This shim preloads all seven with RTLD_GLOBAL (in dependency
+order) before `from av._core import ...` on the first line of the package —
+directly from opt/lib, or by following a "<name>.fwork" marker where a
+serious_python build has relocated one into a framework (serious-python#223) —
+so dyld binds each @rpath reference by the already-loaded image's install-id.
+No-op on Android (DT_NEEDED resolves the libs by basename from the APK jniLibs)
+and on desktop.
+
+--- a/av/__init__.py
++++ b/av/__init__.py
+@@ -1,3 +1,62 @@
++# mobile-forge (iOS): the seven FFmpeg libraries this package's extension modules
++# link (@rpath/libavutil.dylib, @rpath/libavcodec.dylib, ...) ship as plain dylibs
++# in site-packages/opt/lib, and nothing on an extension module's rpath resolves
++# them -- so the `av._core` import below would die with "Library not loaded:
++# @rpath/libavutil.dylib". Preload them with RTLD_GLOBAL, in dependency order,
++# before the first extension import: dyld then satisfies every @rpath reference
++# from the already-loaded image's install-id. Where a serious_python build has
++# relocated a dylib into a *.framework it leaves a "<name>.fwork" text pointer in
++# its place (serious-python#223) -- follow that instead.
++# No-op on Android (the libraries are .so in the APK's jniLibs, resolved by
++# DT_NEEDED basename) and on desktop (no opt/lib beside the package).
++def _preload_ffmpeg() -> None:
++    import ctypes
++    import os
++
++    optlib = os.path.join(
++        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "opt", "lib"
++    )
++    for base in (
++        "libavutil",
++        "libswresample",
++        "libswscale",
++        "libavcodec",
++        "libavformat",
++        "libavfilter",
++        "libavdevice",
++    ):
++        dylib = os.path.join(optlib, base + ".dylib")
++        if os.path.exists(dylib):
++            try:
++                ctypes.CDLL(dylib, mode=ctypes.RTLD_GLOBAL)
++            except OSError:
++                pass
++            continue
++        fwork = os.path.join(optlib, base + ".fwork")
++        if not os.path.exists(fwork):
++            continue
++        with open(fwork) as fp:
++            relative = fp.read().strip()
++        # The pointer is relative to the app bundle, an unknown number of levels
++        # above site-packages; walk up until it resolves.
++        directory = optlib
++        for _ in range(12):
++            directory = os.path.dirname(directory)
++            candidate = os.path.join(directory, relative)
++            if os.path.exists(candidate):
++                try:
++                    ctypes.CDLL(candidate, mode=ctypes.RTLD_GLOBAL)
++                except OSError:
++                    pass
++                break
++
++
++try:
++    _preload_ffmpeg()
++except Exception:
++    pass
++del _preload_ffmpeg
++
+ # MUST import the core before anything else in order to initialize the underlying
+ # library that is being wrapped.
+ from av._core import time_base, library_versions, ffmpeg_version_info

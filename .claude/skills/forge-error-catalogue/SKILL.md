@@ -14,7 +14,8 @@ description: >-
   schema errors, meson source-tree include / sanity-check breakage,
   duplicated patch hunks, iOS flatc MACOSX_BUNDLE, .dylib-vs-.so staging,
   libc++_shared, config.sub apple-ios, ctypes "Unable to find ... shared
-  library", PT_LOAD 16KB alignment, lazy_loader "non-existent stub" crashes
+  library", a green iOS build that silently ships another project's site-packages
+  (headerpad), PT_LOAD 16KB alignment, lazy_loader "non-existent stub" crashes
   (stripped *.pyi), the Flet 0.86 Android sitepackages.zip class (NotADirectoryError
   on a bundled data file -> extract_packages, untagged native .so
   ModuleNotFoundError -> forge ABI-tag, ctypes-by-__file__ loaders -> find_spec /
@@ -120,7 +121,12 @@ instead of re-deriving it.
   of interdependent bundled dylibs (pyarrow, llama)** → **serious_python #223**:
   reconcile framework install-ids + `@rpath` deps to the dotted-framework paths
   (`reconcile_framework_install_names` in darwin scripts; needs an sp release for CI;
-  local sp fix cc28d13 verified pyarrow 4/4 on-sim).
+  local sp fix cc28d13 verified pyarrow 4/4 on-sim). **And its follow-on:** that same
+  reconcile pass FAILS on an extension linked without header padding
+  (`larger updated load commands do not fit`), which aborts the sync and leaves
+  `flet build` reporting success while shipping the shared pub-cache `dist_ios`'s
+  packages from some *other* project → **`-Wl,-headerpad_max_install_names`** on the
+  iOS lanes of any non-CMake recipe binding several bundled dylibs (av).
 - **Recipe-tester app failures** — host-build (`pg_config` etc.), pypi.flet.dev
   index precedence, "no matching distribution" (incl. **ios-simulator also
   resolving the iphoneos wheel**), **sdist-only pure-python dep → pip backtrack**
