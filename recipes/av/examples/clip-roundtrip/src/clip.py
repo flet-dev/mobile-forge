@@ -1,6 +1,4 @@
-"""Everything in this example that touches PyAV.
-
-Writes a short MP4 with a video and an audio stream, reads it back to describe
+"""Writes a short MP4 with a video and an audio stream, reads it back to describe
 what actually landed in the file, and pulls stills out of it as JPEG bytes an
 `ft.Image` can display.
 """

@@ -23,15 +23,7 @@ def row(label, value):
 
 
 def main(page: ft.Page):
-    """Encode an MP4 with PyAV, read it back, and put the frames on screen.
-
-    The round trip is the point: the same wheel muxes the file, re-opens it to
-    report what the container actually holds, then seeks into it and re-encodes
-    single frames as JPEG — the only way to get a decoded frame into an
-    ft.Image, which takes encoded bytes rather than raw pixels.
-    """
-
-    def run(e=None):
+    def run():
         """Lock the button, raise the spinner, and hand the work to a thread."""
         button.disabled = True
         spinner.visible = True

@@ -37,8 +37,6 @@ cp dist/<recipe>-*-android_24_arm64_v8a.whl /tmp/rt_dist/   # forge's dist/ whee
 ./tests/recipe-tester/stage_recipe.sh <recipe> <version>
 
 # 3. Clear flet's stale bundle (gotcha #3), then build the app.
-#    The recipe-tester targets Flet 0.86 (only there since flet#104), now stable on
-#    PyPI — check `flet --version` is 0.86+ before trusting the build (gotcha #13).
 rm -rf tests/recipe-tester/build/site-packages tests/recipe-tester/build/.hash
 cd tests/recipe-tester
 PIP_FIND_LINKS=/tmp/rt_dist \
@@ -151,7 +149,7 @@ for i in $(seq 1 30); do grep EXIT "$DATA/Library/Caches/console.log" 2>/dev/nul
     rule: **a search that returns a surprising negative is a bug until proven otherwise** — spot-check
     one case you are certain about before reporting the absence as evidence.
 
-13. **`--python-version` only exists in flet-cli 0.86+, and `uvx` can hand you 0.85.** Flet 0.86 is stable on PyPI now, so `--prerelease allow` is harmless but no longer required. The trap is the invocation: `uvx --with flet-cli --with flet flet …` infers the *tool* package from the command name, and a stale uv tool cache can resolve `flet` 0.85.2 — whose CLI has no `--python-version` and which pins serious_python **1.0.0** (no #223 reconcile, so every iOS recipe with interdependent dylibs would fail). It exits with `flet: error: unrecognized arguments: --python-version`, which reads like a flet bug rather than a resolution problem. Check `uvx … flet --version` first; `uvx --from flet-cli flet …` resolves unambiguously. For the record, the template pin per release: 0.85.2 → serious_python 1.0.0, 0.86.0 → 4.3.2, 0.86.1 → 4.3.3, 0.86.5 → 4.5.1 (`curl -sL https://github.com/flet-dev/flet/releases/download/v<ver>/flet-build-template.zip` then grep the pubspec).
+13. **`--python-version` only exists in flet-cli 0.86+, and `uvx` can hand you 0.85.**
 
 14. **After an iOS build, check the `.app`'s bundled site-packages actually contains your package.** `flet build ios-simulator` reports success and exits 0 even when serious_python's site-packages sync **aborted**, because the failure is not propagated. The plugin's `dist_ios` lives in the shared pub cache, so the SwiftPM resource bundle then ships whatever the last *successful* build of any project left there — an app carrying a different recipe's packages entirely, which on device is an ordinary-looking `ModuleNotFoundError`. One line, worth it every time:
     ```bash
