@@ -1,0 +1,22 @@
+{% set version = "1.3.7" %}
+
+package:
+  name: flet-libvorbis
+  version: '{{ version }}'
+  # Static PIC archives (vorbis + vorbisenc + vorbisfile) for flet-libsndfile's
+  # Ogg Vorbis support. Link-time only -- nothing ships to the device.
+
+build:
+  number: 1
+
+source:
+  url: https://github.com/xiph/vorbis/releases/download/v{{ version }}/libvorbis-{{ version }}.tar.gz
+
+requirements:
+  build:
+    - cmake
+  host_build:
+    - flet-libogg 1.3.6
+
+about:
+  license: BSD-3-Clause

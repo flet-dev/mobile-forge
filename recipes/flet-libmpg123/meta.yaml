@@ -1,0 +1,18 @@
+{% set version = "1.33.7" %}
+
+# Static PIC libmpg123 -- the MPEG Audio *decoder* half of flet-libsndfile's
+# MP3 support (mp3lame is the encoder half; libsndfile needs both or neither).
+# Link-time only -- nothing ships to the device.
+package:
+  name: flet-libmpg123
+  version: '{{ version }}'
+
+build:
+  number: 1
+
+source:
+  url: https://www.mpg123.de/download/mpg123-{{ version }}.tar.bz2
+
+about:
+  # No "or later": COPYING and every source header name LGPL 2.1 flat.
+  license: LGPL-2.1-only
