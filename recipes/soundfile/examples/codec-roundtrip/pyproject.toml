@@ -1,0 +1,16 @@
+[project]
+name = "soundfile-codec-roundtrip"
+version = "1.0.0"
+description = "Encodes a generated chord to every container libsndfile supports and decodes it back."
+requires-python = ">=3.12"
+
+dependencies = [
+    "flet==0.86.5",
+    "soundfile==0.14.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

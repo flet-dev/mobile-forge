@@ -1,0 +1,24 @@
+{% set libsndfile_version = "1.2.2" %}
+
+package:
+  name: soundfile
+  version: "0.14.0"
+
+build:
+  number: 1
+
+requirements:
+  build:
+    # setup.py-only sdist (no [build-system] table) -- seed the legacy
+    # setuptools backend, plus the cffi that setup.py's `cffi_modules` hook
+    # needs to generate the ABI-mode _soundfile.py.
+    - setuptools
+    - cffi
+  host:
+    # soundfile is pure Python: it dlopens libsndfile through cffi at import
+    # time (see mobile.patch). Ship the library -- fix_wheel promotes this to
+    # a Requires-Dist so the app bundles the platform .so.
+    - flet-libsndfile {{ libsndfile_version }}
+
+patches:
+  - mobile.patch

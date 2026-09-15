@@ -1,0 +1,29 @@
+{% set version = "1.5.0" %}
+
+# Static PIC libFLAC for flet-libsndfile's FLAC support (native .flac and
+# Ogg-FLAC). Link-time only -- nothing ships to the device.
+package:
+  name: flet-libflac
+  version: '{{ version }}'
+
+build:
+  number: 1
+
+source:
+  url: https://github.com/xiph/flac/releases/download/{{ version }}/flac-{{ version }}.tar.xz
+
+requirements:
+  build:
+    - cmake
+  host_build:
+    - flet-libogg 1.3.6
+
+patches:
+  - android-api-level.patch
+
+about:
+  # Only libFLAC is built here. The GPL-2.0 arm of FLAC's split licence covers
+  # the command-line tools (BUILD_PROGRAMS=OFF), which this wheel does not
+  # contain; the library itself is BSD-3-Clause (COPYING.Xiph).
+  license_file: COPYING.Xiph
+  license: BSD-3-Clause

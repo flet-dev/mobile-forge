@@ -1,0 +1,37 @@
+Read the Android API level from the variable the NDK toolchain actually sets.
+
+FLAC disables fseeko/ftello on 32-bit Android "before API 24" and reads the API
+level from CMAKE_SYSTEM_VERSION. That only works under CMake's built-in Android
+support; the NDK's own android.toolchain.cmake -- which is what every recipe
+here uses -- pins CMAKE_SYSTEM_VERSION to 1 and reports the level in
+ANDROID_PLATFORM_LEVEL instead. So the test fires at every API level, and on
+armeabi-v7a compat.h's `#define fseeko fseek` then collides with bionic's own
+64-bit-off_t declaration (forge compiles with _FILE_OFFSET_BITS=64):
+
+    stdio.h:216:5: error: conflicting types for 'fseek'
+    compat.h:67:16: note: expanded from macro 'fseeko'
+
+arm64-v8a and x86_64 escape only because the processor test does not match them.
+
+diff -ruN fa/CMakeLists.txt fb/CMakeLists.txt
+--- fa/CMakeLists.txt	2025-02-10 15:20:26
++++ fb/CMakeLists.txt	2026-09-14 21:42:44
+@@ -122,7 +122,17 @@
+ endif()
+ 
+ 
+-if(ANDROID AND CMAKE_SYSTEM_VERSION VERSION_LESS 24 AND (CMAKE_SYSTEM_PROCESSOR MATCHES "i686" OR CMAKE_SYSTEM_PROCESSOR MATCHES "armv7-a"))
++if(ANDROID AND DEFINED ANDROID_PLATFORM_LEVEL)
++    # The NDK's own android.toolchain.cmake pins CMAKE_SYSTEM_VERSION to 1 and
++    # reports the real API level in ANDROID_PLATFORM_LEVEL; only CMake's built-in
++    # Android support puts the API level in CMAKE_SYSTEM_VERSION. Read whichever
++    # is meaningful, or the test below disables fseeko at every API level.
++    set(FLAC_ANDROID_API_LEVEL ${ANDROID_PLATFORM_LEVEL})
++else()
++    set(FLAC_ANDROID_API_LEVEL ${CMAKE_SYSTEM_VERSION})
++endif()
++
++if(ANDROID AND FLAC_ANDROID_API_LEVEL VERSION_LESS 24 AND (CMAKE_SYSTEM_PROCESSOR MATCHES "i686" OR CMAKE_SYSTEM_PROCESSOR MATCHES "armv7-a"))
+     # fseeko/ftello may link, but it's not usable before Android API 24 on 32-bit Android
+     # https://android.googlesource.com/platform/bionic/+/main/docs/32-bit-abi.md
+     message(STATUS "Disabling fseeko/ftello for 32-bit Android before API 24")

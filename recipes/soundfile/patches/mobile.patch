@@ -1,0 +1,73 @@
+Make soundfile find libsndfile on Flet's mobile runtimes.
+
+soundfile is pure Python: it dlopens libsndfile through cffi at import time.
+Its loader knows darwin/win32/linux only, so on Android (sys.platform
+'android') and iOS ('ios') every branch misses, ctypes.util.find_library()
+returns None -- there is no ld cache or compiler to consult -- and the chain
+ends in a bare `raise`: `import soundfile` fails outright.
+
+Wrap find_library() so that, on those two platforms only, it also looks for the
+library flet-libsndfile ships. serious-python surfaces it as an Android jniLibs
+`libsndfile.so` (loadable by bare soname) or, on iOS, an embedded framework
+plus a `libsndfile.fwork` text pointer beside the wheel's opt/lib. cffi's
+dlopen is the raw dlopen(3) and cannot dereference a .fwork, so the lookup goes
+through ctypes -- iOS CPython patches CDLL to follow the pointer -- and returns
+the path ctypes settled on for cffi to open. Everything downstream of
+find_library() is upstream's, unchanged.
+
+diff -ruN pa/soundfile.py pb/soundfile.py
+--- pa/soundfile.py	2026-06-06 10:55:35
+diff -ruN pa/soundfile.py pb/soundfile.py
+--- pa/soundfile.py	2026-06-06 10:55:35
++++ pb/soundfile.py	2026-09-14 20:55:33
+@@ -14,7 +14,7 @@
+ import sys as _sys
+ import threading as _threading
+ from collections.abc import Generator
+-from ctypes.util import find_library as _find_library
++from ctypes.util import find_library as _ctypes_find_library
+ from os import SEEK_CUR, SEEK_END, SEEK_SET
+ from typing import Any, BinaryIO, Final, Literal, TypeAlias
+ 
+@@ -158,6 +158,41 @@
+     'AVERAGE': 1,
+     'VARIABLE': 2,
+ }
++
++
++def _find_library(name: str) -> str | None:
++    """Locate a shared library by name, extended for Flet's mobile runtimes.
++
++    `ctypes.util.find_library()` has no ld cache or compiler to consult on
++    Android or iOS and always returns None there, so the fallbacks below --
++    which only know darwin/win32/linux -- end in a bare `raise` and
++    `import soundfile` dies. The flet-libsndfile wheel ships libsndfile, and
++    serious-python surfaces it as an Android jniLibs `libsndfile.so` or, on
++    iOS, an embedded framework plus a `libsndfile.fwork` text pointer beside
++    the wheel's opt/lib. cffi's dlopen is the raw dlopen(3) and cannot
++    dereference a .fwork, so resolution goes through ctypes -- iOS CPython
++    patches `CDLL` to follow the pointer -- and cffi is handed the path ctypes
++    settled on.
++    """
++    path = _ctypes_find_library(name)
++    if path is not None or _sys.platform not in ('android', 'ios'):
++        return path
++
++    import ctypes as _ctypes
++
++    _optlib = _os.path.join(
++        _os.path.dirname(_os.path.abspath(__file__)), 'opt', 'lib')
++    for _candidate in (
++        f'lib{name}.so',                              # Android jniLibs, by soname
++        _os.path.join(_optlib, f'lib{name}.fwork'),   # iOS embedded framework
++        _os.path.join(_optlib, f'lib{name}.so'),      # not relocated (either platform)
++    ):
++        try:
++            return _ctypes.CDLL(_candidate)._name
++        except OSError:
++            continue
++    return None
++
+ 
+ try:  # packaged lib (in _soundfile_data which should be on python path)
+     if _sys.platform == 'darwin':

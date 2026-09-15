@@ -89,6 +89,8 @@ instead of re-deriving it.
   transient/scattered in CI where a rerun clears it). **A vendored lib built by
   setup.py's OWN cmake call** (arg list hardcoded, so `CMAKE_ARGS` does nothing) →
   green host-configured library, fix by patching in a `FORGE_CMAKE_ARGS` extend.
+  **`conflicting types for 'fseek'` from a project's own `compat.h`, 32-bit Android only →
+  the NDK toolchain pins `CMAKE_SYSTEM_VERSION` to 1; read `ANDROID_PLATFORM_LEVEL`**.
 - **Runtime failures** (device/emulator/simulator) — **the Flet 0.86 Android
   `sitepackages.zip` class** (its umbrella entry explains "why only now"):
   `NotADirectoryError` on a bundled data file → **`extract_packages`** meta field;
