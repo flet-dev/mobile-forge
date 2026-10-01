@@ -1,0 +1,32 @@
+package:
+  name: vl-convert-python
+  version: "2.0.0rc7"
+  # v8x ships its V8 API bindings pre-generated for 64-bit targets, with
+  # compile-time size asserts that cannot hold where pointers are 4 bytes.
+  excluded_arches: [armeabi-v7a]
+
+build:
+  number: 1
+  script_env:
+    _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
+
+requirements:
+  build:
+    - cmake
+
+patches:
+  - mobile.patch
+
+crate_patches:
+  deno_core:
+    - deno_core.patch
+  deno_fs:
+    - deno_fs.patch
+  deno_io:
+    - deno_io.patch
+  deno_node:
+    - deno_node.patch
+  deno_os:
+    - deno_os.patch
+  deno_signals:
+    - deno_signals.patch

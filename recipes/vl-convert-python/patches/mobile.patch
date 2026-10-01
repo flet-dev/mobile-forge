@@ -1,0 +1,156 @@
+mobile.patch: run vl-convert on QuickJS instead of V8.
+
+vl-convert executes Vega and Vega-Lite inside Deno. Deno's default engine is V8,
+which has no Android build at all and only jitless arm64 iOS builds, and whose
+startup snapshot (made at build time by a host V8) cannot be loaded by a V8
+built for another configuration. deno_core 0.411 can instead run on QuickJS-ng
+through its deno_v8 facade (the `quickjs` feature, backed by the v8x crate): a
+plain C interpreter that cross-compiles like any -sys crate and needs no JIT.
+
+1. Cargo.toml: deno_core with `quickjs` in place of its default `v8`.
+
+2. vl-convert-rs: boot without a snapshot. QuickJS cannot load a V8 snapshot,
+   so build.rs is swapped for forge_build.rs, which writes the empty snapshot
+   and residual-source tables lib.rs includes; the converter passes
+   `startup_snapshot: None`, and deno_runtime gets `transpile` so it can strip
+   the TypeScript in its extension sources at startup. Dropping build.rs also
+   drops its host-side deno_runtime build and V8 download.
+
+3. vl-convert-rs: aws-lc-sys 0.40 (pulled in by Deno's crypto crates) ships
+   pregenerated bindings for Android arm64 only; enable its `bindgen` feature
+   for every mobile target.
+
+4. .cargo/config.toml + .cargo/cross.cmake: v8x builds WAMR (QuickJS's
+   WebAssembly backend) with a bare `cmake` call that would configure for the
+   build host. CMake reads CMAKE_TOOLCHAIN_FILE from the environment; cargo's
+   [env] sets it for build scripts, and the toolchain file keys off the TARGET
+   triple cargo gives them, so host builds are unaffected.
+
+diff -ruN a/.cargo/config.toml b/.cargo/config.toml
+--- a/.cargo/config.toml
++++ b/.cargo/config.toml
+@@ -0,0 +1,2 @@
++[env]
++CMAKE_TOOLCHAIN_FILE = { value = ".cargo/cross.cmake", relative = true }
+diff -ruN a/.cargo/cross.cmake b/.cargo/cross.cmake
+--- a/.cargo/cross.cmake
++++ b/.cargo/cross.cmake
+@@ -0,0 +1,38 @@
++# Cross toolchain for CMake projects driven by a Rust build script. v8x builds
++# WAMR with a bare `cmake` call, which would otherwise configure for the build
++# host. $ENV{TARGET} is the Rust target triple cargo gives the build script;
++# host-side builds match neither branch and stay native.
++set(_forge_target "$ENV{TARGET}")
++
++if(_forge_target MATCHES "-linux-android")
++  if(_forge_target MATCHES "^aarch64-")
++    set(ANDROID_ABI arm64-v8a)
++  elseif(_forge_target MATCHES "^x86_64-")
++    set(ANDROID_ABI x86_64)
++  elseif(_forge_target MATCHES "^i686-")
++    set(ANDROID_ABI x86)
++  else()
++    set(ANDROID_ABI armeabi-v7a)
++  endif()
++  if(DEFINED ENV{ANDROID_API_LEVEL})
++    set(ANDROID_PLATFORM "android-$ENV{ANDROID_API_LEVEL}")
++  else()
++    set(ANDROID_PLATFORM android-24)
++  endif()
++  set(WAMR_BUILD_PLATFORM android CACHE STRING "")
++  include("$ENV{NDK_ROOT}/build/cmake/android.toolchain.cmake")
++elseif(_forge_target MATCHES "-apple-ios")
++  set(CMAKE_SYSTEM_NAME iOS)
++  if(_forge_target MATCHES "-sim$" OR _forge_target MATCHES "^x86_64-")
++    set(CMAKE_OSX_SYSROOT iphonesimulator)
++  else()
++    set(CMAKE_OSX_SYSROOT iphoneos)
++  endif()
++  if(_forge_target MATCHES "^aarch64-")
++    set(CMAKE_OSX_ARCHITECTURES arm64)
++  else()
++    set(CMAKE_OSX_ARCHITECTURES x86_64)
++  endif()
++  set(CMAKE_OSX_DEPLOYMENT_TARGET 13.0)
++  set(WAMR_BUILD_PLATFORM darwin CACHE STRING "")
++endif()
+diff -ruN a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -32,7 +32,7 @@
+ # Deno dependencies - versions correspond to Deno v2.9.6
+ deno_runtime = "0.266.0"
+ node_resolver = "0.96.0"
+-deno_core = "0.411.0"
++deno_core = { version = "0.411.0", default-features = false, features = ["quickjs", "reactor-tokio"] }
+ deno_error = "0.7.1"
+ deno_graph = { version = "0.111.0", default-features = false, features = ["swc"] }
+ deno_ast = { version = "0.53.3", features = ["bundler", "codegen", "transforms", "transpiling"] }
+diff -ruN a/vl-convert-rs/Cargo.toml b/vl-convert-rs/Cargo.toml
+--- a/vl-convert-rs/Cargo.toml
++++ b/vl-convert-rs/Cargo.toml
+@@ -8,6 +8,7 @@
+ repository.workspace = true
+ description = "Convert Vega-Lite, Vega, and SVG input to static and interactive formats"
+ keywords = ["Visualization", "Vega", "Vega-Lite"]
++build = "forge_build.rs"
+ 
+ [package.metadata.docs.rs]
+ # Compile the host build script with this cfg so it can avoid linking V8.
+@@ -22,7 +23,7 @@
+ vl-convert-google-fonts = { workspace = true, features = ["fontdb"] }
+ 
+ arc-swap = "1.9"
+-deno_runtime = { workspace = true }
++deno_runtime = { workspace = true, features = ["transpile"] }
+ deno_core = { workspace = true }
+ deno_error = { workspace = true }
+ node_resolver = { workspace = true }
+@@ -72,6 +73,9 @@
+ [target.'cfg(windows)'.build-dependencies]
+ winapi = { version = "0.3", features = ["std"] }
+ 
++[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
++aws-lc-sys = { version = "=0.40.0", features = ["bindgen"] }
++
+ [dev-dependencies]
+ rstest = { workspace = true }
+ dssim = { workspace = true }
+@@ -81,11 +85,3 @@
+ [[bench]]
+ name = "scenegraph_scatter"
+ harness = false
+-
+-[build-dependencies]
+-deno_core = { workspace = true }
+-deno_error = { workspace = true }
+-# Need "snapshot" feature to access deno_runtime::snapshot::create_runtime_snapshot
+-deno_runtime = { workspace = true, features = ["snapshot"] }
+-# Canvas 2D Deno extension - used in snapshot creation
+-vl-convert-canvas2d-deno = { workspace = true }
+diff -ruN a/vl-convert-rs/forge_build.rs b/vl-convert-rs/forge_build.rs
+--- a/vl-convert-rs/forge_build.rs
++++ b/vl-convert-rs/forge_build.rs
+@@ -0,0 +1,10 @@
++fn main() {
++    let out_dir = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
++    std::fs::write(out_dir.join("VL_CONVERT_SNAPSHOT.bin"), []).unwrap();
++    std::fs::write(
++        out_dir.join("VL_CONVERT_RESIDUAL_SOURCES.rs"),
++        "pub(crate) static VL_CONVERT_RESIDUAL_LAZY_JS: &[(&str, &str)] = &[];\n\
++         pub(crate) static VL_CONVERT_RESIDUAL_LAZY_ESM: &[(&str, &str)] = &[];\n",
++    )
++    .unwrap();
++}
+diff -ruN a/vl-convert-rs/src/converter/inner/mod.rs b/vl-convert-rs/src/converter/inner/mod.rs
+--- a/vl-convert-rs/src/converter/inner/mod.rs
++++ b/vl-convert-rs/src/converter/inner/mod.rs
+@@ -189,7 +189,7 @@
+                 // Runtime extension for worker-local JSON/msgpack transfer ops.
+                 super::vl_convert_runtime::init(),
+             ],
+-            startup_snapshot: Some(crate::VL_CONVERT_SNAPSHOT),
++            startup_snapshot: None,
+             residual_lazy_js_sources: crate::VL_CONVERT_RESIDUAL_LAZY_JS,
+             residual_lazy_esm_sources: crate::VL_CONVERT_RESIDUAL_LAZY_ESM,
+             create_params,

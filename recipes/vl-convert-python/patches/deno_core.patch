@@ -1,0 +1,47 @@
+deno_core 0.411.0: errno on Android and iOS.
+
+uv_compat/tty.rs reads errno through a per-platform extern and has a
+compile_error!() for every OS but macOS and Linux. iOS uses Darwin's __error();
+Android's bionic exposes __errno().
+
+diff -ruN a/uv_compat/tty.rs b/uv_compat/tty.rs
+--- a/uv_compat/tty.rs
++++ b/uv_compat/tty.rs
+@@ -381,7 +381,7 @@
+   }
+ 
+   /// Get a pointer to the thread-local errno value.
+-  #[cfg(target_os = "macos")]
++  #[cfg(any(target_os = "macos", target_os = "ios"))]
+   fn errno_location() -> *mut c_int {
+     unsafe extern "C" {
+       fn __error() -> *mut c_int;
+@@ -389,6 +389,14 @@
+     unsafe { __error() }
+   }
+ 
++  #[cfg(target_os = "android")]
++  fn errno_location() -> *mut c_int {
++    unsafe extern "C" {
++      fn __errno() -> *mut c_int;
++    }
++    unsafe { __errno() }
++  }
++
+   #[cfg(target_os = "linux")]
+   fn errno_location() -> *mut c_int {
+     unsafe extern "C" {
+@@ -397,7 +405,12 @@
+     unsafe { __errno_location() }
+   }
+ 
+-  #[cfg(not(any(target_os = "macos", target_os = "linux")))]
++  #[cfg(not(any(
++    target_os = "macos",
++    target_os = "ios",
++    target_os = "linux",
++    target_os = "android"
++  )))]
+   fn errno_location() -> *mut c_int {
+     compile_error!(
+       "errno_location not implemented for this platform — \
