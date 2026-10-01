@@ -1,0 +1,16 @@
+[project]
+name = "lz4-log-archive"
+version = "1.0.0"
+description = "Streams a generated app log into an .lz4 file at three levels and verifies the round trip."
+requires-python = ">=3.12"
+
+dependencies = [
+    "flet==0.86.5",
+    "lz4==4.4.5",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

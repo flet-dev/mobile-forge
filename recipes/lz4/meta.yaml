@@ -1,0 +1,11 @@
+package:
+  name: lz4
+  version: "4.4.5"
+
+build:
+  number: 1
+  script_env:
+    # Always compile the liblz4 the sdist vendors. setup.py otherwise links any
+    # liblz4 >= 1.7.5 that pkg-config can see, turning the self-contained wheel
+    # into one with a runtime library dependency nothing would ship.
+    PYLZ4_USE_SYSTEM_LZ4: "0"
