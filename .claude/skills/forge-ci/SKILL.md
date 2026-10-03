@@ -185,6 +185,12 @@ gh run download <run-id> --repo <fork> -D artifacts/
 cat artifacts/test-py3.12-<platform>-<pkg>-*/console.log
 ```
 
+`gh api …/jobs/<id>/logs` may refuse with *"the response contains terminal escape
+sequences"* and write nothing — add `--allow-escape-sequences`, or a grep over the result
+reports a silent, false negative. console.log does not print the interpreter, so after a
+`mobile_test_pythons=ALL` run confirm each leg was genuine from its job log:
+`grep -oE -- '--python-version [0-9.]+|<pkg>-[^ ]*-9999-cp3[0-9]+[^ ]*\.whl'`.
+
 A missing console.log artifact for a failed 3.12 job means the job died
 *before* the device test — almost always at recipe-tester packaging
 (resolution: see Chains) rather than on the device.

@@ -217,6 +217,15 @@ It verifies:
 
 If any check fails, the script prints what to do. **The one non-trivial fix has its own script:**
 
+### Trap: a truncated support tarball is reused silently
+
+`setup.sh` skips the download whenever `downloads/python-<plat>-mobile-forge-<ver>.tar.gz`
+exists, and an interrupted `curl` (killed shell, slow link) leaves a partial file behind
+that the next run extracts as far as it goes. Found 2026-10-01: a main-checkout iOS 3.14.6
+tarball at 34 MB of 296 MB. Before trusting a cached tarball, compare it with the release:
+`curl -sIL <url> | grep -i content-length` against `stat -f%z`. On a slow link, fetch with
+parallel `curl -r` ranges and concatenate, then let `setup.sh` find the complete file.
+
 ### Fix: NDK install (one-time)
 
 Mobile-forge pins NDK r27d. If `$NDK_HOME` is empty or points at a wrong version, run:
@@ -543,6 +552,29 @@ runner itself (EXIT sentinel, meta.yaml `test.requires` / `extract_packages` han
 what's committed vs generated).
 
 `>>>>>>>>>> EXIT 0 <<<<<<<<<<` in console.log on both platforms = ready to ship.
+
+### Audit the consumer README and example before the PR
+
+Every sentence in `recipes/<name>/README.md` and the example is a claim a bump can break,
+and plausible ones are often wrong. An adversarial claim audit of lz4 (one skeptic per
+claim group, each told to refute with source quotes and runs against the sdist, PyPI's
+desktop wheel and the reference tools) turned up defects that a green CI could not:
+
+- **Upstream constants can overstate the library.** python-lz4 exports
+  `COMPRESSIONLEVEL_MAX = 16`, but the vendored liblz4 clamps HC at 12, so levels 13–16
+  produce byte-identical output. Check a "max" against the vendored C, not the binding.
+- **An example with several buttons and `page.run_thread` races itself.** The pool runs
+  workers concurrently, so a second tap mid-run overlapped the first on a shared file and
+  failed it every time. Disabling the controls in the handler is **not enough**: on an iOS
+  simulator two taps reached Python 11 ms apart, before the `disabled` patch reached
+  Flutter, and the race still fired. Guard the handler itself —
+  `if not busy.acquire(blocking=False): return`, release at the end of the worker — and
+  disable the controls for the visual cue (`recipes/lz4/examples/log-archive`).
+- **"Stateful object, one per thread" understates it** when the binding mutates the native
+  context with the GIL released: sharing an `LZ4FrameCompressor` crashed the interpreter.
+- **Prose that says "streams" needs code that streams** — one `write()` of the whole
+  buffer is not it, and neither is a test that never calls `write()` twice.
+- **Run flake8 over the example** (`--config .flake8`); E741 slipped through review.
 
 ### Wheel hygiene checklist (before commit)
 

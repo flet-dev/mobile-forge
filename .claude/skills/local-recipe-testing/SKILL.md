@@ -92,6 +92,27 @@ DATA=$(xcrun simctl get_app_container "$UDID" com.flet.recipe-tester data)
 for i in $(seq 1 30); do grep EXIT "$DATA/Library/Caches/console.log" 2>/dev/null && break; sleep 5; done
 ```
 
+## Shortcut: the consumer example pass on CI's wheels
+
+Once a CI run is green, its `wheels-py3.X-<platform>-<pkg>-*` artifacts are the exact
+wheels the device tests used. Flatten them into one find-links dir and the example app
+builds with **no local forge env at all** — no support tarballs, no NDK, no `forge` run:
+
+```bash
+gh run download <run-id> --repo <fork> -p 'wheels-*' -D ci/
+mkdir ci/findlinks && cp ci/wheels-*/*.whl ci/findlinks/
+cd recipes/<pkg>/examples/<example>
+PIP_FIND_LINKS=/abs/path/ci/findlinks uv run flet build apk          # or ios-simulator
+```
+
+flet 0.86.5 defaults to Python 3.14, so the run must include the 3.14 leg. For a package
+that is on **no** index yet, iOS per-arch staging honours find-links (lz4, 2026-10-01 —
+contrast gotcha #10, where a same-version published wheel wins). To read the app's own
+output without racing a screenshot against the update, the Flet patch log carries every
+control value: `xcrun simctl spawn "$UDID" log show --last 2m --style compact --predicate
+'process == "<app-name>"'`. A simulator app's files are host-readable under
+`xcrun simctl get_app_container "$UDID" <bundle-id> data`.
+
 ### forge slice syntax (quick reference)
 
 `android:arm64-v8a` | `android:x86_64` | `android:armeabi-v7a` | `iphonesimulator:arm64` | `iphonesimulator:x86_64` | `iphoneos:arm64` — the first token is the **SDK**, not the OS. `forge iOS:arm64` dies with a raw `KeyError: 'iOS'` (only the bare-platform forms `forge android` / `forge iOS` take the OS name, and those build every arch).
@@ -115,6 +136,11 @@ for i in $(seq 1 30); do grep EXIT "$DATA/Library/Caches/console.log" 2>/dev/nul
    sed -i '' 's/hw.ramSize=.*/hw.ramSize=6144/' "$cfg" 2>/dev/null || echo 'hw.ramSize=6144' >> "$cfg"
    ```
    (`aosp_atd` is rootable but headless — it can't run a Flet GUI app, so don't use it here.)
+   Launched from a non-login shell the emulator dies with *"Cannot find AVD system path.
+   Please define ANDROID_SDK_ROOT"* — export `ANDROID_SDK_ROOT=$HOME/Library/Android/sdk`.
+   If it then says *"Broken AVD system path"*, the AVD survived but its image did not
+   (`system-images/` empty); reinstall it rather than recreating the AVD:
+   `sdkmanager "system-images;android-34;google_apis;arm64-v8a"`.
 
 5. **Give the emulator RAM + disk.** A heavy `.so` (polars ~130 MB) + Python + the Flutter engine OOM-kills the app on a default AVD (`lowmemorykiller: Kill 'com.flet.recipe_tester'`). 6 GB RAM avoids it. The ~100–235 MB APK install needs a big `/data` (6 GB partition); if you hit `INSTALL_FAILED_INSUFFICIENT_STORAGE`, free space (uninstall old apps) or use a fresh AVD.
 
@@ -135,6 +161,25 @@ for i in $(seq 1 30); do grep EXIT "$DATA/Library/Caches/console.log" 2>/dev/nul
     device_info_plus = "12.3.0"
     ```
     (`stage_recipe.sh` regenerates the pyproject, so append this AFTER staging.)
+
+10b. **New local Xcode rejects flet's iOS deployment target.** Xcode 27 makes
+    `IPHONEOS_DEPLOYMENT_TARGET = 13.0` (flet 0.86.5's template, still on flet `main` as of
+    2026-10-03) a hard error: *"set to 13.0, but the range of supported deployment target
+    versions is 15.0 to 27.0.x"*. Plain `flet build` output hides it behind "Failed to build
+    iOS app" and a doctor dump; `-vv` shows the `error:` lines. Not your recipe, and CI's
+    Xcode 26 is unaffected. Workaround — flet has already staged everything, so patch the
+    generated project and re-run only the flutter step with the same env:
+    ```bash
+    cd build/flutter/ios
+    sed -i '' "s/platform :ios, '13.0'/platform :ios, '15.0'/" Podfile
+    # in Podfile's post_install target loop, before GCC_PREPROCESSOR_DEFINITIONS:
+    #   config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+    sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = 13.0;/IPHONEOS_DEPLOYMENT_TARGET = 15.0;/' Runner.xcodeproj/project.pbxproj
+    cd .. && SERIOUS_PYTHON_APP=$PWD/../python-app SERIOUS_PYTHON_SITE_PACKAGES=$PWD/../site-packages \
+      SERIOUS_PYTHON_VERSION=3.14 flutter build ios --simulator --build-name 1.0.0
+    # → build/flutter/build/ios/iphonesimulator/<app>.app
+    ```
+    A fresh `flet build` regenerates the template, so repeat the patch after every one.
 
 11. **Two booted simulators make `simctl booted` ambiguous.** With more than one sim booted, `simctl install booted …` targets one device and your subsequent `get_app_container booted …` may query the OTHER — the app "isn't installed" / the container is empty despite a successful install. Use the explicit `$UDID` for every simctl call (as the loop above does); never rely on `booted` unless you've verified exactly one device is booted (`xcrun simctl list devices | grep -c Booted`).
 
