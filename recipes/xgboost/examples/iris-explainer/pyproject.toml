@@ -1,0 +1,24 @@
+[project]
+name = "xgboost-iris-explainer"
+version = "1.0.0"
+description = "Predicts iris species with a bundled XGBoost .joblib model and explains each prediction."
+requires-python = ">=3.12"
+
+dependencies = [
+    "flet==1.0.3",
+    "xgboost==3.4.1",
+    "joblib==1.6.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+train = ["scikit-learn==1.9.0"]
+
+[tool.flet.app]
+path = "src"
+
+[tool.flet.android]
+target_arch = ["arm64-v8a", "x86_64"]
+
+[tool.flet.cleanup]
+package_files = ["scipy/**/tests", "numpy/tests", "numpy/*/tests"]
