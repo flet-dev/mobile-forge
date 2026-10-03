@@ -1,3 +1,5 @@
+import threading
+
 import flet as ft
 from clip import clip_path, library_versions, probe, thumbnails, write_clip
 
@@ -23,8 +25,14 @@ def row(label, value):
 
 
 def main(page: ft.Page):
+    busy = threading.Lock()
+
     def run():
         """Lock the button, raise the spinner, and hand the work to a thread."""
+        # Every run rewrites the same clip. Disabling the button is not enough on
+        # its own: a second tap already in flight lands before the patch does.
+        if not busy.acquire(blocking=False):
+            return
         button.disabled = True
         spinner.visible = True
         page.update()
@@ -47,6 +55,7 @@ def main(page: ft.Page):
         button.disabled = False
         spinner.visible = False
         page.update()
+        busy.release()
 
     page.appbar = ft.AppBar(title=ft.Text("clip roundtrip"), center_title=True)
     page.add(

@@ -139,7 +139,10 @@ finish the handler with an explicit
 [`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update).
 
 A single container is not safe to use from two threads at once. Give each thread its own
-`av.open(...)`, or serialise access with a `threading.Lock`.
+`av.open(...)`, or serialise access with a `threading.Lock`. The same goes for two runs that
+write one output file: `run_thread` uses a pool, so two quick taps run concurrently, and
+disabling the button does not stop a tap that is already in flight — take a lock in the
+handler instead.
 
 ### What this build can encode
 
