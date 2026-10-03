@@ -247,6 +247,15 @@ The reported arch must match the tag — `*-ios_13_0_x86_64_iphonesimulator.whl`
 
 **See also:** `references/recipe-patterns.md` § Pattern F (CMake/Meson) for the full scikit-build-core cross-compile template.
 
+**Second cause, no recipe involved: the app listed the package in `[tool.flet] source_packages`.**
+pip then builds the sdist for the build host (its isolated build drops serious_python's
+platform-faking `sitecustomize`), so every iOS slice gets the same macOS arm64 `.so` and lipo
+refuses the pair. Tells: `build/site-packages/<slice>/<pkg>-*.dist-info/WHEEL` says
+`Tag: cp3XX-cp3XX-macosx_*`, and `otool -l` on the `.so` shows `LC_BUILD_VERSION platform
+MACOS`. The Android build carries the same Mach-O as `lib/<abi>/lib<pkg>-<mod>.so`. If the
+extension is optional the app still runs, on the package's pure-Python fallback. The fix is a
+recipe; see the `new-mobile-recipe` skill, "When NOT to use" (thrift).
+
 ---
 
 ### iOS `flet build ios-simulator`: `Error (Xcode): Unsupported mach-o filetype (only MH_OBJECT and MH_DYLIB can be linked) in <pkg>.framework/<pkg>` (a CMake/scikit-build extension is an MH_BUNDLE)
@@ -762,6 +771,20 @@ version-suspicious paths is the signature.
 `Path.cwd()`) at configure. Generalizes to any superbuild that FetchContents its
 **parent project** when a source-dir cache var is unset. tflite-runtime
 (`_forge/forge_tflite_backend.py`).
+
+---
+
+### setuptools: `ModuleNotFoundError: No module named 'distutils'` from a `byte_compile` script, after the extension already compiled
+
+**Cause:** the sdist's `setup.cfg` sets `[install] optimize = 1`. `install_lib` then writes
+`.opt-1.pyc` files by running a generated script — `from distutils.util import byte_compile` —
+in a child interpreter, the cross venv's `python3.12`. Python 3.12 has no stdlib `distutils`,
+and setuptools' shim is not active in that child, so the build dies at the very end:
+`error: command '.../cross/bin/python3.12' failed with exit code 1`. The native part had
+already succeeded, which makes it look like a packaging bug rather than a config line.
+
+**Fix:** patch the `[install] optimize` lines out of `setup.cfg`. Optimized bytecode is dead
+weight on a phone anyway. thrift (`recipes/thrift/patches/mobile.patch`).
 
 ---
 
