@@ -542,6 +542,20 @@ class Builder(ABC):
             (libgcc_shim / "libgcc.a").write_text("INPUT(-lunwind)\n")
             cargo_ldflags += f" -L{libgcc_shim}"
 
+            # rustc links cdylibs with -nodefaultlibs, so the NDK's compiler-rt
+            # builtins never reach the link, and Rust's compiler_builtins lacks some
+            # that C code in -sys crates calls. arm64 libffi's __clear_cache is one:
+            # the .so links, then dlopen fails with `cannot locate symbol`. Only
+            # members for still-undefined symbols are pulled from the archive.
+            rt_arch = self.cross_venv.platform_triplet.split("-")[0]
+            builtins = sorted(
+                (Path(cc).parent.parent / "lib" / "clang").glob(
+                    f"*/lib/linux/libclang_rt.builtins-{rt_arch}-android.a"
+                )
+            )
+            if builtins:
+                cargo_ldflags += f" -C link-arg={builtins[-1]}"
+
         if self.cross_venv.sdk != "android":
             # Replace any hard-coded reference to -isysroot <sysroot> with the actual reference
             ldflags = re.sub(
