@@ -1,0 +1,21 @@
+package:
+  name: thrift
+  version: "0.25.0"
+
+build:
+  number: 1
+  script_env:
+    # setup.py silently falls back to a pure-Python wheel if the optional
+    # fastbinary C++ extension fails to compile; CIBUILDWHEEL=1 makes it
+    # re-raise instead (its only other use is a win32 include path).
+    CIBUILDWHEEL: "1"
+
+# {% if sdk == 'android' %}
+requirements:
+  host:
+    # fastbinary is C++ -> libc++_shared.so at runtime on Android.
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
+
+patches:
+  - mobile.patch
