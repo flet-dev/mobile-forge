@@ -217,15 +217,6 @@ It verifies:
 
 If any check fails, the script prints what to do. **The one non-trivial fix has its own script:**
 
-### Trap: a truncated support tarball is reused silently
-
-`setup.sh` skips the download whenever `downloads/python-<plat>-mobile-forge-<ver>.tar.gz`
-exists, and an interrupted `curl` (killed shell, slow link) leaves a partial file behind
-that the next run extracts as far as it goes. Found 2026-10-01: a main-checkout iOS 3.14.6
-tarball at 34 MB of 296 MB. Before trusting a cached tarball, compare it with the release:
-`curl -sIL <url> | grep -i content-length` against `stat -f%z`. On a slow link, fetch with
-parallel `curl -r` ranges and concatenate, then let `setup.sh` find the complete file.
-
 ### Fix: NDK install (one-time)
 
 Mobile-forge pins NDK r27d. If `$NDK_HOME` is empty or points at a wrong version, run:
@@ -243,6 +234,18 @@ If you already have Android Studio installed with NDK 27.x or 28.x at `~/Library
 you can `export NDK_HOME=~/Library/Android/sdk/ndk/<version>` and use that — for most recipes 
 the differences between r27 / r27d / r28 are immaterial. CI builds against r27d; your local r27 
 should produce equivalent wheels.
+
+### Trap: a truncated support tarball
+
+`download_support` in `setup.sh` returns early once the extracted
+`downloads/support/python-<plat>-mobile-forge-<ver>/support/` exists, otherwise skips the
+download whenever the tarball exists, and never checks `tar`'s exit status. A shell killed
+mid-`curl` leaves a partial tarball behind (2026-10-01: an iOS 3.14.6 tarball at 34 MB of
+296 MB): `tar` reports `truncated gzip input`, and depending on how far it got, setup either
+fails its support-path check or keeps a half-extracted tree on every later run. Compare a
+cached tarball with the release (`curl -sIL <url> | grep -i content-length` against
+`stat -f%z`), and delete both the tarball and its extracted `downloads/support/…` directory
+before re-running. On a slow link, fetch with parallel `curl -r` ranges and concatenate.
 
 ### Note: Android sysconfigdata CI paths — self-healing, nothing to fix
 
