@@ -9,7 +9,8 @@ What it demonstrates:
 
 - **The level trade, measured on the device.** `Fast` is LZ4's default codec; `HC 9` and
   `HC 12` are LZ4-HC, and 12 is its ceiling. On a log like this HC files come out about 30%
-  smaller for tens of times the write time, while reading gets no slower.
+  smaller for roughly 15 to 150 times the write time, `HC 12` being the slow end, while
+  reading back stays fast at every level.
 - **Writing and reading in pieces.**
   [`lz4.frame.open`](https://python-lz4.readthedocs.io/en/stable/lz4.frame.html#lz4.frame.open)
   returns a file object that compresses as it is written to, so the log goes to disk a
@@ -22,7 +23,9 @@ What it demonstrates:
   level buttons locked and a spinner up, ending in the explicit
   [`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update) a background
   thread needs. Locking matters: every level writes the same file, and two overlapping runs
-  would corrupt each other's read-back.
+  corrupt each other's read-back. Disabling the buttons is not enough on its own — a second
+  tap already in flight arrives before the disabled state does — so the handler also takes
+  a non-blocking lock and drops any tap that finds it held.
 
 The log is generated rather than bundled, so the example ships no asset.
 

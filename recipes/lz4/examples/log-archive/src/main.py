@@ -1,10 +1,18 @@
+import threading
+
 import flet as ft
 from logs import LEVELS, archive, library_version, sample_log
 
 
 def main(page: ft.Page):
+    busy = threading.Lock()
+
     def run(name):
         """Lock the levels, raise the spinner, and hand one archive run to a thread."""
+        # Every level writes the same file. Disabling the buttons is not enough on
+        # its own: a second tap already in flight lands before the patch does.
+        if not busy.acquire(blocking=False):
+            return
         levels.disabled = True
         spinner.visible = True
         page.update()
@@ -35,6 +43,7 @@ def main(page: ft.Page):
         levels.disabled = False
         spinner.visible = False
         page.update()
+        busy.release()
 
     page.appbar = ft.AppBar(title=ft.Text("Archive a log"), center_title=True)
     page.add(

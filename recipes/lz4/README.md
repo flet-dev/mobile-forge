@@ -45,7 +45,7 @@ with lz4.frame.open(path, "wb") as f:
 
 `compression_level` picks the trade. The default (0) is LZ4's fast codec; 3 and up switch
 to LZ4-HC, which compresses noticeably smaller and many times slower, while decompression
-stays just as fast. HC tops out at 12 — liblz4 treats anything higher as 12, whatever
+stays fast. HC tops out at 12 — liblz4 treats anything higher as 12, whatever
 `lz4.frame.COMPRESSIONLEVEL_MAX` says. HC pays off for data written once and read often,
 such as a bundled cache; the default suits anything written constantly, such as a log. The
 [example](examples/log-archive) measures both on your device.
@@ -93,8 +93,10 @@ reports corrupt input as a plain `RuntimeError` — and finish with an explicit
 [`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update). The one-shot
 functions are safe from any number of threads. A compressor, decompressor or open `.lz4`
 file is not: it has no lock, and lz4 changes it with the GIL released, so sharing one
-between threads can crash the app. Give each thread its own, and remember `run_thread` uses
-a pool, so two quick taps can overlap.
+between threads can crash the app. Give each thread its own. `run_thread` uses a pool, so
+two quick taps run concurrently; guard work that must not overlap (two runs writing one
+file, say) with a lock taken in the handler — disabling the button alone does not stop a
+tap that is already in flight.
 
 ### App size
 
