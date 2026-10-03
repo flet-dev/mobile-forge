@@ -1346,6 +1346,71 @@ upstream drift becomes your build break. (From `recipes/pymupdf`.)
 
 ---
 
+### bindgen: `'stdlib.h' file not found` (Android) / `version 'sim' in target triple 'arm64-apple-ios-sim' is invalid` (iOS simulator)
+
+**Cause:** a `-sys` crate's build script runs bindgen, whose libclang gets no target
+sysroot, and bindgen spells the `aarch64-apple-ios-sim` Rust triple as a clang triple
+clang rejects.
+
+**Fix:** forge now exports `BINDGEN_EXTRA_CLANG_ARGS_<cargo target>` with `--target=` and
+the NDK sysroot or `-isysroot <SDK>` for every Rust build. If you still see it, the crate
+passes its own conflicting clang args. Found on vl-convert-python (libnghttp2,
+libuv-sys-lite).
+
+---
+
+### aws-lc-sys: `Failure invoking external bindgen` / `Please enable the 'bindgen' feature` (iOS, Android x86_64)
+
+**Cause:** with its default `all-bindings` feature, aws-lc-sys 0.40 ships pregenerated
+bindings for a fixed target list (Android arm64 is on it; no iOS target and not Android
+x86_64 are) and otherwise wants the `bindgen` CLI.
+
+**Fix:** enable its internal bindgen from the consuming crate, target-gated:
+`[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]`
+`aws-lc-sys = { version = "=0.40.0", features = ["bindgen"] }`. Newer aws-lc-sys (0.45)
+uses universal bindings and needs nothing.
+
+---
+
+### iOS: `ld: library 'python3.10' not found` (a PyO3 extension with `abi3-pyXY`)
+
+**Cause:** a pyo3 abi3 cross build links the abi3 floor (`-lpython3.10` for
+`abi3-py310`), not the Python forge built for.
+
+**Fix:** drop the `abi3-*` feature in the recipe patch; forge builds one wheel per Python
+anyway. Android may link fine regardless, so do not take a green Android leg as proof.
+
+---
+
+### A crates.io dependency fails to compile for Android or iOS (`compile_error!` in a per-OS branch, `cannot find function` behind `cfg(target_os = "macos")`)
+
+**Cause:** the crate covers macOS and Linux only. iOS takes neither branch; Android takes
+Linux's where it says `any(target_os = "linux", target_os = "android")` and nothing
+otherwise.
+
+**Fix:** patch the crate with forge's `crate_patches` (see `new-mobile-recipe`). For iOS a
+blanket `target_os = "macos"` -> `any(target_os = "macos", target_os = "ios")` over the
+crate is usually right, since the branches select Darwin APIs; compile with
+`cargo build --keep-going` to collect every failing crate in one pass. Precedent:
+vl-convert-python (six Deno crates).
+
+---
+
+### A build script's own `cmake` call configures for the build host (no cross toolchain)
+
+**Cause:** the crate shells out to `cmake` with a fixed argument list (v8x building WAMR),
+so nothing forge sets reaches it, and CMake picks the host platform (WAMR even defaults
+its platform to `CMAKE_HOST_SYSTEM_NAME`).
+
+**Fix:** CMake reads `CMAKE_TOOLCHAIN_FILE` from the environment. Ship a toolchain file in
+the recipe patch that keys off `$ENV{TARGET}` (the Rust triple cargo gives build scripts;
+host builds match nothing and stay native), and set the variable for build scripts
+through a patched-in `.cargo/config.toml`:
+`[env] CMAKE_TOOLCHAIN_FILE = { value = ".cargo/cross.cmake", relative = true }`.
+Precedent: vl-convert-python's `mobile.patch`.
+
+---
+
 ## Runtime failures (on device/emulator/simulator)
 
 ### Flet 0.86 changed Android packaging — `sitepackages.zip` + jniLibs relocation (the umbrella behind a whole class of "worked under 0.85, fails now" on-device failures)
@@ -1726,6 +1791,83 @@ consumer's `setup.py`: `-l:libX.a` on Android, `-lX` on iOS. Detect with
 `ios-13.0-arm64-iphonesimulator`). Verify the iOS extension is self-contained with
 `otool -L` (no `libX` dylib dep) + `nm` (the `libX` symbols are `T`, defined). Any
 recipe that borrows this static-link pattern must apply the same per-platform gate.
+
+---
+
+### `dlopen failed: cannot locate symbol "__clear_cache"` (Android **arm64** only, a Rust extension)
+
+**Cause:** rustc links cdylibs with `-nodefaultlibs`, so the NDK's
+`libclang_rt.builtins-<arch>-android.a` never reaches the link, and Rust's
+`compiler_builtins` lacks some symbols that C code in `-sys` crates calls. arm64 libffi's
+instruction-cache flush is the known one. The `.so` links (a shared library may keep
+undefined symbols), then bionic refuses it at `dlopen`. x86_64 never references
+`__clear_cache`, so **CI's x86_64 emulator cannot catch this**. Tell it from the jniLibs
+collision above by the symbol: a compiler builtin, not one of your libraries'.
+
+**Fix:** forge now appends the builtins archive to every Android Rust link
+(`cargo_ldflags`, next to the libgcc shim); only members for still-undefined symbols are
+pulled. If you still see it, check the archive glob matches the NDK layout. Found on
+vl-convert-python.
+
+---
+
+### `fatal runtime error: out of TLS keys, aborting` (Android) — often in a module that is NOT the one using them up
+
+**Cause:** Rust's Android targets have no native TLS (`has-thread-local` unset,
+`tls-model: emulated` in `rustc --print target-spec-json`), so std backs every
+`thread_local!` it touches with its own pthread key, and bionic allows a process about
+128. Each Rust extension carries its own std. vl-convert's Deno worker took about 80, so
+the next Rust module to load (rpds-py, under Altair) aborted the whole app. iOS has
+native TLS and 512 keys and is unaffected.
+
+**Measure it** before and after a suspect call, from Python on the device:
+```python
+libc = ctypes.CDLL("libc.so"); keys, k = [], ctypes.c_uint()
+while libc.pthread_key_create(ctypes.byref(k), None) == 0: keys.append(k.value)
+for key in keys: libc.pthread_key_delete(key)   # len(keys) = keys still free
+```
+
+**Fix:** link a C shim into the extension that defines `pthread_key_create`,
+`pthread_key_delete`, `pthread_getspecific` and `pthread_setspecific` with
+`visibility("hidden")` and multiplexes them onto one real key holding a per-thread table
+(destructors run at thread exit with POSIX iteration semantics). Hidden definitions bind
+every reference inside the `.so` and nothing outside it. Link it `static:+whole-archive`,
+since libc.so also defines the names. Precedent: `forge_tls.c` in
+`recipes/vl-convert-python/patches/mobile.patch` (95 keys free afterwards, against 4).
+Verify with `llvm-nm -D <so> | grep pthread_key`, which should print nothing.
+
+---
+
+### `Failed to initialize a JsRuntime: No such file or directory (os error 2)` (a Rust crate embedding `deno_core`, on device)
+
+Python only sees `Failed to receive worker startup status: receiving on a closed channel`
+when the runtime lives on a worker thread; capture the panic (Diagnostic snippets).
+
+**Cause:** deno_core 0.411's `include_js_files!` records each extension source as an
+absolute **build-machine path** and reads it only while a snapshot is made. A runtime
+started with `startup_snapshot: None` reads those paths at startup: they exist on the
+machine that built the wheel (so a desktop test, or an iOS simulator on that machine,
+passes) and not on a phone. deno_runtime attaches `99_main.js` the same way by hand.
+
+**Fix:** patch the macros to `mode=included` and deno_runtime's `99_main.js` push to
+`ascii_str_include!` (`crate_patches`). Check the binary:
+`grep -a -o -E '/(home|Users)/[^"[:space:]]*\.(js|ts)' <so>` should find (almost) nothing.
+Precedent: vl-convert-python's `deno_core.patch` and `deno_runtime.patch`.
+
+---
+
+### `Expect rustls-platform-verifier to be initialized` (Android panic on the first HTTPS request)
+
+**Cause:** reqwest 0.13's `rustls` feature verifies certificates through
+rustls-platform-verifier, which on Android calls into Java and needs
+`init_hosted(env, context)` first. A Python extension never does that. The panic happens
+at TLS-handshake time, so import and offline work look fine.
+
+**Fix:** on Android, give the client its own roots so reqwest skips the platform verifier:
+`ClientBuilder::tls_certs_only(...)` with `webpki-root-certs` converted to
+`reqwest::Certificate`. Server certificates installed only on the device are then not
+trusted; say so on the recipe page. Precedent: `MobileTls` in vl-convert-python's
+`mobile.patch`.
 
 ---
 
@@ -2283,6 +2425,17 @@ republishing". Full authoring guidance in `new-mobile-recipe` § 3.5b.
 ---
 
 ## Diagnostic snippets
+
+### Capture a Rust panic on Android, and keep results when the app aborts
+
+Android discards fd 2, so a Rust panic's message never reaches logcat, and a process
+abort kills pytest before its failure summary reaches `console.log`. Redirect fd 2 and
+write results to a file in the app's cache dir, then read both with `adb shell cat`:
+```python
+err = os.path.join(tempfile.gettempdir(), "stderr.txt")   # the app cache dir
+os.dup2(os.open(err, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644), 2)
+os.environ["RUST_BACKTRACE"] = "1"
+```
 
 ### Inspect a wheel's contents
 

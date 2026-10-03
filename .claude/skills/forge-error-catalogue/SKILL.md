@@ -91,6 +91,11 @@ instead of re-deriving it.
   green host-configured library, fix by patching in a `FORGE_CMAKE_ARGS` extend.
   **`conflicting types for 'fseek'` from a project's own `compat.h`, 32-bit Android only →
   the NDK toolchain pins `CMAKE_SYSTEM_VERSION` to 1; read `ANDROID_PLATFORM_LEVEL`**.
+  **bindgen `stdlib.h` not found / `'sim'` triple invalid → forge's
+  `BINDGEN_EXTRA_CLANG_ARGS_<target>`**, **aws-lc-sys 0.40 external-bindgen → its `bindgen`
+  feature**, **iOS `library 'python3.10' not found` → drop pyo3 `abi3`**, **a crates.io dep
+  with no iOS/Android branch → `crate_patches`**, **a build script's bare `cmake` →
+  `CMAKE_TOOLCHAIN_FILE` via cargo `[env]`**.
 - **Runtime failures** (device/emulator/simulator) — **the Flet 0.86 Android
   `sitepackages.zip` class** (its umbrella entry explains "why only now"):
   `NotADirectoryError` on a bundled data file → **`extract_packages`** meta field;
@@ -127,6 +132,12 @@ instead of re-deriving it.
   `flet build` reporting success while shipping the shared pub-cache `dist_ios`'s
   packages from some *other* project → **`-Wl,-headerpad_max_install_names`** on the
   iOS lanes of any non-CMake recipe binding several bundled dylibs (av).
+  Rust on Android: **`cannot locate symbol "__clear_cache"` (arm64 only) → forge links the
+  NDK's compiler-rt builtins**; **`fatal runtime error: out of TLS keys` → hidden pthread-key
+  multiplexing shim** (std spends a key per `thread_local!`; bionic has ~128);
+  **deno_core `Failed to initialize a JsRuntime: No such file or directory` → embed the
+  extension sources** (they are build paths without a snapshot); **`Expect
+  rustls-platform-verifier to be initialized` → `tls_certs_only` with bundled roots**.
 - **Recipe-tester app failures** — host-build (`pg_config` etc.), pypi.flet.dev
   index precedence, "no matching distribution" (incl. **ios-simulator also
   resolving the iphoneos wheel**), **sdist-only pure-python dep → pip backtrack**

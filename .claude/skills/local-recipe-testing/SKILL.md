@@ -157,6 +157,15 @@ for i in $(seq 1 30); do grep EXIT "$DATA/Library/Caches/console.log" 2>/dev/nul
     ```
     The known cause is an extension linked without `-Wl,-headerpad_max_install_names` (see the `forge-error-catalogue` skill), but the check is cheap and catches the whole class. The Android twin is gotcha #12's `unzip -l build/apk/…`.
 
+15. **CI's Android test runs only x86_64, so a green CI says nothing about arm64, which is every phone.**
+    vl-convert passed CI's emulator build while its arm64 `.so` could not even load
+    (`cannot locate symbol "__clear_cache"`: x86_64 never references it). Do a local arm64
+    pass for any Rust or C-heavy recipe before trusting the matrix. Two related traps:
+    an iOS simulator on the machine that **built** the wheel can pass while the binary
+    reads build-machine paths a phone will not have, and a native abort kills pytest
+    before its summary reaches `console.log`. For both, see the `forge-error-catalogue`
+    diagnostic snippets (capture fd 2, write results to a file).
+
 ## Model assets & test-only deps
 
 `stage_recipe.sh` copies **every** file in `recipes/<pkg>/tests/` into the app (`cp -r tests/. recipe_tests/`), so a model dropped next to the test file becomes an app asset. Two tiers:
