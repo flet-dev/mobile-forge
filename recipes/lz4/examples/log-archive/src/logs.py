@@ -32,8 +32,8 @@ def library_version():
 def sample_log(lines=60_000, seed=0):
     """Build a deterministic app log of about 4 MB, standing in for a real one.
 
-    Seeded so every run compresses the same bytes and the levels compare fairly;
-    cached so only the first tap pays for generating it.
+    Seeded so every run compresses the same bytes and the levels compare fairly; cached
+    so only the first tap pays for generating it.
     """
     rng = random.Random(seed)
     levels = ["DEBUG", "INFO", "INFO", "INFO", "WARN", "ERROR"]
@@ -51,11 +51,11 @@ def sample_log(lines=60_000, seed=0):
 
 
 def archive(data, level):
-    """Write `data` to an .lz4 file at `level` a megabyte at a time, then read it
-    back the same way, timing both ends and checking every byte.
+    """Write `data` to an .lz4 file at `level` a megabyte at a time, then read it back
+    the same way, timing both ends and checking every byte.
 
-    Chunked in both directions because that is how a log too large to hold twice
-    would be handled; lz4.frame.open compresses as it is written to.
+    Chunked in both directions because that is how a log too large to hold twice would
+    be handled; lz4.frame.open compresses as it is written to.
     """
     directory = os.getenv("FLET_APP_STORAGE_TEMP") or tempfile.gettempdir()
     path = os.path.join(directory, "app-log.lz4")
@@ -76,5 +76,10 @@ def archive(data, level):
     read_s = time.perf_counter() - started
 
     return Archive(
-        len(data), os.path.getsize(path), write_s, read_s, intact and pos == len(data), path
+        len(data),
+        os.path.getsize(path),
+        write_s,
+        read_s,
+        intact and pos == len(data),
+        path,
     )

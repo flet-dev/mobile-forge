@@ -25,10 +25,12 @@ def row(label, value):
 
 
 def main(page: ft.Page):
+    """Lay out the page, then write and inspect a first clip straight away."""
     busy = threading.Lock()
 
     def run():
-        """Lock the button, raise the spinner, and hand the work to a thread."""
+        """Unless a run is in flight, disable the button, raise the spinner, and hand
+        the work to a thread."""
         # Every run rewrites the same clip. Disabling the button is not enough on
         # its own: a second tap already in flight lands before the patch does.
         if not busy.acquire(blocking=False):
@@ -41,8 +43,8 @@ def main(page: ft.Page):
     def compute():
         """Write the clip, probe it, extract stills, and update the page.
 
-        run_thread swallows exceptions and does not carry an automatic update
-        with it, so this catches its own failures and ends with page.update().
+        run_thread reports a failure only in the log and does not carry an automatic
+        update with it, so this catches its own failures and ends with page.update().
         """
         try:
             path = clip_path()

@@ -5,10 +5,12 @@ from logs import LEVELS, archive, library_version, sample_log
 
 
 def main(page: ft.Page):
+    """Wire the level buttons to a background archive-and-verify of a generated log."""
     busy = threading.Lock()
 
     def run(name):
-        """Lock the levels, raise the spinner, and hand one archive run to a thread."""
+        """Unless a run is in flight, disable the levels, raise the spinner, and hand
+        one archive run to a thread."""
         # Every level writes the same file. Disabling the buttons is not enough on
         # its own: a second tap already in flight lands before the patch does.
         if not busy.acquire(blocking=False):
@@ -21,8 +23,8 @@ def main(page: ft.Page):
     def work(name):
         """Write, read back and verify at one level, then refill the report.
 
-        run_thread swallows exceptions and does not carry an automatic update
-        with it, so this catches its own failures and ends with page.update().
+        run_thread reports a failure only in the log and does not carry an automatic
+        update with it, so this catches its own failures and ends with page.update().
         """
         try:
             a = archive(sample_log(), LEVELS[name])

@@ -51,8 +51,8 @@ def test_block_modes_roundtrip():
 
 
 def test_incremental_matches_oneshot():
-    """Chunked LZ4FrameCompressor/Decompressor output decodes to the same bytes as
-    one-shot calls -> the stateful frame context objects work on device."""
+    """Chunked LZ4FrameCompressor/Decompressor output matches one-shot calls -> the
+    stateful frame context objects work on device."""
     import lz4.frame
 
     data = _payload()
@@ -72,8 +72,8 @@ def test_incremental_matches_oneshot():
 
 
 def test_frame_file_roundtrip(tmp_path):
-    """lz4.frame.open writes a standard .lz4 file to device storage in pieces and
-    reads it back -> the file API streams, not only in-memory buffers."""
+    """lz4.frame.open writes a standard .lz4 file to device storage in pieces and reads
+    it back -> the file API streams, not only in-memory buffers."""
     import lz4.frame
 
     data = _payload()

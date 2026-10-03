@@ -6,7 +6,7 @@ come out larger than zlib's, but it compresses several times faster and decompre
 three times faster, which on a phone means less CPU time and battery for every cached API
 response, packed log or snapshot read back often. When size matters more than speed, the
 standard library's [`zlib`](https://docs.python.org/3/library/zlib.html) needs no extra
-wheel. This one compiles in the liblz4 the package vendors.
+wheel.
 
 ## Install
 
@@ -27,8 +27,10 @@ See runnable Flet apps in [`examples/`](examples):
 ## Usage in a Flet app
 
 Use [`lz4.frame`](https://python-lz4.readthedocs.io/en/stable/lz4.frame.html): its output is
-the standard LZ4 format (see **Storage**), while `lz4.block` output carries a size header
-only python-lz4 reads. For files,
+the standard LZ4 format (see **Storage**), while
+[`lz4.block`](https://python-lz4.readthedocs.io/en/stable/lz4.block.html) output is a bare
+block behind python-lz4's own size prefix, which the `lz4` command-line tool cannot read.
+For files,
 [`lz4.frame.open`](https://python-lz4.readthedocs.io/en/stable/lz4.frame.html#lz4.frame.open)
 returns a file object that compresses as you write to it, so data written in pieces never
 has to sit in memory whole:
@@ -46,7 +48,8 @@ with lz4.frame.open(path, "wb") as f:
 `compression_level` picks the trade. The default (0) is LZ4's fast codec; 3 and up switch
 to LZ4-HC, which compresses noticeably smaller and many times slower, while decompression
 stays fast. HC tops out at 12 — liblz4 treats anything higher as 12, whatever
-`lz4.frame.COMPRESSIONLEVEL_MAX` says. HC pays off for data written once and read often,
+[`lz4.frame.COMPRESSIONLEVEL_MAX`](https://python-lz4.readthedocs.io/en/stable/lz4.frame.html#lz4.frame.COMPRESSIONLEVEL_MAX)
+says. HC pays off for data written once and read often,
 such as a bundled cache; the default suits anything written constantly, such as a log. The
 [example](examples/log-archive) measures both on your device.
 
@@ -83,13 +86,17 @@ any other LZ4 implementation, with no Python on the server.
 
 [`page.run_thread(...)`](https://flet.dev/docs/controls/page/#flet.Page.run_thread) keeps
 the UI responsive whatever lz4 call it runs, and the LZ4 calls themselves release the GIL,
-so compressing (through any API) and `lz4.frame.decompress` genuinely run in parallel with
-other threads. Reading through `lz4.frame.open` is the exception: it decompresses in small
-chunks driven by Python code that holds the GIL, so several readers do not speed each other
-up.
+so compressing (through any API) and
+[`lz4.frame.decompress`](https://python-lz4.readthedocs.io/en/stable/lz4.frame.html#lz4.frame.decompress)
+genuinely run in parallel with other threads. Reading through `lz4.frame.open` scales less
+well, because Python code holding the GIL feeds the decompressor one
+`io.DEFAULT_BUFFER_SIZE` at a time. That is 128 KiB on Python 3.14, which Flet bundles by
+default, and readers calling `read(n)` with large chunks keep most of the speedup; it is
+8 KiB on 3.12 and 3.13, where four readers finish no sooner than one after another.
 
 Catch exceptions inside the worker — `run_thread` does not surface them, and `lz4.frame`
-reports corrupt input as a plain `RuntimeError` — and finish with an explicit
+reports corrupt input as a plain `RuntimeError`, or as `EOFError` for a file cut short
+through `lz4.frame.open`, as when the app was killed mid-write — and finish with an explicit
 [`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update). The one-shot
 functions are safe from any number of threads. A compressor, decompressor or open `.lz4`
 file is not: it has no lock, and lz4 changes it with the GIL released, so sharing one
