@@ -32,16 +32,21 @@ def test_frame_roundtrip_with_checksums():
 
 
 def test_block_modes_roundtrip():
-    """Every block mode round-trips, with and without the size header -> covers
-    both lz4.c and lz4hc.c in the _block extension."""
+    """Default, accelerated and HC block modes round-trip, with and without the size
+    header -> covers both lz4.c and lz4hc.c in the _block extension."""
     import lz4.block
 
     data = _payload()
-    for mode in ("default", "fast", "high_compression"):
-        packed = lz4.block.compress(data, mode=mode)
+    # "fast" only differs from "default" once acceleration is above 1.
+    for mode, extra in (
+        ("default", {}),
+        ("fast", {"acceleration": 8}),
+        ("high_compression", {}),
+    ):
+        packed = lz4.block.compress(data, mode=mode, **extra)
         assert lz4.block.decompress(packed) == data
 
-        raw = lz4.block.compress(data, mode=mode, store_size=False)
+        raw = lz4.block.compress(data, mode=mode, store_size=False, **extra)
         assert lz4.block.decompress(raw, uncompressed_size=len(data)) == data
 
 
@@ -67,14 +72,15 @@ def test_incremental_matches_oneshot():
 
 
 def test_frame_file_roundtrip(tmp_path):
-    """lz4.frame.open writes a standard .lz4 file to device storage and reads it
-    back -> file-backed streaming works, not only in-memory buffers."""
+    """lz4.frame.open writes a standard .lz4 file to device storage in pieces and
+    reads it back -> the file API streams, not only in-memory buffers."""
     import lz4.frame
 
     data = _payload()
     path = tmp_path / "events.lz4"
     with lz4.frame.open(path, "wb", compression_level=9) as f:
-        f.write(data)
+        for i in range(0, len(data), 7000):
+            f.write(data[i : i + 7000])
 
     assert path.read_bytes()[:4] == b"\x04\x22\x4d\x18"  # LZ4 frame magic
     assert path.stat().st_size < len(data)
