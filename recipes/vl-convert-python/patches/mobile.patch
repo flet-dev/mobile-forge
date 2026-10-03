@@ -8,13 +8,18 @@ through its deno_v8 facade (the `quickjs` feature, backed by the v8x crate): a
 plain C interpreter that cross-compiles like any -sys crate and needs no JIT.
 
 1. Cargo.toml: deno_core with `quickjs` in place of its default `v8`.
+   pyo3 without `abi3-py310`: an abi3 cross build links the abi3 floor,
+   libpython3.10, which the iOS link cannot find. forge builds one wheel per
+   Python anyway.
 
 2. vl-convert-rs: boot without a snapshot. QuickJS cannot load a V8 snapshot,
    so build.rs is swapped for forge_build.rs, which writes the empty snapshot
    and residual-source tables lib.rs includes; the converter passes
    `startup_snapshot: None`, and deno_runtime gets `transpile` so it can strip
-   the TypeScript in its extension sources at startup. Dropping build.rs also
-   drops its host-side deno_runtime build and V8 download.
+   the TypeScript in its extension sources at startup (deno_core.patch and
+   deno_runtime.patch embed those sources, which Deno otherwise only reads from
+   build-machine paths while snapshotting). Dropping build.rs also drops its
+   host-side deno_runtime build and V8 download.
 
 3. vl-convert-rs: aws-lc-sys 0.40 (pulled in by Deno's crypto crates) ships
    pregenerated bindings for Android arm64 only; enable its `bindgen` feature
@@ -25,6 +30,23 @@ plain C interpreter that cross-compiles like any -sys crate and needs no JIT.
    build host. CMake reads CMAKE_TOOLCHAIN_FILE from the environment; cargo's
    [env] sets it for build scripts, and the toolchain file keys off the TARGET
    triple cargo gives them, so host builds are unaffected.
+
+5. vl-convert-google-fonts: a MobileTls builder extension, applied to every
+   reqwest client in both crates. reqwest's rustls backend verifies through
+   rustls-platform-verifier, which panics on Android unless initialised from
+   Java with a JNI context; on Android the clients trust the bundled Mozilla
+   roots (webpki-root-certs) instead. Other targets are unchanged.
+
+6. worker_pool.rs: when a worker thread dies before reporting startup, put its
+   panic message in the error instead of "receiving on a closed channel". On
+   Android a Rust panic's own output goes to a discarded stderr.
+
+7. vl-convert-python/forge_tls.c (Android only): Rust has no native TLS on
+   Android, so std backs every thread_local! with its own pthread key, and
+   bionic allows a process about 128. A worker touches about 80, so the next
+   native module to load (rpds-py, under Altair) aborted with "out of TLS keys".
+   Hidden definitions of the four pthread key functions bind every reference in
+   this .so and multiplex its keys onto one real key.
 
 diff -ruN a/.cargo/config.toml b/.cargo/config.toml
 --- a/.cargo/config.toml
@@ -86,6 +108,241 @@ diff -ruN a/Cargo.toml b/Cargo.toml
  deno_error = "0.7.1"
  deno_graph = { version = "0.111.0", default-features = false, features = ["swc"] }
  deno_ast = { version = "0.53.3", features = ["bundler", "codegen", "transforms", "transpiling"] }
+@@ -56,7 +56,7 @@
+ lz-str = "0.2.1"
+ png = "0.18.1"
+ predicates = "3.0.2"
+-pyo3 = { version = "0.29.2", features = ["extension-module", "anyhow", "abi3-py310"] }
++pyo3 = { version = "0.29.2", features = ["extension-module", "anyhow"] }
+ pyo3-async-runtimes = { version = "0.29.0", features = ["tokio-runtime"] }
+ pyo3-log = "0.13.4"
+ pythonize = "0.29.0"
+diff -ruN a/vl-convert-google-fonts/Cargo.toml b/vl-convert-google-fonts/Cargo.toml
+--- a/vl-convert-google-fonts/Cargo.toml
++++ b/vl-convert-google-fonts/Cargo.toml
+@@ -26,6 +26,9 @@
+ tinyvec = { workspace = true, optional = true }
+ tokio = { workspace = true, features = ["sync", "fs", "rt-multi-thread"] }
+ 
++[target.'cfg(target_os = "android")'.dependencies]
++webpki-root-certs = "1"
++
+ [dev-dependencies]
+ fontdb = { workspace = true }
+ tempfile = { workspace = true }
+diff -ruN a/vl-convert-google-fonts/src/client.rs b/vl-convert-google-fonts/src/client.rs
+--- a/vl-convert-google-fonts/src/client.rs
++++ b/vl-convert-google-fonts/src/client.rs
+@@ -89,7 +89,7 @@
+             std::fs::create_dir_all(dir.join("fonts"))?;
+         }
+ 
+-        let async_client = reqwest::Client::builder()
++        let async_client = crate::MobileTls::mobile_tls(reqwest::Client::builder())
+             .user_agent(&config.user_agent)
+             .timeout(Duration::from_secs(config.request_timeout_secs))
+             .build()
+diff -ruN a/vl-convert-google-fonts/src/lib.rs b/vl-convert-google-fonts/src/lib.rs
+--- a/vl-convert-google-fonts/src/lib.rs
++++ b/vl-convert-google-fonts/src/lib.rs
+@@ -7,11 +7,13 @@
+ mod client;
+ mod config;
+ mod error;
++mod mobile_tls;
+ mod resolve;
+ mod types;
+ pub use client::GoogleFontsClient;
+ pub use config::{google_fonts_cache_dir, ClientConfig};
+ pub use error::{GoogleFontsError, GoogleFontsFailure, GoogleFontsResult};
++pub use mobile_tls::MobileTls;
+ 
+ #[cfg(feature = "fontdb")]
+ mod fontdb_ext;
+diff -ruN a/vl-convert-google-fonts/src/mobile_tls.rs b/vl-convert-google-fonts/src/mobile_tls.rs
+--- a/vl-convert-google-fonts/src/mobile_tls.rs
++++ b/vl-convert-google-fonts/src/mobile_tls.rs
+@@ -0,0 +1,34 @@
++/// Applied to every reqwest client vl-convert builds.
++///
++/// reqwest's rustls backend checks certificates through rustls-platform-verifier,
++/// which on Android panics unless it was first initialised from Java with a JNI
++/// context. A Python extension never is, so trust the bundled Mozilla roots there.
++pub trait MobileTls: Sized {
++    fn mobile_tls(self) -> Self;
++}
++
++#[cfg(target_os = "android")]
++fn root_certs() -> Vec<reqwest::Certificate> {
++    webpki_root_certs::TLS_SERVER_ROOT_CERTS
++        .iter()
++        .filter_map(|der| reqwest::Certificate::from_der(der).ok())
++        .collect()
++}
++
++impl MobileTls for reqwest::ClientBuilder {
++    fn mobile_tls(self) -> Self {
++        #[cfg(target_os = "android")]
++        return self.tls_certs_only(root_certs());
++        #[cfg(not(target_os = "android"))]
++        self
++    }
++}
++
++impl MobileTls for reqwest::blocking::ClientBuilder {
++    fn mobile_tls(self) -> Self {
++        #[cfg(target_os = "android")]
++        return self.tls_certs_only(root_certs());
++        #[cfg(not(target_os = "android"))]
++        self
++    }
++}
+diff -ruN a/vl-convert-python/Cargo.toml b/vl-convert-python/Cargo.toml
+--- a/vl-convert-python/Cargo.toml
++++ b/vl-convert-python/Cargo.toml
+@@ -7,6 +7,7 @@
+ homepage = "https://github.com/vega/vl-convert"
+ repository.workspace = true
+ publish = false
++build = "forge_build.rs"
+ 
+ [lib]
+ name = "vl_convert"
+@@ -21,3 +22,6 @@
+ tokio = { workspace = true }
+ pyo3-async-runtimes = { workspace = true }
+ pyo3-log = { workspace = true }
++
++[build-dependencies]
++cc = "1"
+diff -ruN a/vl-convert-python/forge_build.rs b/vl-convert-python/forge_build.rs
+--- a/vl-convert-python/forge_build.rs
++++ b/vl-convert-python/forge_build.rs
+@@ -0,0 +1,14 @@
++fn main() {
++    println!("cargo:rerun-if-changed=forge_tls.c");
++    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("android") {
++        return;
++    }
++    cc::Build::new()
++        .file("forge_tls.c")
++        .cargo_metadata(false)
++        .compile("forge_tls");
++    println!("cargo:rustc-link-search=native={}", std::env::var("OUT_DIR").unwrap());
++    // whole-archive: libc.so also defines these, and an archive member is only
++    // pulled for a symbol nothing else defines.
++    println!("cargo:rustc-link-lib=static:+whole-archive=forge_tls");
++}
+diff -ruN a/vl-convert-python/forge_tls.c b/vl-convert-python/forge_tls.c
+--- a/vl-convert-python/forge_tls.c
++++ b/vl-convert-python/forge_tls.c
+@@ -0,0 +1,106 @@
++// Virtual pthread TLS keys for everything linked into this extension.
++//
++// Rust has no native TLS on Android, so std backs every thread_local! with a
++// pthread key of its own, and bionic allows a process about 128. A vl-convert
++// worker touches around 80, which leaves too few for the next native module to
++// load ("fatal runtime error: out of TLS keys"). These definitions are hidden,
++// so they bind every reference inside this .so and nothing outside it: all of
++// the extension's keys share one real key that holds a per-thread table.
++
++#include <dlfcn.h>
++#include <errno.h>
++#include <pthread.h>
++#include <stdatomic.h>
++#include <stdlib.h>
++#include <string.h>
++
++#define HIDDEN __attribute__((visibility("hidden")))
++#define MAX_KEYS 4096
++#define DESTRUCTOR_PASSES 4
++
++typedef void (*dtor_fn)(void *);
++typedef struct {
++  size_t cap;
++  void *slots[];
++} table;
++
++static pthread_once_t once = PTHREAD_ONCE_INIT;
++static pthread_key_t real_key;
++static void *(*real_get)(pthread_key_t);
++static int (*real_set)(pthread_key_t, const void *);
++static atomic_uint next_key = 1;  // 0 is never handed out
++static _Atomic(dtor_fn) dtors[MAX_KEYS];
++
++// Runs at thread exit with the thread's table, which bionic has already
++// detached. Reattach it so destructors that touch other thread-locals see
++// their values, and re-read it after each call because a destructor may grow it.
++static void run_destructors(void *value) {
++  real_set(real_key, value);
++  for (int pass = 0; pass < DESTRUCTOR_PASSES; pass++) {
++    int ran = 0;
++    for (size_t key = 1;; key++) {
++      table *t = real_get(real_key);
++      if (key >= t->cap) break;
++      void *slot = t->slots[key];
++      if (!slot) continue;
++      t->slots[key] = NULL;
++      dtor_fn dtor = atomic_load(&dtors[key]);
++      if (dtor) {
++        dtor(slot);
++        ran = 1;
++      }
++    }
++    if (!ran) break;
++  }
++  table *t = real_get(real_key);
++  real_set(real_key, NULL);
++  free(t);
++}
++
++static void init(void) {
++  int (*real_create)(pthread_key_t *, dtor_fn) = dlsym(RTLD_DEFAULT, "pthread_key_create");
++  real_get = dlsym(RTLD_DEFAULT, "pthread_getspecific");
++  real_set = dlsym(RTLD_DEFAULT, "pthread_setspecific");
++  if (!real_create || !real_get || !real_set || real_create(&real_key, run_destructors)) abort();
++}
++
++HIDDEN int pthread_key_create(pthread_key_t *key, dtor_fn dtor) {
++  pthread_once(&once, init);
++  unsigned k = atomic_fetch_add(&next_key, 1);
++  if (k >= MAX_KEYS) return EAGAIN;
++  atomic_store(&dtors[k], dtor);
++  *key = (pthread_key_t)k;
++  return 0;
++}
++
++HIDDEN int pthread_key_delete(pthread_key_t key) {
++  if (key <= 0 || (unsigned)key >= MAX_KEYS) return EINVAL;
++  atomic_store(&dtors[key], NULL);
++  return 0;
++}
++
++HIDDEN void *pthread_getspecific(pthread_key_t key) {
++  pthread_once(&once, init);
++  table *t = real_get(real_key);
++  return (t && key > 0 && (size_t)key < t->cap) ? t->slots[key] : NULL;
++}
++
++HIDDEN int pthread_setspecific(pthread_key_t key, const void *value) {
++  pthread_once(&once, init);
++  if (key <= 0 || (unsigned)key >= atomic_load(&next_key)) return EINVAL;
++  table *t = real_get(real_key);
++  if (!t || (size_t)key >= t->cap) {
++    if (!value) return 0;
++    size_t old = t ? t->cap : 0;
++    size_t cap = old ? old : 64;
++    while (cap <= (size_t)key) cap *= 2;
++    table *grown = realloc(t, sizeof(table) + cap * sizeof(void *));
++    if (!grown) return ENOMEM;
++    memset(&grown->slots[old], 0, (cap - old) * sizeof(void *));
++    grown->cap = cap;
++    real_set(real_key, grown);
++    t = grown;
++  }
++  t->slots[key] = (void *)value;
++  return 0;
++}
 diff -ruN a/vl-convert-rs/Cargo.toml b/vl-convert-rs/Cargo.toml
 --- a/vl-convert-rs/Cargo.toml
 +++ b/vl-convert-rs/Cargo.toml
@@ -154,3 +411,64 @@ diff -ruN a/vl-convert-rs/src/converter/inner/mod.rs b/vl-convert-rs/src/convert
              residual_lazy_js_sources: crate::VL_CONVERT_RESIDUAL_LAZY_JS,
              residual_lazy_esm_sources: crate::VL_CONVERT_RESIDUAL_LAZY_ESM,
              create_params,
+diff -ruN a/vl-convert-rs/src/converter/worker_pool.rs b/vl-convert-rs/src/converter/worker_pool.rs
+--- a/vl-convert-rs/src/converter/worker_pool.rs
++++ b/vl-convert-rs/src/converter/worker_pool.rs
+@@ -292,10 +292,19 @@
+             }
+             Err(err) => {
+                 drop(senders);
++                let mut detail = err.to_string();
+                 for handle in handles {
+-                    let _ = handle.join();
++                    if let Err(payload) = handle.join() {
++                        if let Some(msg) = payload
++                            .downcast_ref::<String>()
++                            .cloned()
++                            .or_else(|| payload.downcast_ref::<&str>().map(|s| s.to_string()))
++                        {
++                            detail = format!("worker panicked: {msg}");
++                        }
++                    }
+                 }
+-                bail!("Failed to receive worker startup status: {err}");
++                bail!("Failed to receive worker startup status: {detail}");
+             }
+         }
+     }
+diff -ruN a/vl-convert-rs/src/data_ops.rs b/vl-convert-rs/src/data_ops.rs
+--- a/vl-convert-rs/src/data_ops.rs
++++ b/vl-convert-rs/src/data_ops.rs
+@@ -13,7 +13,7 @@
+ use std::time::{Duration, Instant};
+ 
+ lazy_static! {
+-    static ref ASYNC_CLIENT: reqwest::Client = reqwest::Client::builder()
++    static ref ASYNC_CLIENT: reqwest::Client = vl_convert_google_fonts::MobileTls::mobile_tls(reqwest::Client::builder())
+         .user_agent(VL_CONVERT_USER_AGENT)
+         .connect_timeout(Duration::from_secs(10))
+         .timeout(REQUEST_TIMEOUT)
+diff -ruN a/vl-convert-rs/src/image_loading.rs b/vl-convert-rs/src/image_loading.rs
+--- a/vl-convert-rs/src/image_loading.rs
++++ b/vl-convert-rs/src/image_loading.rs
+@@ -18,7 +18,7 @@
+     concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+ 
+ lazy_static! {
+-    static ref BLOCKING_CLIENT: reqwest::blocking::Client = reqwest::blocking::ClientBuilder::new()
++    static ref BLOCKING_CLIENT: reqwest::blocking::Client = vl_convert_google_fonts::MobileTls::mobile_tls(reqwest::blocking::ClientBuilder::new())
+         .user_agent(VL_CONVERT_USER_AGENT)
+         .connect_timeout(Duration::from_secs(10))
+         .timeout(crate::data_ops::REQUEST_TIMEOUT)
+diff -ruN a/vl-convert-rs/src/module_loader/mod.rs b/vl-convert-rs/src/module_loader/mod.rs
+--- a/vl-convert-rs/src/module_loader/mod.rs
++++ b/vl-convert-rs/src/module_loader/mod.rs
+@@ -244,7 +244,7 @@
+             }
+ 
+             return Box::pin(async move {
+-                let client = reqwest::Client::builder()
++                let client = vl_convert_google_fonts::MobileTls::mobile_tls(reqwest::Client::builder())
+                     .redirect(reqwest::redirect::Policy::none())
+                     .build()
+                     .map_err(|e| {

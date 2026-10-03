@@ -1,9 +1,37 @@
-deno_core 0.411.0: errno on Android and iOS.
+deno_core 0.411.0: embed extension sources; errno on Android and iOS.
 
-uv_compat/tty.rs reads errno through a per-platform extern and has a
-compile_error!() for every OS but macOS and Linux. iOS uses Darwin's __error();
-Android's bionic exposes __errno().
+1. extensions.rs: include_js_files! and include_lazy_loaded_js_files! record
+   each extension source by its absolute build-machine path and read it only
+   while a snapshot is being made. This build boots without a snapshot (QuickJS
+   cannot load a V8 one), so the runtime would read those paths on the device
+   and fail with "Failed to initialize a JsRuntime: No such file or directory".
+   Switch both to `included`, which embeds the files with include_str!.
 
+2. uv_compat/tty.rs reads errno through a per-platform extern and has a
+   compile_error!() for every OS but macOS and Linux. iOS uses Darwin's
+   __error(); Android's bionic exposes __errno().
+
+diff -ruN a/extensions.rs b/extensions.rs
+--- a/extensions.rs
++++ b/extensions.rs
+@@ -943,7 +943,7 @@
+     $(with_specifier $s2:literal)?
+     $(= $config:tt)?
+   ),* $(,)?) => {
+-    $crate::__extension_include_js_files_inner!(mode=loaded, name=$name, dir=$crate::__extension_root_dir!($($dir)?), $([
++    $crate::__extension_include_js_files_inner!(mode=included, name=$name, dir=$crate::__extension_root_dir!($($dir)?), $([
+       // These entries will be parsed in __extension_include_js_files_inner
+       $s1 $(with_specifier $s2)? $(= $config)?
+     ]),*)
+@@ -973,7 +973,7 @@
+ #[doc(hidden)]
+ #[macro_export]
+ macro_rules! __extension_include_js_files_detect {
+-  ($($rest:tt)*) => { $crate::__extension_include_js_files_inner!(mode=loaded, $($rest)*) };
++  ($($rest:tt)*) => { $crate::__extension_include_js_files_inner!(mode=included, $($rest)*) };
+ }
+ 
+ /// This is the core of the [`include_js_files!`] and [`include_lazy_loaded_js_files`] macros. The first
 diff -ruN a/uv_compat/tty.rs b/uv_compat/tty.rs
 --- a/uv_compat/tty.rs
 +++ b/uv_compat/tty.rs

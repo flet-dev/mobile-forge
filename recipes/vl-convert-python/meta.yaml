@@ -28,5 +28,11 @@ crate_patches:
     - deno_node.patch
   deno_os:
     - deno_os.patch
+  deno_runtime:
+    - deno_runtime.patch
   deno_signals:
     - deno_signals.patch
+
+test:
+  requires:
+    - altair
