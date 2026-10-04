@@ -1399,6 +1399,18 @@ because `copyOpt` copies only `**/*.so`); the fix there is to ship the data file
 **inside the python package's own wheel** + load it from memory — see the dedicated
 python-magic entry below.
 
+**When the package itself reads the file on every import, patch the read instead.**
+`extract_packages` in a recipe's `meta.yaml` reaches only mobile-forge's test app, so
+the CI run goes green while every consumer app still crashes until its author adds the
+same entry to their own `pyproject.toml`. If the read is one small file in the package's
+own code, swap the `open(os.path.join(os.path.dirname(__file__), …))` for
+`importlib.resources.files(__package__).joinpath(…).read_text()`, which zipimport
+serves. xgboost 3.4 (`_c_api._py_version()` opens `xgboost/VERSION`, called from
+`__init__` and again from `_load_lib`) died on `import xgboost` with
+`…/sitepackages.zip/xgboost/VERSION`; `mobile.patch` hunk 4 fixes it with no consumer
+configuration. The 3.3.0 recipe predated 0.86 and never met it. Reproduce on a desktop
+in seconds: put the package in a zip on `sys.path` and import it.
+
 ---
 
 ### `RuntimeError: Failed to load shared library '.../<pkg>/lib/lib<X>.so'` / `dlopen failed: library "..." not found` (Android, at import — a **ctypes** loader that raises before its own jniLibs fallback)
@@ -1439,7 +1451,12 @@ Android** build, while the *same recipe passes on py3.12*. llama-cpp-python hit 
 Unsupported platform` at import on 3.13, before its jniLibs bare-soname fallback could run.
 
 **Fix:** add `or sys.platform == "android"` wherever `"linux"` is special-cased (Android is a
-Linux kernel, so the linux path is almost always what you want), and bump the build. This is a
+Linux kernel, so the linux path is almost always what you want), and bump the build.
+**iOS is different: flet's runtime reports `"ios"` on every version, 3.12 included**
+(`Py_GetPlatform()` in its 3.12.13 `Python.framework` returns the literal `"ios"`, and its
+`_sysconfigdata__ios_*` sets `MACHDEP` to `ios`). So an `ios` branch is enough, and the
+`darwin` branch can stay byte-identical to upstream (xgboost). A comment in
+llama-cpp-python's `mobile.patch` says 3.12 iOS reports `"darwin"`; it does not. This is a
 **general py3.12→3.13 tell** — grep a recipe's patches/loaders for `sys.platform` before trusting
 a 3.13 build. Distinct from the 3.13/3.14 Android **x86_64 `SIGSYS`/seccomp `open()`** crash,
 which is a *native* abort from python-build's mimalloc (fixed in the `20260712` snapshot), not a
@@ -1693,8 +1710,12 @@ misses. The bundled libs (llama-cpp-python's libllama/libggml*) were relocated t
 **Fix:** after the on-disk probes miss, fall back to `ctypes.CDLL("lib<name>.so")`
 (bare soname → the Android linker resolves it from jniLibs), for both the dependency
 preload and the main lib; load `RTLD_GLOBAL` so preloaded deps satisfy the main
-lib's DT_NEEDED. Verified: llama-cpp-python (android). See also "Unable to find
-… shared library" (the `find_library`-returns-None sibling).
+lib's DT_NEEDED. Verified: llama-cpp-python (android). xgboost's `libpath.py` has
+the same `os.path.exists` gate (its error would be `XGBoostLibraryNotFound: Cannot
+find XGBoost Library in the candidate path`); its patch returns `["libxgboost.so"]`
+when nothing exists and `sys.getandroidapilevel` does — present on 3.12, where
+`sys.platform` still says `"linux"`. Verified on an arm64 emulator, Flet 1.0.3.
+See also "Unable to find … shared library" (the `find_library`-returns-None sibling).
 
 ---
 
