@@ -25,7 +25,6 @@ def row(label: str, value: str) -> ft.Row:
 
 
 def main(page: ft.Page):
-    """Lay out the page, then write and inspect a first clip straight away."""
     busy = threading.Lock()
 
     def run():

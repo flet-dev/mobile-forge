@@ -5,7 +5,6 @@ from logs import LEVELS, archive, library_version, sample_log
 
 
 def main(page: ft.Page):
-    """Wire the level buttons to a background archive-and-verify of a generated log."""
     busy = threading.Lock()
 
     def run(name: str):
