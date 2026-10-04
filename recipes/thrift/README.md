@@ -20,10 +20,6 @@ dependencies = [
 ]
 ```
 
-Do not list `thrift` in `[tool.flet] source_packages`, and remove it if you added it before
-this wheel existed. That setting builds the codec for your computer instead of the phone,
-so the app runs on thrift's pure-Python fallback while carrying a binary it cannot load.
-
 ## Examples
 
 See runnable Flet apps in [`examples/`](examples):

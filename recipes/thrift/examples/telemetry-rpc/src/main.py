@@ -37,7 +37,6 @@ def row_for(name, size, fast, pure):
 
 
 def main(page: ft.Page):
-    """Start the in-app Thrift server, then call it and benchmark the protocols."""
     port = start_server()
     native = native_codec()
 
