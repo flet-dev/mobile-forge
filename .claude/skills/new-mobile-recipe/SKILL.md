@@ -372,7 +372,9 @@ crate_patches:
 
 forge downloads the exact version the source's `Cargo.lock` resolves, checks its
 sha256 against the lockfile, unpacks it into `forge-crates/`, applies the patches and adds
-a `[patch.crates-io]` entry to the root `Cargo.toml`. Generate each patch from a pristine
+a `[patch.crates-io]` entry to the root `Cargo.toml`, joining upstream's table when it has
+one. If that table already patches the same crate (say, to a git fork), forge stops: change
+upstream's entry with the sdist patch instead. Generate each patch from a pristine
 copy of `~/.cargo/registry/src/*/<crate>-<ver>` the same way as an sdist patch, and keep
 the sdist patch from rewriting `Cargo.lock`: forge reads versions and checksums from it.
 Running `cargo metadata` or `cargo tree` in your edited tree rewrites the lockfile, which

@@ -4,6 +4,7 @@ import hashlib
 import multiprocessing
 import os
 import re
+import shlex
 import shutil
 import struct
 import sys
@@ -51,6 +52,50 @@ Everything in it ships, whatever it is named — a recipe supplying
 notices for a binary that carries none usually has one per bundled project, and
 those names (COPYING.curl, LICENSE.boringssl) are ours to choose.
 """
+
+PATCH_CRATES_IO_RE = re.compile(
+    r'^[ \t]*\[[ \t]*patch[ \t]*\.[ \t]*(crates-io|"crates-io")[ \t]*\][ \t]*(#.*)?$',
+    re.MULTILINE,
+)
+
+
+def add_crates_io_patches(text: str, entries: list[tuple[str, str, str]]) -> str:
+    """Add ``(key, crate, path)`` entries to a Cargo.toml's ``[patch.crates-io]``.
+
+    Refuses a crate the manifest already patches, and checks the result parses,
+    so an unusual manifest fails here rather than as a cargo TOML error.
+    """
+    existing = tomllib.loads(text).get("patch", {}).get("crates-io", {})
+    for key, name, _ in entries:
+        for old_key, old in existing.items():
+            old_name = old.get("package", old_key) if isinstance(old, dict) else old_key
+            if key == old_key or name == old_name:
+                raise RuntimeError(
+                    f"crate_patches: Cargo.toml already patches {name} ({old_key!r}); "
+                    "change that entry with a source patch instead"
+                )
+
+    # Quoted: a crate id used as a key has dots.
+    lines = "".join(
+        f'"{key}" = {{ package = "{name}", path = "{path}" }}\n'
+        for key, name, path in entries
+    )
+    header = PATCH_CRATES_IO_RE.search(text)
+    if header:
+        text = f"{text[: header.end()]}\n{lines[:-1]}{text[header.end() :]}"
+    elif existing:
+        raise RuntimeError(
+            "crate_patches: Cargo.toml defines [patch.crates-io] without a "
+            "[patch.crates-io] header to add entries under"
+        )
+    else:
+        text = f"{text.rstrip()}\n\n[patch.crates-io]\n{lines}"
+
+    merged = tomllib.loads(text)["patch"]["crates-io"]
+    for key, name, path in entries:
+        if merged.get(key) != {"package": name, "path": path}:
+            raise RuntimeError(f"crate_patches: could not add {key!r} to Cargo.toml")
+    return text if text.endswith("\n") else text + "\n"
 
 
 class Builder(ABC):
@@ -286,7 +331,9 @@ class Builder(ABC):
                 if pkg["name"] == name and (not version or pkg["version"] == version)
             ]
             if len(matches) != 1:
-                found = ", ".join(pkg["version"] for pkg in locked if pkg["name"] == name)
+                found = ", ".join(
+                    pkg["version"] for pkg in locked if pkg["name"] == name
+                )
                 raise RuntimeError(
                     f"crate_patches: {key!r} must match exactly one crates.io package in "
                     f"Cargo.lock (found: {found or 'none'}); use name@version to choose"
@@ -318,7 +365,12 @@ class Builder(ABC):
             crates_dir = self.build_path / "forge-crates"
             crates_dir.mkdir(exist_ok=True)
             with tarfile.open(archive) as tf:
-                tf.extractall(path=crates_dir, filter="data")
+                # filter= exists from 3.12 and in 3.8-3.11 security releases; the
+                # archive already matched the lockfile checksum.
+                if hasattr(tarfile, "data_filter"):
+                    tf.extractall(path=crates_dir, filter="data")
+                else:
+                    tf.extractall(path=crates_dir)
 
             for patch in patches:
                 patchfile = self.package.recipe_path / "patches" / patch
@@ -337,22 +389,14 @@ class Builder(ABC):
                 )
             patched.setdefault(name, []).append(crate_id)
 
-        lines = []
+        entries = []
         for name, crate_ids in patched.items():
             for crate_id in crate_ids:
                 # Two patched versions of one crate need distinct keys; cargo
-                # matches on `package`, not on the key. Quoted: a crate id has dots.
+                # matches on `package`, not on the key.
                 key = name if len(crate_ids) == 1 else crate_id
-                lines.append(
-                    f'"{key}" = {{ package = "{name}", path = "forge-crates/{crate_id}" }}\n'
-                )
-        text = manifest.read_text()
-        header = "[patch.crates-io]\n"
-        if header in text:
-            text = text.replace(header, header + "".join(lines), 1)
-        else:
-            text = text.rstrip("\n") + "\n\n" + header + "".join(lines)
-        manifest.write_text(text)
+                entries.append((key, name, f"forge-crates/{crate_id}"))
+        manifest.write_text(add_crates_io_patches(manifest.read_text(), entries))
 
     def prepare(self, clean=True):
         if clean and self.build_path.is_dir():
@@ -716,20 +760,20 @@ class Builder(ABC):
         if self.cross_venv.sdk == "android":
             cc_name = Path(cc).name
             clang_target = (
-                cc_name.removesuffix("-clang")
+                cc_name[: -len("-clang")]
                 if cc_name.endswith("-clang")
                 else f"{self.cross_venv.platform_triplet}{self.cross_venv.sdk_version}"
             )
-            sysroot = f"--sysroot={env['NDK_SYSROOT']}"
+            # bindgen shell-splits the variable, so a path with a space needs quoting.
+            sysroot = f"--sysroot={shlex.quote(env['NDK_SYSROOT'])}"
         else:
             arch = self.cross_venv.platform_triplet.split("-")[0]
             clang_target = f"{arch}-apple-ios{self.cross_venv.sdk_version}"
             if self.cross_venv.sdk.endswith("simulator"):
                 clang_target += "-simulator"
-            sysroot = f"-isysroot {self.cross_venv.sdk_root}"
-        env[f"BINDGEN_EXTRA_CLANG_ARGS_{cargo_build_target.replace('-', '_')}"] = (
-            f"--target={clang_target} {sysroot}"
-        )
+            sysroot = f"-isysroot {shlex.quote(str(self.cross_venv.sdk_root))}"
+        bindgen_var = f"BINDGEN_EXTRA_CLANG_ARGS_{cargo_build_target.replace('-', '_')}"
+        env[bindgen_var] = f"--target={clang_target} {sysroot}"
 
         # `env` wins. Everything forge has adjusted above — the compiler and
         # binutils re-pointed at the installed NDK, and the CFLAGS/CPPFLAGS/LDFLAGS
