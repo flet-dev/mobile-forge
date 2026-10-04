@@ -1,0 +1,74 @@
+deno_fs 0.168.0: treat iOS as macOS.
+
+Every target_os = "macos" cfg also matches ios. Several of these branches have
+no fallback, so iOS fails to compile without them; the rest select Darwin APIs
+that iOS shares. Regenerate on a bump by running, from the crate root:
+
+    perl -0pi -e 's/target_os = "macos"/any(target_os = "macos", target_os = "ios")/g' $(grep -rl 'target_os = "macos"' .)
+
+diff -ruN a/std_fs.rs b/std_fs.rs
+--- a/std_fs.rs
++++ b/std_fs.rs
+@@ -86,7 +86,7 @@
+       Ok(r.bits())
+     }
+     #[cfg(any(
+-      target_os = "macos",
++      any(target_os = "macos", target_os = "ios"),
+       target_os = "openbsd",
+       target_os = "freebsd"
+     ))]
+@@ -568,7 +568,7 @@
+   Err(FsError::NotSupported)
+ }
+ 
+-#[cfg(target_os = "macos")]
++#[cfg(any(target_os = "macos", target_os = "ios"))]
+ fn lchmod(path: &Path, mode: u32) -> FsResult<()> {
+   use std::os::unix::fs::OpenOptionsExt;
+   use std::os::unix::fs::PermissionsExt;
+@@ -583,7 +583,7 @@
+   Ok(())
+ }
+ 
+-#[cfg(not(target_os = "macos"))]
++#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+ fn lchmod(_path: &Path, _mode: u32) -> FsResult<()> {
+   Err(FsError::NotSupported)
+ }
+@@ -669,7 +669,7 @@
+     );
+   }
+ 
+-  #[cfg(target_os = "macos")]
++  #[cfg(any(target_os = "macos", target_os = "ios"))]
+   {
+     use std::ffi::CString;
+     use std::os::unix::fs::OpenOptionsExt;
+@@ -834,7 +834,7 @@
+     copy_file(from, to)
+   }
+ 
+-  #[cfg(target_os = "macos")]
++  #[cfg(any(target_os = "macos", target_os = "ios"))]
+   {
+     // Just clonefile()
+     use std::ffi::CString;
+@@ -1004,7 +1004,7 @@
+     cpath.push(0);
+     if bigint {
+       #[cfg(not(any(
+-        target_os = "macos",
++        any(target_os = "macos", target_os = "ios"),
+         target_os = "freebsd",
+         target_os = "openbsd"
+       )))]
+@@ -1014,7 +1014,7 @@
+         (libc::statfs64(cpath.as_ptr() as _, &mut result), result)
+       };
+       #[cfg(any(
+-        target_os = "macos",
++        any(target_os = "macos", target_os = "ios"),
+         target_os = "freebsd",
+         target_os = "openbsd"
+       ))]

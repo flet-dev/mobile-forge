@@ -103,6 +103,23 @@ properties:
       Patches to apply to the code. Each entry is a filename in the
       `patches` folder of the recipe.
 
+  crate_patches:
+    type: object
+    default: {}
+    additionalProperties:
+      type: array
+      items:
+        type: string
+    description: >-
+      Rust recipes only. Patches for crates.io dependencies, keyed by crate name
+      (or name@version when Cargo.lock holds several versions of it), each value
+      a list of filenames in the recipe's `patches` folder. forge downloads the
+      version the source's Cargo.lock resolves, checks it against the lockfile
+      checksum, unpacks it into `forge-crates/`, applies the patches with
+      `patch -p1` from the crate root, and adds a `[patch.crates-io]` entry for
+      it to the root Cargo.toml. Needs Cargo.toml and Cargo.lock at the source
+      root.
+
   extract_packages:
     type: array
     default: []

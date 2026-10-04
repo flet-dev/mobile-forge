@@ -1,0 +1,17 @@
+deno_os 0.75.0: use the Darwin rss() on iOS.
+
+rss() is defined per OS with no fallback; iOS has the same mach task_info as
+macOS.
+
+diff -ruN a/lib.rs b/lib.rs
+--- a/lib.rs
++++ b/lib.rs
+@@ -847,7 +847,7 @@
+   total_rss_pages * page_size as u64
+ }
+ 
+-#[cfg(target_os = "macos")]
++#[cfg(any(target_os = "macos", target_os = "ios"))]
+ fn rss() -> u64 {
+   // Inspired by https://github.com/Arc-blroth/memory-stats/blob/5364d0d09143de2a470d33161b2330914228fde9/src/darwin.rs
+ 
