@@ -23,13 +23,13 @@ class Archive:
     path: str
 
 
-def library_version():
+def library_version() -> str:
     """Version of the liblz4 compiled into the wheel."""
     return lz4.library_version_string()
 
 
 @functools.cache
-def sample_log(lines=60_000, seed=0):
+def sample_log(lines: int = 60_000, seed: int = 0) -> bytes:
     """Build a deterministic app log of about 4 MB, standing in for a real one.
 
     Seeded so every run compresses the same bytes and the levels compare fairly; cached
@@ -50,7 +50,7 @@ def sample_log(lines=60_000, seed=0):
     return "".join(out).encode()
 
 
-def archive(data, level):
+def archive(data: bytes, level: int) -> Archive:
     """Write `data` to an .lz4 file at `level` a megabyte at a time, then read it back
     the same way, timing both ends and checking every byte.
 

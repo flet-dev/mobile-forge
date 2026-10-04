@@ -8,7 +8,7 @@ def main(page: ft.Page):
     """Wire the level buttons to a background archive-and-verify of a generated log."""
     busy = threading.Lock()
 
-    def run(name):
+    def run(name: str):
         """Unless a run is in flight, disable the levels, raise the spinner, and hand
         one archive run to a thread."""
         # Every level writes the same file. Disabling the buttons is not enough on
@@ -20,7 +20,7 @@ def main(page: ft.Page):
         page.update()
         page.run_thread(lambda: work(name))
 
-    def work(name):
+    def work(name: str):
         """Write, read back and verify at one level, then refill the report.
 
         run_thread reports a failure only in the log and does not carry an automatic

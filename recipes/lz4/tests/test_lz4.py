@@ -1,4 +1,5 @@
 import random
+from pathlib import Path
 
 # `lz4 -9 --content-size -BX` (the reference CLI, v1.10.0) over
 # b"flet + lz4 on a phone\n" * 300: content size, block and content checksums.
@@ -10,7 +11,7 @@ CLI_FRAME = bytes.fromhex(
 CLI_PAYLOAD = b"flet + lz4 on a phone\n" * 300
 
 
-def _payload():
+def _payload() -> bytes:
     """Half repetitive text, half seeded noise, so every codec path does real work."""
     text = b"".join(b"event %05d level=info msg=ok\n" % i for i in range(4000))
     return text + random.Random(0).randbytes(len(text))
@@ -71,7 +72,7 @@ def test_incremental_matches_oneshot():
     assert out == data == lz4.frame.decompress(frame)
 
 
-def test_frame_file_roundtrip(tmp_path):
+def test_frame_file_roundtrip(tmp_path: Path):
     """lz4.frame.open writes a standard .lz4 file to device storage in pieces and reads
     it back -> the file API streams, not only in-memory buffers."""
     import lz4.frame

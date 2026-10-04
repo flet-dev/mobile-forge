@@ -1,7 +1,6 @@
-"""Writes a short MP4 with a video and an audio stream, reads it back to describe
-what actually landed in the file, and pulls stills out of it as JPEG bytes an
-`ft.Image` can display.
-"""
+"""Writes a short MP4 with a video and an audio stream, reads it back to describe what
+actually landed in the file, and pulls stills out of it as JPEG bytes an `ft.Image` can
+display."""
 
 import io
 import math
@@ -57,7 +56,7 @@ def _video_frame(index: int):
     return frame
 
 
-def _audio_frames(stream):
+def _audio_frames(stream: av.AudioStream):
     """A 440 Hz tone, resampled into whatever layout the AAC encoder asked for."""
     resampler = av.AudioResampler(
         format=stream.format, layout=stream.layout, rate=SAMPLE_RATE
@@ -129,7 +128,7 @@ def probe(path: str) -> list[tuple[str, str]]:
     return rows
 
 
-def _jpeg(frame, width: int) -> bytes:
+def _jpeg(frame: av.VideoFrame, width: int) -> bytes:
     """Re-encode one decoded frame as a JPEG, scaled to `width`."""
     height = width * frame.height // frame.width
     scaled = frame.reformat(width=width, height=height, format="yuvj420p")

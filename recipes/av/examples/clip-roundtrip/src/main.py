@@ -4,7 +4,7 @@ import flet as ft
 from clip import clip_path, library_versions, probe, thumbnails, write_clip
 
 
-def still(label, jpeg):
+def still(label: str, jpeg: bytes) -> ft.Column:
     """One filmstrip cell: a decoded frame above the timestamp it was taken at."""
     return ft.Column(
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -16,7 +16,7 @@ def still(label, jpeg):
     )
 
 
-def row(label, value):
+def row(label: str, value: str) -> ft.Row:
     """One line of the probe readout: label on the left, what was read on the right."""
     return ft.Row(
         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,

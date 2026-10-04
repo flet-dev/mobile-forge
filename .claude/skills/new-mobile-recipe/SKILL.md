@@ -310,6 +310,9 @@ Open `tests/test_<name>.py` and replace the placeholder with a real smoke test:
 - **Every test function has a docstring** — one line saying what behavior it proves.
 - Tests must be **network-free and deterministic** (fixed seeds, committed tiny assets) —
   they run on an emulator with no guarantees about connectivity.
+- **Type every parameter where Python allows it** — tests, fixtures (`tmp_path: Path`),
+  helpers, and the example apps' functions and nested handlers alike. Only lambdas are
+  exempt (no annotation syntax); domain functions also get a return type.
 
 For ML/inference recipes, raise the bar from import-only to real compute:
 
