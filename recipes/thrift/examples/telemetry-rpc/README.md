@@ -12,7 +12,7 @@ What it demonstrates:
   part a real app keeps: a `TSocket` with a timeout, wrapped in a `TFramedTransport`,
   speaking `TBinaryProtocolAccelerated`. Point it at your own host and port, and match
   your server's transport, framed or buffered. Everything else in that file is the
-  stand-in server.
+  stand-in server, the sample readings and the codec benchmark.
 - **Errors arrive as exceptions.** The second call includes an impossible temperature. The
   server raises `InvalidReading`, which the IDL declares, and the client receives it as a
   Python exception with its fields intact.

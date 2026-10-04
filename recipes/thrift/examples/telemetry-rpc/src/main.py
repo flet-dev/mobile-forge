@@ -19,7 +19,7 @@ def rate(per_second):
     """Round trips per second, abbreviated: 41200 -> '41.2k', 180 -> '180'."""
     if per_second is None:
         return "—"
-    return f"{per_second / 1000:.1f}k" if per_second >= 1000 else f"{per_second:.0f}"
+    return f"{per_second / 1000:.1f}k" if per_second >= 999.5 else f"{per_second:.0f}"
 
 
 def row_for(name, size, fast, pure):
@@ -42,7 +42,7 @@ def main(page: ft.Page):
     native = native_codec()
 
     def calls():
-        """A good call and a rejected one. Network failures raise TException."""
+        """A good call and a rejected one; a network failure raises."""
         summary, ms = submit(port, batch())
         call.value = (
             f"submit({summary.count} readings) in {ms:.1f} ms\n"
@@ -62,7 +62,7 @@ def main(page: ft.Page):
         page.update()
         try:
             calls()
-        except TException as err:  # refused, timed out, wrong framing, bad certificate
+        except (TException, OSError) as err:  # THttpClient raises OSError unwrapped
             call.value = f"{type(err).__name__}: {err}"
             rejected.value = ""
 

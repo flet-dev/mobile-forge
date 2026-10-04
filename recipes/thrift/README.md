@@ -55,18 +55,20 @@ try:
     summary = client.submit(readings)            # readings: a list of generated Reading
 finally:
     transport.close()
+status.value = f"{summary.count} readings, mean {summary.mean_celsius:.1f} °C"  # an ft.Text
 ```
 
 Use the `*Accelerated` protocol classes: on this wheel they run the native codec. Requests
 are encoded natively on any transport, but replies are decoded natively only through
-`TFramedTransport` or `TBufferedTransport`. So always wrap the connection: in whichever of
-the two the server speaks (`TBufferedTransport` is the same on the wire as a bare socket),
-and over HTTP, `TTransport.TBufferedTransport(THttpClient.THttpClient(url))`.
+`TFramedTransport` or `TBufferedTransport`. So always wrap the connection: a socket in
+whichever of the two the server speaks (`TBufferedTransport` is the same on the wire as a
+bare socket), and an HTTP client as `TTransport.TBufferedTransport(THttpClient.THttpClient(url))`.
 
 Serializing without a connection, for a cache file or a message payload, is one call each
 way with [`thrift.TSerialization`](https://github.com/apache/thrift/blob/master/lib/py/src/TSerialization.py):
 
 ```python
+from thrift.protocol import TBinaryProtocol
 from thrift.TSerialization import deserialize, serialize
 
 from telemetry.ttypes import Summary
@@ -109,10 +111,14 @@ CA, build the context with `ssl.create_default_context(cafile=...)` and pass it 
 `ssl_context=` to either class; `THttpClient`'s own `cafile=` argument raises `TypeError`
 unless a client certificate is given too.
 
-A certificate the device rejects surfaces differently per class. `TSSLSocket.open()` raises
-`TTransportException: Could not connect to any of [...]`, the same message as an
-unreachable host, with the `ssl.SSLCertVerificationError` in the exception's `inner`.
-`THttpClient` raises the `ssl.SSLCertVerificationError` itself.
+### Failures
+
+A phone loses its network far more often than a desktop does, so plan for the error path.
+`TSocket` and `TSSLSocket` wrap failures in `TTransportException`; a certificate the device
+rejects reads `Could not connect to any of [...]`, the same message as an unreachable host,
+with the `ssl.SSLCertVerificationError` in the exception's `inner`. `THttpClient` wraps
+nothing: a refused connection, a timeout or a rejected certificate arrives as the
+underlying `OSError`. Catching `(TException, OSError)` covers both.
 
 ### App size
 
@@ -124,17 +130,18 @@ whole ABIs you do not ship.
 
 ### Other considerations
 
-`flet run` on a desktop installs PyPI's own thrift wheels, which carry the same native
-codec, so desktop and device take the same code paths.
+On a desktop, `flet run` uses PyPI's own thrift wheels, which carry the same native codec,
+so desktop and device take the same code paths.
 
 ## Things to know
 
 - **Without the codec, the Accelerated classes are slower than the plain ones.** They fall
   back to pure Python silently, and every one created retries the missing import, so code
-  that builds a protocol per message, as `TSerialization` does, pays for it each time: a
-  small struct ran over ten times slower than with `TBinaryProtocol`. Pass `fallback=False`
-  to make a missing codec raise `ImportError` when the protocol is created, or check that
-  `from thrift.protocol import fastbinary` succeeds.
+  that builds a protocol per message, as `TSerialization` does, pays for it each time: on a
+  desktop a small struct ran 5 to 30 times slower than with `TBinaryProtocol`, the smaller
+  the struct the worse. Pass `fallback=False` to make a missing codec raise `ImportError`
+  when the protocol is created, or check that `from thrift.protocol import fastbinary`
+  succeeds.
 
 - **A bare `TSocket`, `TSSLSocket` or `THttpClient` bypasses the native decoder.** Requests
   are still encoded natively, but every reply is decoded in pure Python. Nothing fails; it
