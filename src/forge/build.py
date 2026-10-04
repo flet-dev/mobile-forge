@@ -341,10 +341,10 @@ class Builder(ABC):
         for name, crate_ids in patched.items():
             for crate_id in crate_ids:
                 # Two patched versions of one crate need distinct keys; cargo
-                # matches on `package`, not on the key.
+                # matches on `package`, not on the key. Quoted: a crate id has dots.
                 key = name if len(crate_ids) == 1 else crate_id
                 lines.append(
-                    f'{key} = {{ package = "{name}", path = "forge-crates/{crate_id}" }}\n'
+                    f'"{key}" = {{ package = "{name}", path = "forge-crates/{crate_id}" }}\n'
                 )
         text = manifest.read_text()
         header = "[patch.crates-io]\n"
