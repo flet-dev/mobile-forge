@@ -118,7 +118,7 @@ carries every control value: `xcrun simctl spawn "$UDID" log show --last 2m --st
 
 1. **Use forge's `dist/` wheel, NOT `build/.../target/wheels/`.** The latter is maturin's raw output — **unstripped**. For polars that meant a **1.27 GB** `.so` (vs 130 MB stripped); it blows up install space and may not load. forge strips + repacks into `dist/`. Always test the `dist/` wheel.
 
-2. **Build the recipe against the SAME Python `flet build` bundles — and know which one that is.** `flet build` **0.86.5 defaults to Python 3.14** (measured 2026-09-14: the app's staged site-packages hold `_cffi_backend.cpython-314-*.so`); the snippets above pass `--python-version 3.12` to pin it, and CI's recipe-tester does the same. A **consumer** example app built the plain way (`flet build apk`, no flag) therefore gets 3.14, so build the recipe for 3.14 (`source ./setup.sh 3.14`) before that pass, or pass the flag. `flet-lib*` build.sh recipes are `py3-none-<plat>` and version-independent — only the Python package needs the extra build.
+2. **Build the recipe against the SAME Python `flet build` bundles — and know which one that is.** `flet build` **0.86.5 defaults to Python 3.14** (measured 2026-09-14: the app's staged site-packages hold `_cffi_backend.cpython-314-*.so`), and so does 1.0.3 (3.14.7; a forge build against the 3.14.6 support tree loads fine); the snippets above pass `--python-version 3.12` to pin it, and CI's recipe-tester does the same. A **consumer** example app built the plain way (`flet build apk`, no flag) therefore gets 3.14, so build the recipe for 3.14 (`source ./setup.sh 3.14`) before that pass, or pass the flag. `flet-lib*` build.sh recipes are `py3-none-<plat>` and version-independent — only the Python package needs the extra build.
 
    Two different failure shapes if you get it wrong. For a **compiled** package: forge's Android Rust `.so` hard-links `libpythonX.Y.so` (`DT_NEEDED`) — so the **`abi3` wheel tag is misleading**; it still needs the matching `libpython` at `dlopen`. A 3.14-built wheel in a 3.12 app fails: `dlopen … libpython3.14.so` missing → the package reports its "binary missing" (e.g. polars `NameError: PySeries`). Verify with `llvm-readelf -d <so> | grep NEEDED`. If you only have a different support tree, you can retag a wheel for flet's python with `uvx --from wheel wheel tags --python-tag cp312 --abi-tag abi3 --remove <whl>`, but the underlying `libpython` link still has to match — so really, build on the right python. For a **pure-Python** package with a mobile patch there is no link error at all — pip simply finds no `cp3XX` match, silently installs PyPI's `py3-none-any` wheel, and the app fails on device with the unpatched loader's own error. Tell: the app's `build/site-packages/<abi>/<pkg>-*.dist-info/METADATA` is missing the `flet-lib*` `Requires-Dist` the recipe promotes.
 
@@ -174,11 +174,14 @@ carries every control value: `xcrun simctl spawn "$UDID" log show --last 2m --st
     #   config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
     sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = 13.0;/IPHONEOS_DEPLOYMENT_TARGET = 15.0;/' Runner.xcodeproj/project.pbxproj
     cd .. && SERIOUS_PYTHON_APP=$PWD/../python-app SERIOUS_PYTHON_SITE_PACKAGES=$PWD/../site-packages \
-      SERIOUS_PYTHON_VERSION=3.14 SP_NATIVE_SET=$(cat ../.serious_python_spm_key) \
+      SERIOUS_PYTHON_VERSION=3.14 SERIOUS_PYTHON_BUNDLE_ID=com.flet.<app-name> \
+      SP_NATIVE_SET=$(cat ../.serious_python_spm_key) \
       flutter build ios --simulator --build-name 1.0.0   # VERSION = the Python flet built for
     # → build/flutter/build/ios/iphonesimulator/<app>.app
     ```
     A fresh `flet build` regenerates the template, so repeat the patch after every one.
+    The env is flet-cli's `_flutter_path_env` (`build_base.py`); without
+    `SERIOUS_PYTHON_BUNDLE_ID` the embedded frameworks get `org.python.*` identifiers.
 
 11. **Two booted simulators make `simctl booted` ambiguous.** With more than one sim booted, `simctl install booted …` targets one device and your subsequent `get_app_container booted …` may query the OTHER — the app "isn't installed" / the container is empty despite a successful install. Use the explicit `$UDID` for every simctl call (as the loop above does); never rely on `booted` unless you've verified exactly one device is booted (`xcrun simctl list devices | grep -c Booted`).
 
