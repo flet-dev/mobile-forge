@@ -133,13 +133,16 @@ control for playing the result.
 PyAV releases the GIL around demuxing, decoding and encoding, so this work genuinely runs in
 parallel with the UI. Hand it to
 [`page.run_thread(...)`](https://flet.dev/docs/controls/page/#flet.Page.run_thread) — a
-half-second decode on the event-handler thread is a visibly frozen app. `run_thread` swallows
-exceptions and does not carry an automatic update with it, so catch your own failures and
-finish the handler with an explicit
+half-second decode on the event-handler thread is a visibly frozen app. `run_thread` reports a
+failure only in the log and does not carry an automatic update with it, so catch your own
+failures and finish the worker with an explicit
 [`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update).
 
 A single container is not safe to use from two threads at once. Give each thread its own
-`av.open(...)`, or serialise access with a `threading.Lock`.
+`av.open(...)`, or serialise access with a `threading.Lock`. Two runs writing one output
+file need a lock even with separate containers, and `run_thread` uses a pool, so two quick
+taps on a button run concurrently. Take it in the click handler: disabling the button alone
+does not stop a tap that is already in flight.
 
 ### What this build can encode
 

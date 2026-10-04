@@ -21,7 +21,8 @@ What it demonstrates:
 - **Work off the UI thread** — the encode runs in
   [`page.run_thread(...)`](https://flet.dev/docs/controls/page/#flet.Page.run_thread), which
   needs an explicit [`page.update()`](https://flet.dev/docs/controls/page/#flet.Page.update)
-  at the end.
+  at the end. The handler also takes a non-blocking lock: every run rewrites the same clip,
+  and disabling the button does not stop a second tap that is already in flight.
 
 ## Try it
 

@@ -1,8 +1,10 @@
+import threading
+
 import flet as ft
 from clip import clip_path, library_versions, probe, thumbnails, write_clip
 
 
-def still(label, jpeg):
+def still(label: str, jpeg: bytes) -> ft.Column:
     """One filmstrip cell: a decoded frame above the timestamp it was taken at."""
     return ft.Column(
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -14,7 +16,7 @@ def still(label, jpeg):
     )
 
 
-def row(label, value):
+def row(label: str, value: str) -> ft.Row:
     """One line of the probe readout: label on the left, what was read on the right."""
     return ft.Row(
         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -23,8 +25,15 @@ def row(label, value):
 
 
 def main(page: ft.Page):
+    busy = threading.Lock()
+
     def run():
-        """Lock the button, raise the spinner, and hand the work to a thread."""
+        """Unless a run is in flight, disable the button, raise the spinner, and hand
+        the work to a thread."""
+        # Every run rewrites the same clip. Disabling the button is not enough on
+        # its own: a second tap already in flight lands before the patch does.
+        if not busy.acquire(blocking=False):
+            return
         button.disabled = True
         spinner.visible = True
         page.update()
@@ -33,8 +42,8 @@ def main(page: ft.Page):
     def compute():
         """Write the clip, probe it, extract stills, and update the page.
 
-        run_thread swallows exceptions and does not carry an automatic update
-        with it, so this catches its own failures and ends with page.update().
+        run_thread reports a failure only in the log and does not carry an automatic
+        update with it, so this catches its own failures and ends with page.update().
         """
         try:
             path = clip_path()
@@ -47,6 +56,7 @@ def main(page: ft.Page):
         button.disabled = False
         spinner.visible = False
         page.update()
+        busy.release()
 
     page.appbar = ft.AppBar(title=ft.Text("clip roundtrip"), center_title=True)
     page.add(
