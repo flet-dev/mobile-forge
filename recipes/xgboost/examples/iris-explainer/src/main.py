@@ -23,7 +23,7 @@ def main(page: ft.Page):
             )
         page.update()
 
-    def show(_=None):
+    def show():
         """Predict for the slider values and redraw the verdict, odds and reasons."""
         if model is None:
             return
