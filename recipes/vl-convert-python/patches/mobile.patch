@@ -248,7 +248,7 @@ diff -ruN a/vl-convert-python/forge_build.rs b/vl-convert-python/forge_build.rs
 diff -ruN a/vl-convert-python/forge_tls.c b/vl-convert-python/forge_tls.c
 --- a/vl-convert-python/forge_tls.c
 +++ b/vl-convert-python/forge_tls.c
-@@ -0,0 +1,107 @@
+@@ -0,0 +1,110 @@
 +// Virtual pthread TLS keys for everything linked into this extension.
 +//
 +// Rust has no native TLS on Android, so std backs every thread_local! with a
@@ -325,6 +325,9 @@ diff -ruN a/vl-convert-python/forge_tls.c b/vl-convert-python/forge_tls.c
 +  return 0;
 +}
 +
++// IDs are not reused, so MAX_KEYS bounds creates over the process's life.
++// Reuse would need per-slot generations to hide a deleted key's values, and
++// nothing here churns keys: Rust std deletes one only on a lost init race.
 +HIDDEN int pthread_key_delete(pthread_key_t key) {
 +  if (key <= 0 || (unsigned)key >= MAX_KEYS) return EINVAL;
 +  atomic_store(&dtors[key], NULL);

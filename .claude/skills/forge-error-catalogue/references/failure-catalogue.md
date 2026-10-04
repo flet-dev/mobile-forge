@@ -1880,6 +1880,13 @@ since libc.so also defines the names. Precedent: `forge_tls.c` in
 `recipes/vl-convert-python/patches/mobile.patch` (95 keys free afterwards, against 4).
 Verify with `llvm-nm -D <so> | grep pthread_key`, which should print nothing.
 
+Before copying it into another extension, check what creates keys there: the shim never
+reuses a deleted ID, so it caps creates at 4,095 per process. That is fine for Rust std,
+which deletes a key only when it loses a race to initialise one, and wrong for code that
+creates and deletes keys per object. Reuse needs a generation per slot, as bionic has, so
+a new key cannot read the deleted key's values. The real-key count above cannot see this
+limit.
+
 ---
 
 ### `Failed to initialize a JsRuntime: No such file or directory (os error 2)` (a Rust crate embedding `deno_core`, on device)
