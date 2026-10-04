@@ -35,4 +35,4 @@ crate_patches:
 
 test:
   requires:
-    - altair
+    - altair==6.3.0

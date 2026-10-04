@@ -6,6 +6,7 @@ def main(page: ft.Page):
     def show(name):
         """Start converting `name` on a background thread, spinner up."""
         spinner.visible = True
+        picker.disabled = True  # one conversion at a time
         page.update()
         page.run_thread(work, name)
 
@@ -17,8 +18,10 @@ def main(page: ft.Page):
             caption.value = f"{type(exc).__name__}: {exc}"
         else:
             chart.src = png
+            chart.visible = True
             caption.value = f"{width}×{height} px PNG in {elapsed:.2f} s"
         spinner.visible = False
+        picker.disabled = False
         page.update()  # auto-update does not reach background threads
 
     page.appbar = ft.AppBar(title="Vega-Lite charts", center_title=True)
@@ -28,7 +31,7 @@ def main(page: ft.Page):
             content=ft.Column(
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 controls=[
-                    ft.SegmentedButton(
+                    picker := ft.SegmentedButton(
                         selected=["Bars"],
                         segments=[ft.Segment(value=n, label=n) for n in SPECS],
                         on_change=lambda e: show(e.control.selected[0]),
@@ -36,10 +39,14 @@ def main(page: ft.Page):
                     ft.Container(
                         expand=True,
                         alignment=ft.Alignment.CENTER,
+                        # Hidden until the first chart: an empty src draws Flet's error box.
                         # gapless_playback keeps the old chart up until the new one decodes.
                         content=(
                             chart := ft.Image(
-                                src=b"", fit=ft.BoxFit.CONTAIN, gapless_playback=True
+                                src=b"",
+                                visible=False,
+                                fit=ft.BoxFit.CONTAIN,
+                                gapless_playback=True,
                             )
                         ),
                     ),

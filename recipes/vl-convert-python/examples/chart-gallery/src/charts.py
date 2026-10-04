@@ -1,11 +1,13 @@
 import math
 import os
+import tempfile
 import time
 from pathlib import Path
 
 # The JavaScript bytecode cache and the Google Fonts cache each resolve their
 # directory once, on first use, so point them at app storage before importing.
-CACHE = Path(os.getenv("FLET_APP_STORAGE_CACHE", ".")) / "vl-convert"
+# Absolute either way: vl-convert rejects a relative font cache directory.
+CACHE = Path(os.getenv("FLET_APP_STORAGE_CACHE") or tempfile.gettempdir()) / "vl-convert"
 os.environ.setdefault("V82JSC_BC_CACHE_DIR", str(CACHE / "bytecode"))
 os.environ.setdefault("VLC_GOOGLE_FONTS_CACHE_DIR", str(CACHE / "google-fonts"))
 

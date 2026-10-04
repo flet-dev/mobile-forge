@@ -27,9 +27,11 @@ plain C interpreter that cross-compiles like any -sys crate and needs no JIT.
 
 4. .cargo/config.toml + .cargo/cross.cmake: v8x builds WAMR (QuickJS's
    WebAssembly backend) with a bare `cmake` call that would configure for the
-   build host. CMake reads CMAKE_TOOLCHAIN_FILE from the environment; cargo's
-   [env] sets it for build scripts, and the toolchain file keys off the TARGET
-   triple cargo gives them, so host builds are unaffected.
+   build host, and aws-lc-sys's bindgen mode (item 3) uses its CMake builder,
+   which skips its own cross setup whenever CMAKE_TOOLCHAIN_FILE is set. CMake
+   reads that variable from the environment; cargo's [env] sets it for build
+   scripts, and the toolchain file keys off the TARGET triple cargo gives them,
+   so host builds are unaffected.
 
 5. vl-convert-google-fonts: a MobileTls builder extension, applied to every
    reqwest client in both crates. reqwest's rustls backend verifies through
@@ -57,11 +59,12 @@ diff -ruN a/.cargo/config.toml b/.cargo/config.toml
 diff -ruN a/.cargo/cross.cmake b/.cargo/cross.cmake
 --- a/.cargo/cross.cmake
 +++ b/.cargo/cross.cmake
-@@ -0,0 +1,38 @@
+@@ -0,0 +1,39 @@
 +# Cross toolchain for CMake projects driven by a Rust build script. v8x builds
 +# WAMR with a bare `cmake` call, which would otherwise configure for the build
-+# host. $ENV{TARGET} is the Rust target triple cargo gives the build script;
-+# host-side builds match neither branch and stay native.
++# host, and aws-lc-sys's bindgen mode uses its CMake builder, which skips its own
++# cross setup when CMAKE_TOOLCHAIN_FILE is set. $ENV{TARGET} is the Rust target
++# triple cargo gives the build script; host-side builds match neither branch.
 +set(_forge_target "$ENV{TARGET}")
 +
 +if(_forge_target MATCHES "-linux-android")
@@ -142,6 +145,15 @@ diff -ruN a/vl-convert-google-fonts/src/client.rs b/vl-convert-google-fonts/src/
              .user_agent(&config.user_agent)
              .timeout(Duration::from_secs(config.request_timeout_secs))
              .build()
+@@ -1001,7 +1001,7 @@
+         let timeout_secs = self.config.request_timeout_secs;
+ 
+         let built = std::thread::spawn(move || {
+-            reqwest::blocking::Client::builder()
++            crate::MobileTls::mobile_tls(reqwest::blocking::Client::builder())
+                 .user_agent(user_agent)
+                 .timeout(Duration::from_secs(timeout_secs))
+                 .build()
 diff -ruN a/vl-convert-google-fonts/src/lib.rs b/vl-convert-google-fonts/src/lib.rs
 --- a/vl-convert-google-fonts/src/lib.rs
 +++ b/vl-convert-google-fonts/src/lib.rs
@@ -236,7 +248,7 @@ diff -ruN a/vl-convert-python/forge_build.rs b/vl-convert-python/forge_build.rs
 diff -ruN a/vl-convert-python/forge_tls.c b/vl-convert-python/forge_tls.c
 --- a/vl-convert-python/forge_tls.c
 +++ b/vl-convert-python/forge_tls.c
-@@ -0,0 +1,106 @@
+@@ -0,0 +1,107 @@
 +// Virtual pthread TLS keys for everything linked into this extension.
 +//
 +// Rust has no native TLS on Android, so std backs every thread_local! with a
@@ -280,14 +292,15 @@ diff -ruN a/vl-convert-python/forge_tls.c b/vl-convert-python/forge_tls.c
 +    for (size_t key = 1;; key++) {
 +      table *t = real_get(real_key);
 +      if (key >= t->cap) break;
++      // As bionic does: a value with no destructor stays readable by later
++      // destructors (Rust std's thread handle cleanup reads one) and is
++      // simply dropped with the table.
 +      void *slot = t->slots[key];
-+      if (!slot) continue;
-+      t->slots[key] = NULL;
 +      dtor_fn dtor = atomic_load(&dtors[key]);
-+      if (dtor) {
-+        dtor(slot);
-+        ran = 1;
-+      }
++      if (!slot || !dtor) continue;
++      t->slots[key] = NULL;
++      dtor(slot);
++      ran = 1;
 +    }
 +    if (!ran) break;
 +  }

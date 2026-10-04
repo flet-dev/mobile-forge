@@ -8,35 +8,38 @@ is compiled and rendered on the device, so a spec turns into an image without a 
 server or a network connection.
 
 The mobile wheel runs Vega's JavaScript on [QuickJS-ng](https://github.com/quickjs-ng/quickjs)
-instead of V8, which has no Android build. The Python API is the same as on the desktop.
+instead of the V8 the desktop wheel embeds, which vl-convert cannot ship for iOS or Android
+(see Build notes). The Python API is the same as on the desktop.
 
 ## Install
 
-Pin the release candidate in your `pyproject.toml`, and leave `armeabi-v7a` out of the
-Android targets:
+Give `vl-convert-python` a 2.0 lower bound in your `pyproject.toml`, and leave `armeabi-v7a`
+out of the Android targets:
 
 ```toml
 dependencies = [
     "flet",
-    "vl-convert-python==2.0.0rc7",
+    "vl-convert-python>=2.0.0rc7",
 ]
 
 [tool.flet.android]
 target_arch = ["arm64-v8a", "x86_64"]
 ```
 
-**Pin it so desktop and mobile run the same API.** The mobile build exists only for the 2.0
-series, still a release candidate. A mobile build resolves to it without the pin, since it is
-the only mobile wheel, but `flet run` on a desktop then installs PyPI's stable 1.9, which has
-no `vl_convert.asyncio`, `warm_up_workers` or `configure`: code that works on the phone fails
-with `AttributeError` at your desk.
+**The bound keeps desktop and mobile on the same API.** The mobile wheel exists only for the
+2.0 series. A mobile build picks it without the bound, since it is the only mobile wheel, but
+`flet run` on a desktop then installs PyPI's 1.x, which has no `vl_convert.asyncio` or
+`configure`: code that works on the phone fails with `AttributeError` at your desk. Naming a
+pre-release in the bound is also what lets the resolver choose one.
 
 **There is no 32-bit ARM wheel.** `flet build apk` targets every ABI by default, so without the
 `target_arch` line the `armeabi-v7a` resolve fails and takes the whole build with it. `x86_64`
 is the emulator; use `["arm64-v8a"]` alone for a device-only release.
 
-Altair is pure Python and needs nothing extra: add `"altair"` to the same list and
-`chart.save(...)` finds the mobile `vl-convert-python`.
+Altair is pure Python: add it to the same list and `chart.save(...)` finds the mobile
+`vl-convert-python`. Altair tells vl-convert which Vega-Lite version to compile with, and
+vl-convert accepts only the versions it bundles (`vlc.get_vegalite_versions()`), so a newer
+Altair can outrun the wheel; 6.3.0 is the version tested.
 
 ## Examples
 
@@ -68,8 +71,10 @@ before importing it:
 
 ```python
 import os
+import tempfile
 
-cache = os.path.join(os.getenv("FLET_APP_STORAGE_CACHE", "."), "vl-convert")
+# Absolute either way: vl-convert rejects a relative font cache directory.
+cache = os.path.join(os.getenv("FLET_APP_STORAGE_CACHE") or tempfile.gettempdir(), "vl-convert")
 os.environ.setdefault("V82JSC_BC_CACHE_DIR", os.path.join(cache, "bytecode"))
 os.environ.setdefault("VLC_GOOGLE_FONTS_CACHE_DIR", os.path.join(cache, "google-fonts"))
 
@@ -84,26 +89,30 @@ import vl_convert as vlc
 
 Specs that read files need an absolute path and an explicit allowance: by default vl-convert
 loads data over HTTP and HTTPS but not from the filesystem. See
-[`configure(allowed_base_urls=...)`](https://github.com/vega/vl-convert#readme).
+[`configure(allowed_base_urls=...)`](https://github.com/vega/vl-convert/tree/main/vl-convert-python#readme).
 
 ### Startup and speed
 
 The first conversion in a process starts the JavaScript runtime, and that is where the time
 goes: the desktop wheel restores V8 from a snapshot in well under a second, while the mobile
 build has no snapshot and evaluates Deno's runtime and Vega from scratch. Conversions after
-that are quick. Measured with the example app on an arm64 Android emulator:
+that are quick. Measured with the example app:
 
-| | first chart |
-| --- | ---: |
-| first launch, empty bytecode cache | ~10 s |
-| later launches, bytecode cache in place | ~3 s |
-| every conversion after the first | ~0.5 s |
+| first chart | arm64 Android emulator | iOS simulator |
+| --- | ---: | ---: |
+| first launch, empty bytecode cache | ~10 s | ~4.4 s |
+| later launches, bytecode cache in place | ~3 s | ~0.6 s |
+| every conversion after the first | ~0.5 s | |
 
-Start the runtime while the user is still looking at something else, so the first chart is
-not the one that waits:
+Both columns were measured on an Apple Silicon Mac, whose CPU the emulator and the simulator
+both use; measure on a phone before relying on them.
+
+Do a throwaway conversion while the user is still looking at something else, so the first real
+chart is not the one that waits. `warm_up_workers()` is not enough: it starts the runtime but
+leaves Vega and Vega-Lite to load on the first conversion.
 
 ```python
-page.run_thread(vlc.warm_up_workers)
+page.run_thread(vlc.vegalite_to_svg, {"mark": "point"})
 ```
 
 Do not judge startup from `flet run` on a desktop, which uses the V8 wheel and its snapshot.
@@ -122,29 +131,30 @@ async def show(e):
 ```
 
 Conversions run on one worker by default, which keeps memory to a single JavaScript runtime.
-Leave [`configure(num_workers=...)`](https://github.com/vega/vl-convert#readme) at 1 unless you
+Leave [`configure(num_workers=...)`](https://github.com/vega/vl-convert/tree/main/vl-convert-python#readme) at 1 unless you
 convert in parallel and can afford one runtime per worker.
 
 ### App size
 
-Expect about 29 MB of compressed wheel and 70 MB unpacked per Android architecture
-(arm64-v8a measured), almost all of it the one native module that carries the Deno runtime,
-QuickJS and the bundled Vega and Vega-Lite. Use an app bundle, split APKs or a narrow
+Expect about 29 MB of compressed wheel and 70 MB unpacked per Android architecture (arm64-v8a
+measured), and 26 MB and 57–66 MB per iOS slice. Almost all of it is the one native module
+that carries the Deno runtime, QuickJS and the bundled Vega and Vega-Lite. Use an app bundle, split APKs or a narrow
 [`target_arch`](https://flet.dev/docs/publish/android/#supported-target-architectures) when
 that matters.
 
 ### Other considerations
 
-A desktop `flet run` installs PyPI's V8-based wheel of the same version. Charts come out the
-same, but speed differs, as above, and only the mobile wheel has the platform behaviour
-described here. Check timing and memory on a device.
+A desktop `flet run` installs PyPI's V8-based wheel. Besides startup, text can differ: the
+desktop wheel sees the computer's fonts, while the device has only the bundled Liberation Sans,
+so a font named in a spec renders at your desk and not on the phone (see below). Check timing,
+memory and typography on a device.
 
 ## Things to know
 
-- **Text renders in Liberation Sans unless you register fonts.** The wheel bundles it, and
-  `sans-serif` maps to it, so labels never come out blank. The device's own fonts are not
-  found: a chart that asks for Roboto or Helvetica falls back to Liberation Sans, which is
-  vl-convert's default `missing_fonts="fallback"`. For another typeface, ship the font files as
+- **The device's own fonts are not found; Liberation Sans is the only one there.** The wheel
+  bundles it and `sans-serif` maps to it. What happens to a family it cannot find depends on
+  the output: PNG falls back to Liberation Sans, while JPEG, PDF and `svg_to_png` leave that
+  text out. Name `sans-serif` or a family you registered: ship font files as
   [assets](https://flet.dev/docs/cookbook/assets) and call `vlc.register_font_directory(...)`
   with their absolute path, or request `google_fonts=[...]` with network access.
 - **Remote data needs the network; inline data does not.** A spec whose `data.url` points at
@@ -171,14 +181,16 @@ therefore embeds them (`deno_core.patch`, `deno_runtime.patch`). A QuickJS snaps
 build host was the alternative and was rejected: v8x replays snapshot callbacks by op index,
 Deno registers some ops per OS, and CI builds Android on Linux and iOS on macOS.
 
-Two problems only an arm64 device shows, since CI's emulator is x86_64:
+Two problems surfaced on an arm64 emulator:
 
-- `__clear_cache` was left undefined, because rustc links with `-nodefaultlibs`; forge now
-  passes the NDK's compiler-rt builtins to every Android Rust link.
-- Rust has no native TLS on Android, so every `thread_local!` costs a pthread key, and one
-  worker took about 80 of bionic's 128. The next native module to load (rpds-py, under Altair)
-  aborted with `fatal runtime error: out of TLS keys`. `forge_tls.c` multiplexes all of the
-  extension's keys onto one.
+- `__clear_cache` was left undefined, because rustc links with `-nodefaultlibs` and only
+  aarch64 code calls it; forge now passes the NDK's compiler-rt builtins to every Android Rust
+  link. CI's emulator is x86_64, so only an arm64 run catches this one.
+- Rust has no native TLS on any Android ABI, so every `thread_local!` costs a pthread key, and
+  one worker took about 80 of bionic's 128. The next native module to load (rpds-py, under
+  Altair) aborted with `fatal runtime error: out of TLS keys`. `forge_tls.c` multiplexes all of
+  the extension's keys onto one; `test_leaves_tls_keys_for_other_modules` guards it on every
+  Android leg.
 
 The Deno crates that do not compile for Android or iOS are patched through forge's
 `crate_patches`, one file per crate; each preamble says why.
@@ -202,13 +214,16 @@ The Deno crates that do not compile for Android or iOS are patched through forge
   should find only vl-convert's two module specifiers (`vl-convert-index.js`,
   `vl-plugin-entry.js`). Hundreds of hits mean sources are paths again, and the worker panics
   on device with "Failed to initialize a JsRuntime: No such file or directory".
-- **An arm64 device or emulator run,** not only CI: both arm64-only failures above passed CI.
+- **An arm64 device or emulator run,** not only CI, whose x86_64 emulator cannot see an
+  arm64-only failure such as `__clear_cache`.
 - **The TLS key test** (`test_leaves_tls_keys_for_other_modules`) and the Altair test.
 - **Timings and sizes,** re-measured from the example and the wheels.
 
 ### Coverage gaps
 
-The device tests cover SVG and PNG conversion, text rendering, the bytecode cache location,
-the TLS key budget and Altair's `chart.save`. They are network-free, so remote `data.url`
-loading and Google Fonts downloads are not exercised; remote data was verified by hand on an
-arm64 Android emulator. PDF and JPEG output, Vega plugins and locales are untested on device.
+The device tests run on CI's x86_64 Android emulator and iOS simulator, and were run on an
+arm64 Android emulator by hand. They cover SVG and PNG conversion, the asyncio variants, text
+rendering, the bytecode cache location, the TLS key budget (Android only) and Altair's
+`chart.save`. They are network-free, so remote `data.url` loading and Google Fonts downloads
+are not exercised; remote data was verified by hand on the arm64 Android emulator only. PDF
+and JPEG output, Vega plugins and locales are untested on device.

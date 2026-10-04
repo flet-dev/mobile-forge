@@ -75,7 +75,8 @@ def test_bytecode_cache_lands_in_configured_dir():
     assert any(name.endswith(".qbc") for name in os.listdir(CACHE_DIR))
 
 
-@pytest.mark.skipif(sys.platform != "android", reason="bionic's key limit is Android-only")
+# sys.platform is "android" only from Python 3.13; getandroidapilevel exists on every version.
+@pytest.mark.skipif(not hasattr(sys, "getandroidapilevel"), reason="bionic's key limit is Android-only")
 def test_leaves_tls_keys_for_other_modules():
     """A running worker leaves pthread keys free; unshimmed, it left about 4 of bionic's 128."""
     vlc.vegalite_to_png(SPEC)
