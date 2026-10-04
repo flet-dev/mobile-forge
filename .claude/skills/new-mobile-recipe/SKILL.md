@@ -77,6 +77,7 @@ Match the package to one of these shapes. Each maps to a template in `templates/
 | C-ext needing patches                      | Upstream `setup.py` reaches for host `/usr/include`, has `if sys.platform` branches, or hardcodes paths | `templates/meta-with-patches.yaml` + patch file in `patches/`      |
 | meson-python build backend                 | `[build-system].build-backend = "mesonpy"` (scipy, scikit-image, scikit-learn, pywavelets, contourpy)   | No template — copy from `recipes/pywavelets/` (on main): `build.backend-args:` list with `-Csetup-args=--cross-file` + `-Csetup-args={MESON_CROSS_FILE}`; extra meson options ride the same way (`-Csetup-args=-D<opt>=<val>`) |
 | scikit-build-core / CMake with sdist       | `[build-system].build-backend = "scikit_build_core.build"` (duckdb, onnx, ml-dtypes)                     | No template — copy from `recipes/duckdb/` (on main) or `recipes/onnx/` (branch `machine/onnx-insightface`); CMake args via `script_env` `CMAKE_ARGS` (skbuild appends it after its own defaults) |
+| Package that **ctypes-loads its own C API library** from `<pkg>/lib/` (no extension module) | xgboost, lightgbm: CMake builds `lib<x>.so`, the Python side finds it by a `__file__` path | Copy `recipes/xgboost/` (scikit-build-core lanes + one `mobile.patch`): serious_python framework-izes the lib (`.so` or `.dylib`) behind a `<stem>.fwork` pointer on iOS, so teach the loader `ios`/`android` `sys.platform` (both iOS 3.12+ and Android 3.13+; Android 3.12 says `linux`) + that pointer + an Android bare-soname fallback, drop `SOVERSION`, and grep for every other `__file__` read — Android site-packages is a zip |
 | C-ext consuming an existing flet-lib       | Already-built `flet-libX` covers the C dep (libxml2, libcurl, libssl via openssl, etc.)                 | Adapt `templates/meta-with-patches.yaml` + add `requirements.host` |
 | Native library itself (flet-lib*), **static** | New C library a Python C-extension links at build time (libxml2, libcurl, libgeos…)                  | `templates/meta-flet-lib.yaml` + `templates/build-flet-lib.sh`     |
 | Native library, **ctypes-loaded (shared)** | A pure-Python wrapper `dlopen`s the lib at runtime via `ctypes` (pyzbar→libzbar, python-magic→libmagic) | `templates/meta-flet-lib.yaml` + `templates/build-flet-lib-shared.sh`; see Pattern H |
@@ -238,6 +239,18 @@ you can `export NDK_HOME=~/Library/Android/sdk/ndk/<version>` and use that — f
 the differences between r27 / r27d / r28 are immaterial. CI builds against r27d; your local r27 
 should produce equivalent wheels.
 
+### Trap: a truncated support tarball
+
+`download_support` in `setup.sh` returns early once the extracted
+`downloads/support/python-<plat>-mobile-forge-<ver>/support/` exists, otherwise skips the
+download whenever the tarball exists, and never checks `tar`'s exit status. A shell killed
+mid-`curl` leaves a partial tarball behind (2026-10-01: an iOS 3.14.6 tarball at 34 MB of
+296 MB): `tar` reports `truncated gzip input`, and depending on how far it got, setup either
+fails its support-path check or keeps a half-extracted tree on every later run. Compare a
+cached tarball with the release (`curl -sIL <url> | grep -i content-length` against
+`stat -f%z`), and delete both the tarball and its extracted `downloads/support/…` directory
+before re-running. On a slow link, fetch with parallel `curl -r` ranges and concatenate.
+
 ### Note: Android sysconfigdata CI paths — self-healing, nothing to fix
 
 Historically the `python-android-mobile-forge-3.12.tar.gz` broke macOS local dev: CI-runner
@@ -301,6 +314,9 @@ Open `tests/test_<name>.py` and replace the placeholder with a real smoke test:
 - **Every test function has a docstring** — one line saying what behavior it proves.
 - Tests must be **network-free and deterministic** (fixed seeds, committed tiny assets) —
   they run on an emulator with no guarantees about connectivity.
+- **Type every parameter where Python allows it** — tests, fixtures (`tmp_path: Path`),
+  helpers, and the example apps' functions and nested handlers alike. Only lambdas are
+  exempt (no annotation syntax); domain functions also get a return type.
 
 For ML/inference recipes, raise the bar from import-only to real compute:
 
@@ -546,6 +562,29 @@ runner itself (EXIT sentinel, meta.yaml `test.requires` / `extract_packages` han
 what's committed vs generated).
 
 `>>>>>>>>>> EXIT 0 <<<<<<<<<<` in console.log on both platforms = ready to ship.
+
+### Audit the consumer README and example before the PR
+
+Every sentence in `recipes/<name>/README.md` and the example is a claim a bump can break,
+and plausible ones are often wrong. An adversarial claim audit of lz4 (one skeptic per
+claim group, each told to refute with source quotes and runs against the sdist, PyPI's
+desktop wheel and the reference tools) turned up defects that a green CI could not:
+
+- **Upstream constants can overstate the library.** python-lz4 exports
+  `COMPRESSIONLEVEL_MAX = 16`, but the vendored liblz4 clamps HC at 12, so levels 13–16
+  produce byte-identical output. Check a "max" against the vendored C, not the binding.
+- **An example with several buttons and `page.run_thread` races itself.** The pool runs
+  workers concurrently, so a second tap mid-run overlapped the first on a shared file and
+  failed it every time. Disabling the controls in the handler is **not enough**: on an iOS
+  simulator two taps reached Python 11 ms apart, before the `disabled` patch reached
+  Flutter, and the race still fired. Guard the handler itself —
+  `if not busy.acquire(blocking=False): return`, release at the end of the worker — and
+  disable the controls for the visual cue (`recipes/lz4/examples/log-archive`).
+- **"Stateful object, one per thread" understates it** when the binding mutates the native
+  context with the GIL released: sharing an `LZ4FrameCompressor` crashed the interpreter.
+- **Prose that says "streams" needs code that streams** — one `write()` of the whole
+  buffer is not it, and neither is a test that never calls `write()` twice.
+- **Run flake8 over the example** (`--config .flake8`); E741 slipped through review.
 
 ### Wheel hygiene checklist (before commit)
 

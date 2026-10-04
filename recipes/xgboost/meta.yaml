@@ -1,0 +1,60 @@
+package:
+  name: xgboost
+  version: "3.4.1"
+  # Upstream assumes a 64-bit size_t (common/quantile.cc narrows an unsigned
+  # long long into one, a hard -Wc++11-narrowing error) and ships no 32-bit
+  # builds anywhere.
+  excluded_arches:
+    - armeabi-v7a
+
+build:
+  number: 1
+  script_env:
+# {% if sdk == 'android' %}
+    # libxgboost is a plain C API library loaded through ctypes, not an
+    # extension module, so no Python_* hints are needed. OpenMP stays on: the
+    # NDK ships a real runtime.
+    CMAKE_ARGS: >-
+      -DCMAKE_TOOLCHAIN_FILE={NDK_ROOT}/build/cmake/android.toolchain.cmake
+      -DANDROID_ABI={ANDROID_ABI}
+      -DANDROID_NATIVE_API_LEVEL={ANDROID_API_LEVEL}
+      -DANDROID_STL=c++_shared
+      -DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+# {% else %}
+    # The `ninja` pip package crashes importing on the iOS crossenv python
+    # (sysconfig.get_preferred_scheme('user') -> 'posix_user' invalid on iOS),
+    # so use the Makefiles generator on iOS; scikit-build-core then never imports
+    # ninja. (Android keeps Ninja, which works there.)
+    CMAKE_GENERATOR: Unix Makefiles
+    # iOS has no OpenMP runtime, and upstream's Apple OpenMP lookup would ask
+    # Homebrew for the build host's macOS libomp. Single-threaded is a build
+    # configuration upstream supports.
+    CMAKE_ARGS: >-
+      -DCMAKE_SYSTEM_NAME=iOS
+      -DCMAKE_OSX_SYSROOT={{ sdk }}
+      -DCMAKE_OSX_DEPLOYMENT_TARGET={{ sdk_version }}
+      -DCMAKE_OSX_ARCHITECTURES={{ arch }}
+      -DUSE_OPENMP=OFF
+# {% endif %}
+
+requirements:
+  build:
+    # scikit-build-core comes from the sdist's own build-system.requires; with
+    # forge's `--no-isolation` the CMake toolchain must be in the build venv.
+    - cmake
+    - ninja
+# {% if sdk == 'android' %}
+  host:
+    # libxgboost links libc++_shared.so and the NDK's libomp.so dynamically;
+    # neither is on the device unless the app bundles it.
+    - flet-libcpp-shared >=27.2.12479018
+    - flet-libomp 27.3.13750724
+# {% endif %}
+
+patches:
+  - mobile.patch
+
+test:
+  # Loading a desktop-trained .joblib model is the main way apps get one.
+  requires:
+    - joblib
