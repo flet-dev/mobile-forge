@@ -177,7 +177,7 @@ Then the two log sources:
 
 ```bash
 # Job log (build phase, staging, packaging errors):
-gh api repos/<fork>/actions/jobs/<job-id>/logs > job.log
+gh api --allow-escape-sequences repos/<fork>/actions/jobs/<job-id>/logs > job.log
 grep -nE "error:|CMake Error|No matching distribution|FAILED" job.log
 
 # On-device test output (the actual pytest run) — it is an ARTIFACT, usually
@@ -185,6 +185,13 @@ grep -nE "error:|CMake Error|No matching distribution|FAILED" job.log
 gh run download <run-id> --repo <fork> -D artifacts/
 cat artifacts/test-py3.12-<platform>-<pkg>-*/console.log
 ```
+
+Without `--allow-escape-sequences`, `gh` may refuse (*"the response contains terminal escape
+sequences"*), write nothing and exit 1 — and a grep over the empty file is a silent false
+negative. console.log does not print the interpreter, so after a `mobile_test_pythons=ALL`
+run confirm each leg from its job log: the interpreter, then the wheel pip actually
+installed (flet's `-vv` output wraps lines, so join them first):
+`grep -oE -- '--python-version [0-9.]+' job.log; sed -E 's/^[^ ]+ +//; s/ +$//' job.log | tr -d '\n' | grep -oE 'Processing */[^ ]*dist-test/<pkg>-[A-Za-z0-9_.+-]*\.whl'`.
 
 A missing console.log artifact for a failed 3.12 job means the job died
 *before* the device test — almost always at recipe-tester packaging

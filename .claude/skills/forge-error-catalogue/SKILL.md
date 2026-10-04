@@ -98,7 +98,9 @@ instead of re-deriving it.
   `CMAKE_TOOLCHAIN_FILE` via cargo `[env]`**.
 - **Runtime failures** (device/emulator/simulator) — **the Flet 0.86 Android
   `sitepackages.zip` class** (its umbrella entry explains "why only now"):
-  `NotADirectoryError` on a bundled data file → **`extract_packages`** meta field;
+  `NotADirectoryError` on a bundled data file → **`extract_packages`** meta field,
+  or, when the package's own import reads it (xgboost `VERSION`), **an
+  `importlib.resources` patch** — a meta-only fix passes CI and breaks consumers;
   untagged native `.so` `ModuleNotFoundError`/"circular import" → **forge `fix_wheel`
   ABI-tags `PyInit_*` `.so`**; pycryptodome `Cannot load native module …` →
   **`importlib.find_spec().origin`**; llama `FileNotFoundError` / ctypes

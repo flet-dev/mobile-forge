@@ -1,0 +1,16 @@
+[project]
+name = "thrift-telemetry-rpc"
+version = "1.0.0"
+description = "Calls a Thrift service over a loopback socket and compares its wire protocols."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==1.0.3",
+    "thrift==0.25.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

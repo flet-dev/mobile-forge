@@ -1,6 +1,6 @@
 ---
 name: local-recipe-testing
-description: Run a mobile-forge recipe's wheel ON-DEVICE locally — Android emulator and/or iOS simulator — instead of waiting ~1 hour for a CI mobile-test cycle. Covers the recipe-tester app loop (build wheel → stage → flet build → install → read console.log), and the non-obvious gotchas that each cost a wasted cycle: use forge's stripped dist/ wheel, build the recipe against the SAME Python flet bundles, clear flet's build cache between rebuilds, use a rootable (google_apis, not playstore) arm64 AVD to read the app-private console.log (it's in the app's cache/ dir), give the emulator enough RAM/disk, build ALL THREE iOS slices before `flet build ios-simulator`, use explicit simulator UDIDs when more than one sim is booted, verify the staged-test COUNT so a silently-failed staging can't replay stale tests as false passes, and check the built iOS `.app` actually carries your package (a failed site-packages sync still exits 0). Also covers forge slice syntax, bundling model assets next to recipe tests, test-only deps via the meta.yaml test.requires field, desktop pre-validation via a sys.modules alias shim, and consumer verify-apps for beyond-pytest validation. USE THIS SKILL when iterating on a recipe's on-device behaviour (import works? functions run? crashes?), reproducing or debugging a CI mobile-test failure locally, or whenever someone says the CI mobile test is too slow to iterate on. Sibling of `new-mobile-recipe` (authoring), `forge-ci` (CI runs), `forge-error-catalogue` (build errors), and `native-recipe-bumps` (version bumps); this one is specifically the fast on-device validation loop. macOS + Apple Silicon assumed (the host this was developed on).
+description: Run a mobile-forge recipe's wheel ON-DEVICE locally — Android emulator and/or iOS simulator — instead of waiting ~1 hour for a CI mobile-test cycle. Covers the recipe-tester app loop (build wheel → stage → flet build → install → read console.log), and the non-obvious gotchas that each cost a wasted cycle: use forge's stripped dist/ wheel, build the recipe against the SAME Python flet bundles, clear flet's build cache between rebuilds, use a rootable (google_apis, not playstore) arm64 AVD to read the app-private console.log (it's in the app's cache/ dir), give the emulator enough RAM/disk, build ALL THREE iOS slices before `flet build ios-simulator`, use explicit simulator UDIDs when more than one sim is booted, verify the staged-test COUNT so a silently-failed staging can't replay stale tests as false passes, check the built iOS `.app` actually carries your package (a failed site-packages sync, or a second iOS build running at the same time, still exits 0), and finish an iOS build by hand when Xcode 27 rejects flet's 13.0 deployment target. Also covers forge slice syntax, bundling model assets next to recipe tests, test-only deps via the meta.yaml test.requires field, desktop pre-validation via a sys.modules alias shim, and consumer verify-apps for beyond-pytest validation. USE THIS SKILL when iterating on a recipe's on-device behaviour (import works? functions run? crashes?), reproducing or debugging a CI mobile-test failure locally, or whenever someone says the CI mobile test is too slow to iterate on. Sibling of `new-mobile-recipe` (authoring), `forge-ci` (CI runs), `forge-error-catalogue` (build errors), and `native-recipe-bumps` (version bumps); this one is specifically the fast on-device validation loop. macOS + Apple Silicon assumed (the host this was developed on).
 ---
 
 # Testing a mobile-forge recipe locally
@@ -92,6 +92,24 @@ DATA=$(xcrun simctl get_app_container "$UDID" com.flet.recipe-tester data)
 for i in $(seq 1 30); do grep EXIT "$DATA/Library/Caches/console.log" 2>/dev/null && break; sleep 5; done
 ```
 
+## Shortcut: the consumer example pass on CI's wheels
+
+Once a CI run is green, its `wheels-py3.X-<platform>-<pkg>-*` artifacts are the exact
+wheels the device tests used. Flatten them into one find-links dir and the example app
+builds with **no local forge env at all** — no support tarballs, no NDK, no `forge` run:
+
+```bash
+gh run download <run-id> --repo <fork> -p 'wheels-*' -D /tmp/ci_wheels
+mkdir /tmp/ci_wheels/findlinks && cp /tmp/ci_wheels/wheels-*/*.whl /tmp/ci_wheels/findlinks/
+cd recipes/<pkg>/examples/<example>
+PIP_FIND_LINKS=/tmp/ci_wheels/findlinks uv run flet build apk        # or ios-simulator
+```
+
+The example builds for 3.14 (gotcha #2), so the run must include the 3.14 leg. To read the
+app's own output without racing a screenshot against the update, the Flet patch log
+carries every control value: `xcrun simctl spawn "$UDID" log show --last 2m --style compact
+--predicate 'process == "<app-name>"'` (a release APK logs no patches; use screenshots there).
+
 ### forge slice syntax (quick reference)
 
 `android:arm64-v8a` | `android:x86_64` | `android:armeabi-v7a` | `iphonesimulator:arm64` | `iphonesimulator:x86_64` | `iphoneos:arm64` — the first token is the **SDK**, not the OS. `forge iOS:arm64` dies with a raw `KeyError: 'iOS'` (only the bare-platform forms `forge android` / `forge iOS` take the OS name, and those build every arch).
@@ -100,7 +118,7 @@ for i in $(seq 1 30); do grep EXIT "$DATA/Library/Caches/console.log" 2>/dev/nul
 
 1. **Use forge's `dist/` wheel, NOT `build/.../target/wheels/`.** The latter is maturin's raw output — **unstripped**. For polars that meant a **1.27 GB** `.so` (vs 130 MB stripped); it blows up install space and may not load. forge strips + repacks into `dist/`. Always test the `dist/` wheel.
 
-2. **Build the recipe against the SAME Python `flet build` bundles — and know which one that is.** `flet build` **0.86.5 defaults to Python 3.14** (measured 2026-09-14: the app's staged site-packages hold `_cffi_backend.cpython-314-*.so`); the snippets above pass `--python-version 3.12` to pin it, and CI's recipe-tester does the same. A **consumer** example app built the plain way (`flet build apk`, no flag) therefore gets 3.14, so build the recipe for 3.14 (`source ./setup.sh 3.14`) before that pass, or pass the flag. `flet-lib*` build.sh recipes are `py3-none-<plat>` and version-independent — only the Python package needs the extra build.
+2. **Build the recipe against the SAME Python `flet build` bundles — and know which one that is.** `flet build` **0.86.5 defaults to Python 3.14** (measured 2026-09-14: the app's staged site-packages hold `_cffi_backend.cpython-314-*.so`), and so does 1.0.3 (3.14.7; a forge build against the 3.14.6 support tree loads fine); the snippets above pass `--python-version 3.12` to pin it, and CI's recipe-tester does the same. A **consumer** example app built the plain way (`flet build apk`, no flag) therefore gets 3.14, so build the recipe for 3.14 (`source ./setup.sh 3.14`) before that pass, or pass the flag. `flet-lib*` build.sh recipes are `py3-none-<plat>` and version-independent — only the Python package needs the extra build.
 
    Two different failure shapes if you get it wrong. For a **compiled** package: forge's Android Rust `.so` hard-links `libpythonX.Y.so` (`DT_NEEDED`) — so the **`abi3` wheel tag is misleading**; it still needs the matching `libpython` at `dlopen`. A 3.14-built wheel in a 3.12 app fails: `dlopen … libpython3.14.so` missing → the package reports its "binary missing" (e.g. polars `NameError: PySeries`). Verify with `llvm-readelf -d <so> | grep NEEDED`. If you only have a different support tree, you can retag a wheel for flet's python with `uvx --from wheel wheel tags --python-tag cp312 --abi-tag abi3 --remove <whl>`, but the underlying `libpython` link still has to match — so really, build on the right python. For a **pure-Python** package with a mobile patch there is no link error at all — pip simply finds no `cp3XX` match, silently installs PyPI's `py3-none-any` wheel, and the app fails on device with the unpatched loader's own error. Tell: the app's `build/site-packages/<abi>/<pkg>-*.dist-info/METADATA` is missing the `flet-lib*` `Requires-Dist` the recipe promotes.
 
@@ -115,6 +133,12 @@ for i in $(seq 1 30); do grep EXIT "$DATA/Library/Caches/console.log" 2>/dev/nul
    sed -i '' 's/hw.ramSize=.*/hw.ramSize=6144/' "$cfg" 2>/dev/null || echo 'hw.ramSize=6144' >> "$cfg"
    ```
    (`aosp_atd` is rootable but headless — it can't run a Flet GUI app, so don't use it here.)
+   If the emulator dies with *"Cannot find AVD system path. Please define ANDROID_SDK_ROOT"*
+   (or, with that variable set, *"Broken AVD system path"*), the AVD survived but its system
+   image did not (`system-images/` empty) — exporting the variable only changes the message.
+   Reinstall the image with the SDK's own sdkmanager; a Homebrew `sdkmanager` first on `PATH`
+   installs into its own root, where the emulator never looks:
+   `"$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" "system-images;android-34;google_apis;arm64-v8a"`.
 
 5. **Give the emulator RAM + disk.** A heavy `.so` (polars ~130 MB) + Python + the Flutter engine OOM-kills the app on a default AVD (`lowmemorykiller: Kill 'com.flet.recipe_tester'`). 6 GB RAM avoids it. The ~100–235 MB APK install needs a big `/data` (6 GB partition); if you hit `INSTALL_FAILED_INSUFFICIENT_STORAGE`, free space (uninstall old apps) or use a fresh AVD.
 
@@ -126,7 +150,7 @@ for i in $(seq 1 30); do grep EXIT "$DATA/Library/Caches/console.log" 2>/dev/nul
 
 9. **Android `console.log` lives in the app's CACHE dir — `/data/data/com.flet.recipe_tester/cache/console.log` — NOT under `files/flet/app/`** (that's the app code; `python_site_packages` is a SIBLING under `files/flet/`). Polling the wrong dir looks like "the app never wrote a result" and cost ~10 min during the sherpa-onnx validation. Root is still required to read it (gotcha #4): `adb root` then `adb shell cat …`, or `adb shell su 0 cat …` on a google_apis image.
 
-10. **`flet build ios-simulator` resolves the `iphoneos` (device) wheel AS WELL as both simulator ones.** It configures pip for `iphoneos.arm64` + `iphonesimulator.arm64` + `iphonesimulator.x86_64` and needs a wheel for EACH — a partial local matrix fails with `No matching distribution found`. Build all three iOS slices first (for the recipe AND every `flet-lib*` host dep). CI never hits this because it dumps all of `dist/*.whl` into its find-links dir. (`flet build apk` needs only the one `--arch` slice — the asymmetry is iOS-only.) Long-standing gotcha; re-hit during the onnxruntime iOS spike. **Worse: serious_python's PER-ARCH native staging (`build/site-packages/<iosarch>/`) resolves those slice wheels from the INDEX directly and does NOT honor `PIP_FIND_LINKS`/dist-test locally** — so a hand-patched `-9999` wheel in your find-links dir is used for the initial pip install but the staged PYTHON code (e.g. `cv2/__init__.py`, whichever slice it picks — often `iphoneos.arm64`) still comes from the published wheel. Net: you cannot validate a *hand-patched loader* on a local `ios-simulator` build; use a real `forge` build of all slices, or verify in CI (where the freshly-built slice wheels ARE used — this is why coolprop iOS passed in CI but a hand-patched opencv wouldn't locally).
+10. **`flet build ios-simulator` resolves the `iphoneos` (device) wheel AS WELL as both simulator ones.** It configures pip for `iphoneos.arm64` + `iphonesimulator.arm64` + `iphonesimulator.x86_64` and needs a wheel for EACH — a partial local matrix fails with `No matching distribution found`. Build all three iOS slices first (for the recipe AND every `flet-lib*` host dep). CI never hits this because it dumps all of `dist/*.whl` into its find-links dir. (`flet build apk` needs only the one `--arch` slice — the asymmetry is iOS-only.) Long-standing gotcha; re-hit during the onnxruntime iOS spike. **Worse: a hand-patched wheel can still lose in serious_python's PER-ARCH native staging (`build/site-packages/<iosarch>/`).** That pip run does read the inherited `PIP_FIND_LINKS` (flet 0.86.5 logs "Looking in links: …", and an unpublished package such as lz4 resolves from it), but during the opencv work a hand-patched `-9999` wheel in the find-links dir was used for the initial pip install while the staged PYTHON code (e.g. `cv2/__init__.py`, whichever slice it picks — often `iphoneos.arm64`) still comes from the published wheel. Net: you cannot validate a *hand-patched loader* on a local `ios-simulator` build; use a real `forge` build of all slices, or verify in CI (where the freshly-built slice wheels ARE used — this is why coolprop iOS passed in CI but a hand-patched opencv wouldn't locally).
 
 10a. **Old local Xcode can't compile newer Flutter plugins** — e.g. Xcode 16.4 dies on `device_info_plus` 12.4.0 with `ARC Semantic Issue: No visible @interface for 'NSProcessInfo' declares the selector 'isiOSAppOnVision'` (a visionOS selector added in a newer SDK). This is a LOCAL toolchain gap, not your recipe (CI's Xcode 26.5 is fine). Pin the offending plugins older in the generated app pyproject before `flet build ios-simulator`:
     ```toml
@@ -135,6 +159,29 @@ for i in $(seq 1 30); do grep EXIT "$DATA/Library/Caches/console.log" 2>/dev/nul
     device_info_plus = "12.3.0"
     ```
     (`stage_recipe.sh` regenerates the pyproject, so append this AFTER staging.)
+
+10b. **New local Xcode rejects flet's iOS deployment target.** Xcode 27 makes
+    `IPHONEOS_DEPLOYMENT_TARGET = 13.0` (flet's template from 0.86.5 through 1.0.3, still on
+    `main` as of 2026-10-03) a hard error: *"set to 13.0, but the range of supported deployment target
+    versions is 15.0 to 27.0.x"*. Plain `flet build` output hides it behind "Failed to build
+    iOS app" and a doctor dump; `-vv` shows the `error:` lines. Not your recipe, and CI's
+    Xcode 26 is unaffected. Workaround — flet has already staged everything, so patch the
+    generated project and re-run only the flutter step with the same env:
+    ```bash
+    cd build/flutter/ios
+    sed -i '' "s/platform :ios, '13.0'/platform :ios, '15.0'/" Podfile
+    # in Podfile's post_install target loop, before GCC_PREPROCESSOR_DEFINITIONS:
+    #   config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+    sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = 13.0;/IPHONEOS_DEPLOYMENT_TARGET = 15.0;/' Runner.xcodeproj/project.pbxproj
+    cd .. && SERIOUS_PYTHON_APP=$PWD/../python-app SERIOUS_PYTHON_SITE_PACKAGES=$PWD/../site-packages \
+      SERIOUS_PYTHON_VERSION=3.14 SERIOUS_PYTHON_BUNDLE_ID=com.flet.<app-name> \
+      SP_NATIVE_SET=$(cat ../.serious_python_spm_key) \
+      flutter build ios --simulator --build-name 1.0.0   # VERSION = the Python flet built for
+    # → build/flutter/build/ios/iphonesimulator/<app>.app
+    ```
+    A fresh `flet build` regenerates the template, so repeat the patch after every one.
+    The env is flet-cli's `_flutter_path_env` (`build_base.py`); without
+    `SERIOUS_PYTHON_BUNDLE_ID` the embedded frameworks get `org.python.*` identifiers.
 
 11. **Two booted simulators make `simctl booted` ambiguous.** With more than one sim booted, `simctl install booted …` targets one device and your subsequent `get_app_container booted …` may query the OTHER — the app "isn't installed" / the container is empty despite a successful install. Use the explicit `$UDID` for every simctl call (as the loop above does); never rely on `booted` unless you've verified exactly one device is booted (`xcrun simctl list devices | grep -c Booted`).
 
@@ -156,6 +203,8 @@ for i in $(seq 1 30); do grep EXIT "$DATA/Library/Caches/console.log" 2>/dev/nul
     ls build/ios-simulator/<app>.app/serious_python_darwin_serious_python_darwin.bundle/site-packages
     ```
     The known cause is an extension linked without `-Wl,-headerpad_max_install_names` (see the `forge-error-catalogue` skill), but the check is cheap and catches the whole class. The Android twin is gotcha #12's `unzip -l build/apk/…`.
+
+    **Two iOS builds running at once cause the same symptom.** Both stage into that one shared `dist_ios`, so whichever finishes second can bundle the other app's files (seen 2026-10-01: a recipe-tester `.app` carrying a consumer app's `main.pyc`). If anything else on the machine might be building for iOS — another terminal, another agent — give each build its own `PUB_CACHE=<dir>` (the first run re-downloads the pub packages), and pass the same `PUB_CACHE` to any manual `flutter build` that follows.
 
 15. **CI's Android test runs only x86_64, so a green CI says nothing about arm64, which is every phone.**
     vl-convert passed CI's emulator build while its arm64 `.so` could not even load

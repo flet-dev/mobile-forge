@@ -31,6 +31,7 @@ If any phase fails, fix forward in that phase before moving on. Don't skip ahead
   flet iOS runtime reports as `"iOS"` → empty `get_adapters()`; one-line patch, setup.py-only
   sdist so `requirements.build: [setuptools]`). Same shadowing mechanics as pysodium.
 - **Pure-Python but SDIST-ONLY packages** (no wheel at all, but the sdist contains no native source — e.g. insightface's pure-Python releases). Still no recipe: the app opts in with `[tool.flet] source_packages = ["<name>"]` in its pyproject.toml, which makes `flet build` set `SERIOUS_PYTHON_ALLOW_SOURCE_DISTRIBUTIONS` and pip builds the sdist for the target. A recipe is only for packages that need *cross-compilation*.
+  **"No native source" must be literal — an OPTIONAL extension does not count.** `source_packages` becomes `pip --no-binary <name>`, and pip's isolated PEP 517 build replaces `PYTHONPATH`, so serious_python's platform-faking `sitecustomize` is gone inside `setup.py`: it runs as the build host, the host compiler builds the "optional" extension for macOS, and pip installs that `cpXY-macosx_*` wheel into every mobile `--target` leg (it never tag-checks a wheel it built itself). The upstream pure-Python fallback never fires, because nothing failed. The app then works by accident — the foreign `.so` can't load, so the package falls back at import time — while shipping the Mach-O (Android: `lib/<abi>/lib<pkg>-<mod>.so`, Gradle only warns "Unable to strip"; iOS: a `.fwork` pointing at a framework that was never built). Code that retries the import per call pays a failed `dlopen` each time (thrift's `*Accelerated` protocols ran 12–23x slower than the plain classes). Such a package is a recipe candidate (`recipes/thrift/`); until it has one, `CXX=false`/`CC=false` in the `flet build` environment makes the fallback fire for real. Once a recipe wheel exists, consumers must drop the `source_packages` entry — `--no-binary` keeps forcing the source build.
 - **Bumping an existing `flet-lib*` recipe to a new upstream version** — use the sibling skill `native-recipe-bumps` instead. It encodes the version-conditional Jinja patterns specific to that workflow.
 - **Debugging a build failure in an existing recipe** — that's a different shape. This skill focuses on creation; for fixing, inspect `errors/<pkg>-*.log` directly and cross-reference the `forge-error-catalogue` skill.
 
@@ -49,6 +50,7 @@ PyPI tags?
 │   │                                   `[tool.flet] source_packages` (see
 │   │                                   "When NOT to use" above)
 │   └── sdist has native source      → CANDIDATE — same compile path
+│       (even an OPTIONAL extension: source_packages would build it for the host)
 └── no sdist either (wheels-only)    → CANDIDATE — set `source.url` to a GitHub
                                         release/tag tarball (e.g. pyzbar). forge's
                                         PythonPackageBuilder honors source.url
@@ -70,10 +72,12 @@ Match the package to one of these shapes. Each maps to a template in `templates/
 |--------------------------------------------|---------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------|
 | Minimal C-extension, well-behaved upstream | C/C++ source, plain setuptools, no system deps                                                          | `templates/meta-minimal.yaml`                                      |
 | Minimal C-ext + Android C++ runtime        | Same as above but C++ source (bundled or upstream) → needs libc++_shared on Android                     | `templates/meta-minimal-with-android-libcpp.yaml`                  |
+| Optional C/C++ extension (setup.py falls back to pure Python on a compile error) | `Extension(optional=True)` (tornado) or a `build_ext` subclass that catches `CompileError` and re-runs `setup()` without `ext_modules` (thrift) — a failed cross-compile then ships a green pure-Python wheel | The minimal template + a `script_env` knob upstream already honors to make the failure fatal (thrift `CIBUILDWHEEL: "1"`, tornado `TORNADO_EXTENSION: "1"`), else a fail-loud patch (zeroconf). Copy `recipes/thrift/`. Tests must prove the `.so` loaded, and must FAIL when run against a pure build (`CC=false CXX=false pip install --no-binary <pkg>`) — that negative control is what shows the suite cannot pass on a fallback |
 | Rust via PyO3 / maturin                    | `[build-system].requires` contains `maturin` or `setuptools-rust`                                       | `templates/meta-rust.yaml`                                         |
 | C-ext needing patches                      | Upstream `setup.py` reaches for host `/usr/include`, has `if sys.platform` branches, or hardcodes paths | `templates/meta-with-patches.yaml` + patch file in `patches/`      |
 | meson-python build backend                 | `[build-system].build-backend = "mesonpy"` (scipy, scikit-image, scikit-learn, pywavelets, contourpy)   | No template — copy from `recipes/pywavelets/` (on main): `build.backend-args:` list with `-Csetup-args=--cross-file` + `-Csetup-args={MESON_CROSS_FILE}`; extra meson options ride the same way (`-Csetup-args=-D<opt>=<val>`) |
 | scikit-build-core / CMake with sdist       | `[build-system].build-backend = "scikit_build_core.build"` (duckdb, onnx, ml-dtypes)                     | No template — copy from `recipes/duckdb/` (on main) or `recipes/onnx/` (branch `machine/onnx-insightface`); CMake args via `script_env` `CMAKE_ARGS` (skbuild appends it after its own defaults) |
+| Package that **ctypes-loads its own C API library** from `<pkg>/lib/` (no extension module) | xgboost, lightgbm: CMake builds `lib<x>.so`, the Python side finds it by a `__file__` path | Copy `recipes/xgboost/` (scikit-build-core lanes + one `mobile.patch`): serious_python framework-izes the lib (`.so` or `.dylib`) behind a `<stem>.fwork` pointer on iOS, so teach the loader `ios`/`android` `sys.platform` (both iOS 3.12+ and Android 3.13+; Android 3.12 says `linux`) + that pointer + an Android bare-soname fallback, drop `SOVERSION`, and grep for every other `__file__` read — Android site-packages is a zip |
 | C-ext consuming an existing flet-lib       | Already-built `flet-libX` covers the C dep (libxml2, libcurl, libssl via openssl, etc.)                 | Adapt `templates/meta-with-patches.yaml` + add `requirements.host` |
 | Native library itself (flet-lib*), **static** | New C library a Python C-extension links at build time (libxml2, libcurl, libgeos…)                  | `templates/meta-flet-lib.yaml` + `templates/build-flet-lib.sh`     |
 | Native library, **ctypes-loaded (shared)** | A pure-Python wrapper `dlopen`s the lib at runtime via `ctypes` (pyzbar→libzbar, python-magic→libmagic) | `templates/meta-flet-lib.yaml` + `templates/build-flet-lib-shared.sh`; see Pattern H |
@@ -236,6 +240,18 @@ you can `export NDK_HOME=~/Library/Android/sdk/ndk/<version>` and use that — f
 the differences between r27 / r27d / r28 are immaterial. CI builds against r27d; your local r27 
 should produce equivalent wheels.
 
+### Trap: a truncated support tarball
+
+`download_support` in `setup.sh` returns early once the extracted
+`downloads/support/python-<plat>-mobile-forge-<ver>/support/` exists, otherwise skips the
+download whenever the tarball exists, and never checks `tar`'s exit status. A shell killed
+mid-`curl` leaves a partial tarball behind (2026-10-01: an iOS 3.14.6 tarball at 34 MB of
+296 MB): `tar` reports `truncated gzip input`, and depending on how far it got, setup either
+fails its support-path check or keeps a half-extracted tree on every later run. Compare a
+cached tarball with the release (`curl -sIL <url> | grep -i content-length` against
+`stat -f%z`), and delete both the tarball and its extracted `downloads/support/…` directory
+before re-running. On a slow link, fetch with parallel `curl -r` ranges and concatenate.
+
 ### Note: Android sysconfigdata CI paths — self-healing, nothing to fix
 
 Historically the `python-android-mobile-forge-3.12.tar.gz` broke macOS local dev: CI-runner
@@ -299,6 +315,9 @@ Open `tests/test_<name>.py` and replace the placeholder with a real smoke test:
 - **Every test function has a docstring** — one line saying what behavior it proves.
 - Tests must be **network-free and deterministic** (fixed seeds, committed tiny assets) —
   they run on an emulator with no guarantees about connectivity.
+- **Type every parameter where Python allows it** — tests, fixtures (`tmp_path: Path`),
+  helpers, and the example apps' functions and nested handlers alike. Only lambdas are
+  exempt (no annotation syntax); domain functions also get a return type.
 
 For ML/inference recipes, raise the bar from import-only to real compute:
 
@@ -563,6 +582,29 @@ runner itself (EXIT sentinel, meta.yaml `test.requires` / `extract_packages` han
 what's committed vs generated).
 
 `>>>>>>>>>> EXIT 0 <<<<<<<<<<` in console.log on both platforms = ready to ship.
+
+### Audit the consumer README and example before the PR
+
+Every sentence in `recipes/<name>/README.md` and the example is a claim a bump can break,
+and plausible ones are often wrong. An adversarial claim audit of lz4 (one skeptic per
+claim group, each told to refute with source quotes and runs against the sdist, PyPI's
+desktop wheel and the reference tools) turned up defects that a green CI could not:
+
+- **Upstream constants can overstate the library.** python-lz4 exports
+  `COMPRESSIONLEVEL_MAX = 16`, but the vendored liblz4 clamps HC at 12, so levels 13–16
+  produce byte-identical output. Check a "max" against the vendored C, not the binding.
+- **An example with several buttons and `page.run_thread` races itself.** The pool runs
+  workers concurrently, so a second tap mid-run overlapped the first on a shared file and
+  failed it every time. Disabling the controls in the handler is **not enough**: on an iOS
+  simulator two taps reached Python 11 ms apart, before the `disabled` patch reached
+  Flutter, and the race still fired. Guard the handler itself —
+  `if not busy.acquire(blocking=False): return`, release at the end of the worker — and
+  disable the controls for the visual cue (`recipes/lz4/examples/log-archive`).
+- **"Stateful object, one per thread" understates it** when the binding mutates the native
+  context with the GIL released: sharing an `LZ4FrameCompressor` crashed the interpreter.
+- **Prose that says "streams" needs code that streams** — one `write()` of the whole
+  buffer is not it, and neither is a test that never calls `write()` twice.
+- **Run flake8 over the example** (`--config .flake8`); E741 slipped through review.
 
 ### Wheel hygiene checklist (before commit)
 
