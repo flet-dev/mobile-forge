@@ -2,30 +2,28 @@ xgboost finds libxgboost and its own VERSION file through paths built from
 __file__, and names the library after the platform it was built on. Four
 mobile adjustments, all inert on desktop builds:
 
-1. CMakeLists.txt: name the library libxgboost.so on iOS, not .dylib.
-   serious_python turns every *.so in site-packages into an embedded
-   framework plus a .fwork pointer; libpath.py looks for that pointer.
+1. CMakeLists.txt: name the library libxgboost.so on iOS, not .dylib, so
+   it has one name on both mobile platforms. serious_python moves it into
+   an embedded framework and leaves libxgboost.fwork in its place.
 2. cpp_src/CMakeLists.txt: no VERSION/SOVERSION on Android and iOS, so the
    soname matches the unversioned file the wheel ships.
-3. xgboost/libpath.py: teach it the "android" and "ios" sys.platform
-   values (3.13+; 3.12 reports "linux" and "darwin"), the iOS .fwork
-   pointer, and an Android fallback to the bare soname -- Flet relocates
-   the .so into the APK's native library dir, where no __file__-relative
-   path can reach it.
+3. xgboost/libpath.py: teach it the "android" sys.platform (3.13+; Android
+   3.12 reports "linux") and "ios" with its .fwork pointer, and give
+   Android a fallback to the bare soname -- Flet relocates the .so into the
+   APK's native library dir, where no __file__-relative path can reach it.
 4. xgboost/_c_api.py: read VERSION through importlib.resources. On Android
    Flet ships site-packages as a zip, so the __file__-relative open() runs
    into NotADirectoryError on every `import xgboost`.
 
 diff -ruN a/CMakeLists.txt b/CMakeLists.txt
 --- a/CMakeLists.txt	2026-10-03 20:43:24
-+++ b/CMakeLists.txt	2026-10-03 20:43:50
-@@ -39,6 +39,10 @@
++++ b/CMakeLists.txt	2026-10-04 03:18:37
+@@ -39,6 +39,9 @@
  # Platform-specific library file name (matches xgboost/libpath.py).
  if(WIN32)
    set(_XGB_LIBNAME "xgboost.dll")
 +elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-+  # mobile-forge: the app packager framework-izes *.so on iOS, leaving a
-+  # .fwork pointer that libpath.py looks for.
++  # mobile-forge: one library name on both mobile platforms.
 +  set(_XGB_LIBNAME "libxgboost.so")
  elseif(APPLE)
    set(_XGB_LIBNAME "libxgboost.dylib")
@@ -69,21 +67,20 @@ diff -ruN a/xgboost/_c_api.py b/xgboost/_c_api.py
  def _register_log_callback(lib: ctypes.CDLL) -> None:
 diff -ruN a/xgboost/libpath.py b/xgboost/libpath.py
 --- a/xgboost/libpath.py	2026-10-03 20:43:24
-+++ b/xgboost/libpath.py	2026-10-03 20:43:50
-@@ -49,16 +49,24 @@
++++ b/xgboost/libpath.py	2026-10-04 03:18:37
+@@ -49,16 +49,25 @@
              ]
          )
          dll_path = [os.path.join(p, "xgboost.dll") for p in dll_path]
 -    elif sys.platform.startswith(("linux", "freebsd", "emscripten")):
 +    elif sys.platform.startswith(("linux", "freebsd", "emscripten", "android")):
          dll_path = [os.path.join(p, "libxgboost.so") for p in dll_path]
--    elif sys.platform == "darwin":
--        dll_path = [os.path.join(p, "libxgboost.dylib") for p in dll_path]
-+    elif sys.platform in ("darwin", "ios"):
-+        # mobile-forge: on iOS the app packager replaces libxgboost.so with a
-+        # .fwork pointer, which iOS ctypes dereferences. iOS reports "darwin"
-+        # on Python 3.12 and "ios" from 3.13.
-+        names = ("libxgboost.dylib", "libxgboost.fwork", "libxgboost.so")
+     elif sys.platform == "darwin":
+         dll_path = [os.path.join(p, "libxgboost.dylib") for p in dll_path]
++    elif sys.platform == "ios":
++        # mobile-forge: the app packager moves the library into an embedded
++        # framework and leaves a .fwork pointer, which iOS ctypes follows.
++        names = ("libxgboost.fwork", "libxgboost.so")
 +        dll_path = [os.path.join(p, n) for p in dll_path for n in names]
      elif sys.platform == "cygwin":
          dll_path = [os.path.join(p, "cygxgboost.dll") for p in dll_path]

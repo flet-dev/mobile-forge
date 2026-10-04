@@ -74,13 +74,17 @@ def test_pred_contribs_treeshap():
 
 def test_desktop_joblib_classifier():
     """A desktop-trained XGBClassifier loaded from .joblib predicts exactly as it
-    did there, with no scikit-learn installed in the app."""
+    did there, with no scikit-learn installed, and takes a thread cap through
+    its booster."""
     import joblib
 
     model = joblib.load(os.path.join(HERE, "iris_classifier.joblib"))
-    proba = model.predict_proba(np.asarray(IRIS_ROWS))
-    assert np.allclose(proba, IRIS_PROBA, atol=1e-5)
-    assert model.predict(np.asarray(IRIS_ROWS)).tolist() == [0, 1, 2]
+    rows = np.asarray(IRIS_ROWS)
+    assert np.allclose(model.predict_proba(rows), IRIS_PROBA, atol=1e-5)
+    assert model.predict(rows).tolist() == [0, 1, 2]
+
+    model.get_booster().set_param({"nthread": 1})
+    assert np.allclose(model.predict_proba(rows), IRIS_PROBA, atol=1e-5)
 
 
 def test_openmp_matches_platform():

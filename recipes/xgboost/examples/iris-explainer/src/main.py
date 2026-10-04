@@ -8,8 +8,9 @@ def main(page: ft.Page):
     def start():
         """Load the bundled model on a worker thread, then show the first prediction.
 
-        run_thread swallows exceptions and does not carry an automatic update with
-        it, so this catches its own failures and ends with page.update().
+        run_thread only logs a worker's exception, never showing it in the UI, and
+        does not carry an automatic update, so this catches its own failures and
+        ends with page.update().
         """
         nonlocal model
         try:
@@ -17,7 +18,9 @@ def main(page: ft.Page):
             header.value = describe(model)
             show()
         except Exception as exc:
-            header.value = f"Could not load the model: {exc!r}"
+            header.value = (
+                f"Could not load or run the model: {type(exc).__name__}: {exc}"
+            )
         page.update()
 
     def show(_=None):
