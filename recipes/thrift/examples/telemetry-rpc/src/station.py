@@ -11,6 +11,7 @@ import time
 from telemetry import Telemetry
 from telemetry.ttypes import InvalidReading, Reading, Summary
 from thrift.protocol import TBinaryProtocol, TCompactProtocol, TJSONProtocol
+from thrift.protocol.TProtocol import TProtocolFactory
 from thrift.server import TServer
 from thrift.transport import TSocket, TTransport
 from thrift.TSerialization import deserialize, serialize
@@ -34,7 +35,7 @@ CODECS = [
 ]
 
 
-def native_codec():
+def native_codec() -> bool:
     """True when thrift's C++ fastbinary codec is loaded, False on a pure-Python build."""
     try:
         from thrift.protocol import fastbinary  # noqa: F401
@@ -43,7 +44,7 @@ def native_codec():
     return True
 
 
-def batch(bad_sensor=None):
+def batch(bad_sensor: str | None = None) -> list[Reading]:
     """A deterministic batch of readings; `bad_sensor` gets an impossible temperature."""
     readings = []
     for i in range(SENSORS):
@@ -64,7 +65,7 @@ def batch(bad_sensor=None):
 class Handler:
     """Server-side implementation of the `Telemetry` service from telemetry.thrift."""
 
-    def submit(self, readings):
+    def submit(self, readings: list[Reading]) -> Summary:
         """Summarise a batch, rejecting any reading below absolute zero."""
         for reading in readings:
             if reading.celsius < -273.15:
@@ -84,17 +85,17 @@ class Handler:
 class _LoopbackServerSocket(TSocket.TServerSocket):
     """Binds an ephemeral port up front, so the port is known before serve() runs."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Listen on 127.0.0.1 with a port picked by the OS."""
         super().__init__(host="127.0.0.1", port=0)
         super().listen()
         self.port = self.handle.getsockname()[1]
 
-    def listen(self):
+    def listen(self) -> None:
         """Already listening; serve() calls this again and must not rebind."""
 
 
-def start_server():
+def start_server() -> int:
     """Serve `Telemetry` from a daemon thread and return its port."""
     socket = _LoopbackServerSocket()
     server = TServer.TThreadedServer(
@@ -108,7 +109,9 @@ def start_server():
     return socket.port
 
 
-def submit(port, readings, host="127.0.0.1"):
+def submit(
+    port: int, readings: list[Reading], host: str = "127.0.0.1"
+) -> tuple[Summary, float]:
     """Call `Telemetry.submit` and return (Summary, milliseconds).
 
     The socket is wrapped in a framed transport: the native decoder only runs on a
@@ -127,7 +130,9 @@ def submit(port, readings, host="127.0.0.1"):
         transport.close()
 
 
-def _window(factory, payload, seconds):
+def _window(
+    factory: TProtocolFactory, payload: Telemetry.submit_args, seconds: float
+) -> float:
     """Serialize-plus-deserialize round trips per second over one short window."""
     done = 0
     started = time.perf_counter()
@@ -137,7 +142,9 @@ def _window(factory, payload, seconds):
     return done / (time.perf_counter() - started)
 
 
-def codec_rows(readings, seconds=0.6, windows=6):
+def codec_rows(
+    readings: list[Reading], seconds: float = 0.6, windows: int = 6
+) -> list[tuple[str, int, float | None, float]]:
     """Wire size and throughput of the `submit` payload in each protocol.
 
     Each row: name, bytes, native round trips/s (None when unavailable), pure-Python

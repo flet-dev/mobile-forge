@@ -7,7 +7,7 @@ from telemetry.ttypes import InvalidReading
 from thrift.Thrift import TException
 
 
-def cell(text, width, color=None):
+def cell(text: str, width: int, color: ft.Colors | None = None) -> ft.Container:
     """One fixed-width monospace table cell."""
     return ft.Container(
         width=width,
@@ -15,14 +15,14 @@ def cell(text, width, color=None):
     )
 
 
-def rate(per_second):
+def rate(per_second: float | None) -> str:
     """Round trips per second, abbreviated: 41200 -> '41.2k', 180 -> '180'."""
     if per_second is None:
         return "—"
     return f"{per_second / 1000:.1f}k" if per_second >= 999.5 else f"{per_second:.0f}"
 
 
-def row_for(name, size, fast, pure):
+def row_for(name: str, size: int, fast: float | None, pure: float) -> ft.Row:
     """One protocol: wire bytes, native and pure-Python round trips/s, and the gain."""
     gain = f"{fast / pure:.1f}x" if fast else ""
     return ft.Row(

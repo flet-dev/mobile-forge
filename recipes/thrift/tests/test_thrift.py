@@ -1,18 +1,22 @@
 import threading
+from collections.abc import Callable
+from typing import Any
 
 import pytest
 from thrift.protocol import TBinaryProtocol, TCompactProtocol
 from thrift.protocol.TBase import TBase
+from thrift.protocol.TProtocol import TProtocolBase
 from thrift.server import THttpServer
 from thrift.Thrift import TMessageType, TType
 from thrift.transport import THttpClient, TSocket, TTransport
+from thrift.transport.TTransport import TTransportBase
 from thrift.TSerialization import deserialize, serialize
 
 
 class Point(TBase):
     __slots__ = ("x", "label")
 
-    def __init__(self, x=None, label=None):
+    def __init__(self, x: int | None = None, label: str | None = None):
         self.x = x
         self.label = label
 
@@ -29,14 +33,14 @@ class Record(TBase):
 
     def __init__(
         self,
-        id=None,
-        name=None,
-        ratio=None,
-        flag=None,
-        blob=None,
-        origin=None,
-        points=None,
-        tags=None,
+        id: int | None = None,
+        name: str | None = None,
+        ratio: float | None = None,
+        flag: bool | None = None,
+        blob: bytes | None = None,
+        origin: Point | None = None,
+        points: list[Point] | None = None,
+        tags: dict[str, int] | None = None,
     ):
         self.id = id
         self.name = name
@@ -71,14 +75,16 @@ PROTOCOLS = {
     ),
 }
 
-WRAPPERS = {
+Wrap = Callable[[TTransportBase], TTransportBase]
+
+WRAPPERS: dict[str, Wrap] = {
     "framed": TTransport.TFramedTransport,
     "buffered": TTransport.TBufferedTransport,
     "bare": lambda transport: transport,
 }
 
 
-def _record():
+def _record() -> Record:
     return Record(
         id=-(2**40) - 7,
         name="flet → thrift",
@@ -91,7 +97,7 @@ def _record():
     )
 
 
-def _reply_with_same_record(iprot, oprot):
+def _reply_with_same_record(iprot: TProtocolBase, oprot: TProtocolBase) -> None:
     """Server side of the echo call: read a Record and send it straight back."""
     name, _, seqid = iprot.readMessageBegin()
     record = Record()
@@ -106,25 +112,27 @@ def _reply_with_same_record(iprot, oprot):
 class _EchoProcessor:
     """The processor interface THttpServer drives."""
 
-    def on_message_begin(self, func):
+    def on_message_begin(self, func: Callable) -> None:
         pass
 
-    def process(self, iprot, oprot):
+    def process(self, iprot: TProtocolBase, oprot: TProtocolBase) -> None:
         _reply_with_same_record(iprot, oprot)
 
 
-def _counting_client(transport):
+def _counting_client(
+    transport: TTransportBase,
+) -> tuple[TBinaryProtocol.TBinaryProtocolAccelerated, dict[str, int]]:
     """A strict accelerated protocol whose native encode/decode calls are counted.
     Built before any server starts, so a missing codec fails at once."""
     proto = TBinaryProtocol.TBinaryProtocolAccelerated(transport, fallback=False)
     counts = {"encode": 0, "decode": 0}
     encode, decode = proto._fast_encode, proto._fast_decode
 
-    def counted_encode(*args):
+    def counted_encode(*args: Any) -> bytes:
         counts["encode"] += 1
         return encode(*args)
 
-    def counted_decode(*args):
+    def counted_decode(*args: Any) -> None:
         counts["decode"] += 1
         return decode(*args)
 
@@ -132,7 +140,7 @@ def _counting_client(transport):
     return proto, counts
 
 
-def _call(proto):
+def _call(proto: TProtocolBase) -> Record:
     """Send the record as an `echo` CALL and return the decoded REPLY."""
     proto.writeMessageBegin("echo", TMessageType.CALL, 1)
     _record().write(proto)
@@ -145,7 +153,7 @@ def _call(proto):
     return reply
 
 
-def _socket_echo(wrap):
+def _socket_echo(wrap: Wrap) -> tuple[Record, dict[str, int]]:
     """One echo call over a loopback TCP socket; returns (reply, native counts)."""
     server = TSocket.TServerSocket(host="127.0.0.1", port=0)
     server.listen()
@@ -154,7 +162,7 @@ def _socket_echo(wrap):
         sock.setTimeout(10000)
         proto, counts = _counting_client(wrap(sock))
 
-        def serve():
+        def serve() -> None:
             trans = wrap(server.accept())
             served = TBinaryProtocol.TBinaryProtocolAccelerated(trans, fallback=False)
             _reply_with_same_record(served, served)
@@ -169,7 +177,7 @@ def _socket_echo(wrap):
     return reply, counts
 
 
-def _http_echo(wrap):
+def _http_echo(wrap: Wrap) -> tuple[Record, dict[str, int]]:
     """One echo call to a loopback THttpServer; returns (reply, native counts)."""
     server = THttpServer.THttpServer(
         _EchoProcessor(),
@@ -220,14 +228,14 @@ def test_accelerated_protocols_bind_native_codec():
 
 
 @pytest.mark.parametrize("name", sorted(PROTOCOLS))
-def test_accelerated_bytes_match_pure_python(name):
+def test_accelerated_bytes_match_pure_python(name: str):
     """The native encoder produces exactly the pure-Python wire bytes."""
     fast, pure = PROTOCOLS[name]
     assert serialize(_record(), fast) == serialize(_record(), pure)
 
 
 @pytest.mark.parametrize("name", sorted(PROTOCOLS))
-def test_accelerated_round_trip(name):
+def test_accelerated_round_trip(name: str):
     """Nested struct/list/map/binary fields survive a native encode/decode."""
     fast, pure = PROTOCOLS[name]
     data = serialize(_record(), fast)
@@ -238,7 +246,7 @@ def test_accelerated_round_trip(name):
 @pytest.mark.parametrize(
     "wrapper, native_decodes", [("framed", 1), ("buffered", 1), ("bare", 0)]
 )
-def test_socket_call_native_codec_use(wrapper, native_decodes):
+def test_socket_call_native_codec_use(wrapper: str, native_decodes: int):
     """A loopback TCP call round-trips on any transport. The request is always
     encoded natively, but the reply is decoded natively only through a framed or
     buffered transport (the README's client setup)."""
@@ -248,7 +256,7 @@ def test_socket_call_native_codec_use(wrapper, native_decodes):
 
 
 @pytest.mark.parametrize("wrapper, native_decodes", [("buffered", 1), ("bare", 0)])
-def test_http_call_native_codec_use(wrapper, native_decodes):
+def test_http_call_native_codec_use(wrapper: str, native_decodes: int):
     """THttpClient behaves like a bare socket: replies are decoded natively only
     when it is wrapped in a TBufferedTransport, as the README advises."""
     reply, counts = _http_echo(WRAPPERS[wrapper])
