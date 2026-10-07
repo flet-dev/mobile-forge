@@ -100,18 +100,18 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DEFAULT_PYTHONS: "3.12,3.13,3.14"
+  DEFAULT_PYTHONS: "3.14"  # ubuntu-26.04 canary
   # Used as the fallback recipe set when `packages` input is empty
   # (workflow_dispatch/workflow_call) or when no `recipes/**` paths
   # changed in the triggering event (push/pull_request).
-  SMOKE_TEST_PACKAGES: "lru-dict:,pydantic-core:,numpy:"
+  SMOKE_TEST_PACKAGES: "duckdb:"  # ubuntu-26.04 canary: heavy CMake build tree in /tmp
 
 permissions:
   contents: read
 
 jobs:
   detect:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       pythons_json: ${{ steps.detect-pythons.outputs.pythons_json }}
       canonical_python: ${{ steps.detect-pythons.outputs.canonical_python }}
@@ -197,7 +197,7 @@ jobs:
     with:
       python_version: ${{ matrix.python_version }}
       canonical_python: ${{ needs.detect.outputs.canonical_python }}
-      archs: ${{ inputs.archs || 'android,iOS' }}
+      archs: ${{ inputs.archs || 'android' }}  # ubuntu-26.04 canary
       packages: ${{ needs.detect.outputs.packages }}
       prebuild_recipes: ${{ inputs.prebuild_recipes || '' }}
       # A non-empty value is honored verbatim (list of test legs, or "ALL"). push/PR

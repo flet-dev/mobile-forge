@@ -133,7 +133,7 @@ permissions:
 
 jobs:
   setup:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       has_jobs: ${{ steps.set-matrix.outputs.has_jobs }}
@@ -180,11 +180,11 @@ jobs:
             for pkg in $build_packages; do
               pkg_name="${pkg%%:*}"
               if [[ "$arch" == "android" ]]; then
-                runner="ubuntu-latest"
+                runners="ubuntu-26.04 ubuntu-24.04"  # ubuntu-26.04 canary + 24.04 control
                 platform="android"
                 rust_targets="aarch64-linux-android,arm-linux-androideabi,x86_64-linux-android"
               else
-                runner="macos-26"
+                runners="macos-26"
                 platform="ios"
                 rust_targets="aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios"
               fi
@@ -208,8 +208,10 @@ jobs:
               display_build="${recipe_build:-0}"
               job_name="${pkg_name} ${display_version} #${display_build} (${platform})"
 
+              for runner in $runners; do
               if [ "$first" = true ]; then first=false; else matrix+=','; fi
-              matrix+="{\"job_name\":\"$job_name\",\"artifact_name\":\"py${py_short}-${platform}-${pkg_name}\",\"runner\":\"$runner\",\"platform\":\"$platform\",\"forge_arch\":\"$arch\",\"forge_packages\":\"$pkg\",\"python_short\":\"$py_short\",\"rust_targets\":\"$rust_targets\"}"
+              matrix+="{\"job_name\":\"$job_name $runner\",\"artifact_name\":\"py${py_short}-${platform}-${pkg_name}-${runner}\",\"runner\":\"$runner\",\"platform\":\"$platform\",\"forge_arch\":\"$arch\",\"forge_packages\":\"$pkg\",\"python_short\":\"$py_short\",\"rust_targets\":\"$rust_targets\"}"
+              done
             done
           done
           matrix+=']}'
@@ -288,6 +290,13 @@ jobs:
             echo "::endgroup::"
           done
 
+      - name: Start /tmp sampler (ubuntu-26.04 canary)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          grep -E '^VERSION=' /etc/os-release; findmnt -no FSTYPE,SIZE,OPTIONS /tmp; df -h /tmp /
+          nohup bash -c 'while sleep 5; do echo "$(date +%T) $(du -sxm /tmp 2>/dev/null | cut -f1)"; done' > "$RUNNER_TEMP/tmp-usage.log" 2>&1 &
+
       - name: Build wheels
         shell: bash
         env:
@@ -338,6 +347,14 @@ jobs:
           for package in "${packages[@]}"; do
             forge "$FORGE_ARCH" "$package"
           done
+
+      - name: Report /tmp peak (ubuntu-26.04 canary)
+        if: always() && runner.os == 'Linux'
+        shell: bash
+        run: |
+          echo "peak /tmp usage (MiB): $(awk '{print $2}' "$RUNNER_TEMP/tmp-usage.log" | sort -n | tail -1)"
+          tail -5 "$RUNNER_TEMP/tmp-usage.log"
+          grep -rl -i -E 'Disk quota exceeded|No space left' logs errors 2>/dev/null | head
 
       - name: Drop support-tree dep wheels
         if: always()
