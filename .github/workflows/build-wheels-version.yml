@@ -294,7 +294,7 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          grep -E '^VERSION=' /etc/os-release; findmnt -no FSTYPE,SIZE,OPTIONS /tmp; df -h /tmp /
+          grep -E '^VERSION=' /etc/os-release; findmnt -no FSTYPE,SIZE,OPTIONS /tmp || echo "/tmp is not a separate mount"; df -h /tmp /
           nohup bash -c 'while sleep 5; do echo "$(date +%T) $(du -sxm /tmp 2>/dev/null | cut -f1)"; done' > "$RUNNER_TEMP/tmp-usage.log" 2>&1 &
 
       - name: Build wheels
