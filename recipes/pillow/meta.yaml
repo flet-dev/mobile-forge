@@ -1,11 +1,11 @@
 package:
   name: Pillow
-  version: "12.2.0"
+  version: "12.3.0"
 
 requirements:
   # PNG support is internal: libpng is not used.
   #
-  # All three are linked STATICALLY into the extensions on iOS and dynamically on
+  # All four are linked STATICALLY into the extensions on iOS and dynamically on
   # Android, so where they belong differs by platform. Under `host` they become a
   # runtime Requires-Dist and every consuming app installs the wheel; on iOS that
   # is ~16 MB of .a already folded into _imaging.so / _webp.so and unloadable at
@@ -17,11 +17,13 @@ requirements:
     - flet-libjpeg 3.0.90
     - flet-libfreetype 2.13.3
     - flet-libwebp 1.6.0
+    - flet-libtiff 4.7.0
 # {% else %}
   host_build:
     - flet-libjpeg 3.0.90
     - flet-libfreetype 2.13.3
     - flet-libwebp 1.6.0
+    - flet-libtiff 4.7.0
 # {% endif %}
 
 # {% if not version or version >= (12,0,0) %}
@@ -41,7 +43,7 @@ patches:
 # {% endif %}
 
 build:
-  number: 2
+  number: 1
   script_env:
 # {% if sdk == 'android' %}
     # pillow's setup.py manually probes `self.compiler.{include,library}_dirs`

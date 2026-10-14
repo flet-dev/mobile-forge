@@ -197,3 +197,43 @@ def test_webp_animation_encode():
     for i, want in enumerate([(255, 0, 0), (0, 255, 0), (0, 0, 255)]):
         rt.seek(i)
         assert rt.convert("RGB").getpixel((4, 4)) == want
+
+
+def test_libtiff_available():
+    """libtiff is linked: Pillow lists it as a codec."""
+    from PIL import features
+
+    assert features.check("libtiff") is True
+    assert "libtiff" in features.get_supported_codecs()
+
+
+def test_tiff_jpeg_roundtrip():
+    """Write and decode JPEG-compressed TIFFs (compression 7), RGB and RGBA."""
+    from PIL import Image
+
+    for mode, colour in (("RGB", (200, 40, 40)), ("RGBA", (40, 200, 40, 128))):
+        src = Image.new(mode, (64, 48), colour)
+        out = io.BytesIO()
+        src.save(out, "TIFF", compression="jpeg")
+
+        rt = Image.open(io.BytesIO(out.getvalue()))
+        assert rt.tag_v2[259] == 7, f"{mode}: compression tag {rt.tag_v2[259]}"
+        rt.load()  # where a build without libtiff raises "decoder libtiff not available"
+        assert rt.mode == mode
+        got = rt.getpixel((32, 24))
+        assert all(abs(g - w) <= 8 for g, w in zip(got, colour)), f"{mode}: {got}"
+
+
+def test_tiff_lossless_compressions_roundtrip():
+    """LZW, deflate and PackBits TIFFs round-trip exactly."""
+    from PIL import Image
+
+    src = Image.new("RGB", (16, 16))
+    src.putdata([(x * 16, y * 16, 0) for y in range(16) for x in range(16)])
+
+    for compression in ("tiff_lzw", "tiff_adobe_deflate", "packbits"):
+        out = io.BytesIO()
+        src.save(out, "TIFF", compression=compression)
+        rt = Image.open(io.BytesIO(out.getvalue()))
+        assert rt.info["compression"] == compression
+        assert rt.tobytes() == src.tobytes(), compression
