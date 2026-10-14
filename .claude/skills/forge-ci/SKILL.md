@@ -33,7 +33,8 @@ build-wheels.yml (push / workflow_dispatch / workflow_call)
         └── jobs (matrix: package × platform)   e.g. "Python 3.12 / foo 1.2.3 #1 (android)"
             ├── Build wheels        — prebuild_recipes first, then the package(s), all slices
             ├── mobile test (3.12 legs only by default) — recipe-tester APK on an
-            │   emulator (android) / .app on a simulator (ios), polls console.log
+            │   x86_64 emulator (android; never arm64, see local-recipe-testing #15) /
+            │   .app on a simulator (ios), polls console.log
             │   for the ">>>>>>>>>> EXIT N <<<<<<<<<<" sentinel
             └── upload artifacts    — wheels + test console.log
 ```

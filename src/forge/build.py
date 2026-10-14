@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import multiprocessing
 import os
 import re
+import shlex
 import shutil
 import struct
 import sys
@@ -50,6 +52,50 @@ Everything in it ships, whatever it is named — a recipe supplying
 notices for a binary that carries none usually has one per bundled project, and
 those names (COPYING.curl, LICENSE.boringssl) are ours to choose.
 """
+
+PATCH_CRATES_IO_RE = re.compile(
+    r'^[ \t]*\[[ \t]*patch[ \t]*\.[ \t]*(crates-io|"crates-io")[ \t]*\][ \t]*(#.*)?$',
+    re.MULTILINE,
+)
+
+
+def add_crates_io_patches(text: str, entries: list[tuple[str, str, str]]) -> str:
+    """Add ``(key, crate, path)`` entries to a Cargo.toml's ``[patch.crates-io]``.
+
+    Refuses a crate the manifest already patches, and checks the result parses,
+    so an unusual manifest fails here rather than as a cargo TOML error.
+    """
+    existing = tomllib.loads(text).get("patch", {}).get("crates-io", {})
+    for key, name, _ in entries:
+        for old_key, old in existing.items():
+            old_name = old.get("package", old_key) if isinstance(old, dict) else old_key
+            if key == old_key or name == old_name:
+                raise RuntimeError(
+                    f"crate_patches: Cargo.toml already patches {name} ({old_key!r}); "
+                    "change that entry with a source patch instead"
+                )
+
+    # Quoted: a crate id used as a key has dots.
+    lines = "".join(
+        f'"{key}" = {{ package = "{name}", path = "{path}" }}\n'
+        for key, name, path in entries
+    )
+    header = PATCH_CRATES_IO_RE.search(text)
+    if header:
+        text = f"{text[: header.end()]}\n{lines[:-1]}{text[header.end() :]}"
+    elif existing:
+        raise RuntimeError(
+            "crate_patches: Cargo.toml defines [patch.crates-io] without a "
+            "[patch.crates-io] header to add entries under"
+        )
+    else:
+        text = f"{text.rstrip()}\n\n[patch.crates-io]\n{lines}"
+
+    merged = tomllib.loads(text)["patch"]["crates-io"]
+    for key, name, path in entries:
+        if merged.get(key) != {"package": name, "path": path}:
+            raise RuntimeError(f"crate_patches: could not add {key!r} to Cargo.toml")
+    return text if text.endswith("\n") else text + "\n"
 
 
 class Builder(ABC):
@@ -249,6 +295,109 @@ class Builder(ABC):
         if not patched:
             log(self.log_file, "No patches to apply.")
 
+    def patch_crates(self):
+        """Patch crates.io dependencies of a Rust source tree.
+
+        A fix that belongs in a dependency, not in the package itself, cannot ride
+        in ``patches``: cargo fetches dependencies at build time. For each crate
+        named in ``crate_patches``, take the exact version the source's Cargo.lock
+        resolves, verify the download against the lockfile checksum, unpack it into
+        ``forge-crates/``, apply the recipe's patches to it and point the
+        workspace's ``[patch.crates-io]`` at the copy.
+        """
+        crate_patches = self.package.meta.get("crate_patches") or {}
+        if not crate_patches:
+            return
+
+        lockfile = self.build_path / "Cargo.lock"
+        manifest = self.build_path / "Cargo.toml"
+        if not (lockfile.is_file() and manifest.is_file()):
+            raise RuntimeError(
+                "crate_patches needs a Cargo.toml and Cargo.lock at the root of the source"
+            )
+        with lockfile.open("rb") as f:
+            locked = [
+                pkg
+                for pkg in tomllib.load(f).get("package", [])
+                if pkg.get("source", "").startswith("registry+")
+            ]
+
+        patched = {}
+        for key, patches in crate_patches.items():
+            name, _, version = key.partition("@")
+            matches = [
+                pkg
+                for pkg in locked
+                if pkg["name"] == name and (not version or pkg["version"] == version)
+            ]
+            if len(matches) != 1:
+                found = ", ".join(
+                    pkg["version"] for pkg in locked if pkg["name"] == name
+                )
+                raise RuntimeError(
+                    f"crate_patches: {key!r} must match exactly one crates.io package in "
+                    f"Cargo.lock (found: {found or 'none'}); use name@version to choose"
+                )
+            crate = matches[0]
+            crate_id = f"{name}-{crate['version']}"
+
+            archive = Path.cwd() / "downloads" / "crates" / f"{crate_id}.crate"
+            if not archive.is_file():
+                url = f"https://static.crates.io/crates/{name}/{crate_id}.crate"
+                log(self.log_file, f"Downloading {url}...")
+                archive.parent.mkdir(parents=True, exist_ok=True)
+                partial = archive.with_suffix(".part")
+                with httpx.stream("GET", url, follow_redirects=True) as response:
+                    response.raise_for_status()
+                    with partial.open("wb") as f:
+                        for chunk in response.iter_bytes():
+                            f.write(chunk)
+                partial.rename(archive)
+
+            digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+            if digest != crate["checksum"]:
+                archive.unlink()
+                raise RuntimeError(
+                    f"{archive.name}: sha256 {digest} does not match Cargo.lock "
+                    f"({crate['checksum']})"
+                )
+
+            crates_dir = self.build_path / "forge-crates"
+            crates_dir.mkdir(exist_ok=True)
+            with tarfile.open(archive) as tf:
+                # filter= exists from 3.12 and in 3.8-3.11 security releases; the
+                # archive already matched the lockfile checksum.
+                if hasattr(tarfile, "data_filter"):
+                    tf.extractall(path=crates_dir, filter="data")
+                else:
+                    tf.extractall(path=crates_dir)
+
+            for patch in patches:
+                patchfile = self.package.recipe_path / "patches" / patch
+                log(self.log_file, f"Applying {patch} to {crate_id}...")
+                subprocess.run(
+                    self.log_file,
+                    [
+                        "patch",
+                        "-p1",
+                        "--ignore-whitespace",
+                        "--quiet",
+                        "--input",
+                        str(patchfile),
+                    ],
+                    cwd=crates_dir / crate_id,
+                )
+            patched.setdefault(name, []).append(crate_id)
+
+        entries = []
+        for name, crate_ids in patched.items():
+            for crate_id in crate_ids:
+                # Two patched versions of one crate need distinct keys; cargo
+                # matches on `package`, not on the key.
+                key = name if len(crate_ids) == 1 else crate_id
+                entries.append((key, name, f"forge-crates/{crate_id}"))
+        manifest.write_text(add_crates_io_patches(manifest.read_text(), entries))
+
     def prepare(self, clean=True):
         if clean and self.build_path.is_dir():
             if clean:
@@ -289,6 +438,7 @@ class Builder(ABC):
 
                 log(self.log_file, f"\n[{self.cross_venv}] Apply patches")
                 self.patch_source()
+                self.patch_crates()
 
         # Create a clean cross environment.
         log(self.log_file, f"\n[{self.cross_venv}] Create clean build environment")
@@ -435,6 +585,20 @@ class Builder(ABC):
             libgcc_shim.mkdir(parents=True, exist_ok=True)
             (libgcc_shim / "libgcc.a").write_text("INPUT(-lunwind)\n")
             cargo_ldflags += f" -L{libgcc_shim}"
+
+            # rustc links cdylibs with -nodefaultlibs, so the NDK's compiler-rt
+            # builtins never reach the link, and Rust's compiler_builtins lacks some
+            # that C code in -sys crates calls. arm64 libffi's __clear_cache is one:
+            # the .so links, then dlopen fails with `cannot locate symbol`. Only
+            # members for still-undefined symbols are pulled from the archive.
+            rt_arch = self.cross_venv.platform_triplet.split("-")[0]
+            builtins = sorted(
+                (Path(cc).parent.parent / "lib" / "clang").glob(
+                    f"*/lib/linux/libclang_rt.builtins-{rt_arch}-android.a"
+                )
+            )
+            if builtins:
+                cargo_ldflags += f" -C link-arg={builtins[-1]}"
 
         if self.cross_venv.sdk != "android":
             # Replace any hard-coded reference to -isysroot <sysroot> with the actual reference
@@ -589,6 +753,27 @@ class Builder(ABC):
             env["ANDROID_ABI"] = self.cross_venv.arch
             env["ANDROID_API_LEVEL"] = str(self.cross_venv.sdk_version)
             env["HOST_TRIPLET"] = self.cross_venv.platform_triplet
+
+        # bindgen, which -sys crates run from their build scripts, parses headers with
+        # libclang and gets neither the target's sysroot nor, for aarch64-apple-ios-sim,
+        # a triple clang accepts. Scoped to the target, so host build scripts are untouched.
+        if self.cross_venv.sdk == "android":
+            cc_name = Path(cc).name
+            clang_target = (
+                cc_name[: -len("-clang")]
+                if cc_name.endswith("-clang")
+                else f"{self.cross_venv.platform_triplet}{self.cross_venv.sdk_version}"
+            )
+            # bindgen shell-splits the variable, so a path with a space needs quoting.
+            sysroot = f"--sysroot={shlex.quote(env['NDK_SYSROOT'])}"
+        else:
+            arch = self.cross_venv.platform_triplet.split("-")[0]
+            clang_target = f"{arch}-apple-ios{self.cross_venv.sdk_version}"
+            if self.cross_venv.sdk.endswith("simulator"):
+                clang_target += "-simulator"
+            sysroot = f"-isysroot {shlex.quote(str(self.cross_venv.sdk_root))}"
+        bindgen_var = f"BINDGEN_EXTRA_CLANG_ARGS_{cargo_build_target.replace('-', '_')}"
+        env[bindgen_var] = f"--target={clang_target} {sysroot}"
 
         # `env` wins. Everything forge has adjusted above — the compiler and
         # binutils re-pointed at the installed NDK, and the CFLAGS/CPPFLAGS/LDFLAGS

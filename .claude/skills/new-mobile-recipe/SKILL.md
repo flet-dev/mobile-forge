@@ -88,6 +88,7 @@ Match the package to one of these shapes. Each maps to a template in `templates/
 | CMake giant, **no sdist AND no setup.py/pyproject.toml** | Upstream's only wheel path is a host==target build script (onnxruntime's `ci_build/build.py`, TF's `build_pip_package_with_cmake.sh`) | No template — copy from `recipes/onnxruntime/` or `recipes/tflite-runtime/` (branches `machine/onnxruntime` / `machine/tflite-runtime`); see "PEP 517 shim" deep-dive below |
 | C-ext linking a `flet-lib*`'s **shared** libs via `pkg-config` | Upstream's `setup.py` runs `pkg-config --cflags --libs …` and the package has too many extension modules to static-link into (PyAV: 49) | No template — copy `recipes/flet-libffmpeg/` + `recipes/av/`: the flet-lib ships SHARED libs plus **relocatable** `.pc` files (forge already has `opt/lib/pkgconfig` on `PKG_CONFIG_LIBDIR`, so the consumer needs no `script_env` for it), and the consumer adds `-Wl,-headerpad_max_install_names` on iOS. See "Cross-cutting conventions" in `references/recipe-patterns.md` |
 | **Prebuilt-repackage + host_build chain**  | Upstream publishes official prebuilt mobile archives of the native lib AND the consumer's own cmake links + re-ships the `.so` (flet-libonnxruntime→sherpa-onnx) | `build.sh` repackager + consumer `requirements.host_build`; copy from `recipes/flet-libonnxruntime/` + `recipes/sherpa-onnx/` (branch `machine/sherpa-onnx`); see "prebuilt-repackage" deep-dive below |
+| **Rust crate embedding Deno (`deno_core`/`deno_runtime`)** | The package runs JavaScript in Deno, i.e. V8 (vl-convert). V8 has no Android build and a host-made V8 snapshot cannot cross configurations | No template — copy `recipes/vl-convert-python/`: deno_core's `quickjs` feature (QuickJS-ng via the `deno_v8` facade), no snapshot with the extension sources embedded, Deno cfg gaps through `crate_patches`. Read its Build notes first: two failures only show on an arm64 device |
 | **cffi/ctypes consumer of a prebuilt archive** | The package's own build DOWNLOADS a prebuilt static lib keyed by the build host's `uname` and statically links it (curl-cffi → curl-impersonate); breaks under cross because host≠target | `flet-lib*` prebuilt-repackage dep (`source.strip: 0` for root-level tarballs) + `requirements.host_build` + a `mobile.patch` opt-in env lever that steers arch/link off the forge target; copy from `recipes/flet-libcurl-impersonate/` + `recipes/curl-cffi/` (branch `curl-cffi`); see deep-dive below |
 
 If unsure, start with **minimal C-extension** and let the build tell you what's missing. Iterate up the table as failures surface.
@@ -357,6 +358,27 @@ Renders the meta.yaml for all SDK contexts (iphoneos, iphonesimulator, android) 
 - Same discipline for any scripted edit (`python -c "...str.replace..."`): `str.replace`
   with a non-matching needle silently no-ops. Always `assert needle in text` before
   replacing, or grep the output file for the new content after.
+
+### 3.5a — Patching a crates.io dependency (`crate_patches`)
+
+`patches` only reaches the sdist; a Rust package's dependencies are fetched by cargo at
+build time. To patch one, list it in meta.yaml:
+
+```yaml
+crate_patches:
+  deno_core:            # or name@version when Cargo.lock holds several versions
+    - deno_core.patch   # in patches/, applied with patch -p1 from the crate root
+```
+
+forge downloads the exact version the source's `Cargo.lock` resolves, checks its
+sha256 against the lockfile, unpacks it into `forge-crates/`, applies the patches and adds
+a `[patch.crates-io]` entry to the root `Cargo.toml`, joining upstream's table when it has
+one. If that table already patches the same crate (say, to a git fork), forge stops: change
+upstream's entry with the sdist patch instead. Generate each patch from a pristine
+copy of `~/.cargo/registry/src/*/<crate>-<ver>` the same way as an sdist patch, and keep
+the sdist patch from rewriting `Cargo.lock`: forge reads versions and checksums from it.
+Running `cargo metadata` or `cargo tree` in your edited tree rewrites the lockfile, which
+then lands in the diff.
 
 ### 3.5b — Licences (`flet-lib*` / build.sh recipes only)
 
