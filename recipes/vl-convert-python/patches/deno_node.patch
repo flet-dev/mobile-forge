@@ -1,0 +1,101 @@
+deno_node 0.196.0: treat iOS as macOS.
+
+Every target_os = "macos" cfg also matches ios. Several of these branches have
+no fallback, so iOS fails to compile without them; the rest select Darwin APIs
+that iOS shares. Regenerate on a bump by running, from the crate root:
+
+    perl -0pi -e 's/target_os = "macos"/any(target_os = "macos", target_os = "ios")/g' $(grep -rl 'target_os = "macos"' .)
+
+diff -ruN a/ops/constant.rs b/ops/constant.rs
+--- a/ops/constant.rs
++++ b/ops/constant.rs
+@@ -242,7 +242,7 @@
+   }
+ }
+ 
+-#[cfg(target_os = "macos")]
++#[cfg(any(target_os = "macos", target_os = "ios"))]
+ #[op2]
+ #[serde]
+ pub fn op_node_fs_constants() -> FsConstants {
+diff -ruN a/ops/fs.rs b/ops/fs.rs
+--- a/ops/fs.rs
++++ b/ops/fs.rs
+@@ -1737,7 +1737,7 @@
+   cp_sync_copy_dir_no_filter(permissions, fs, src, dest, opts)
+ }
+ 
+-#[cfg(target_os = "macos")]
++#[cfg(any(target_os = "macos", target_os = "ios"))]
+ fn try_clone_dir_no_filter(
+   permissions: &PermissionsContainer,
+   fs: &FileSystemRc,
+@@ -1786,7 +1786,7 @@
+   }
+ }
+ 
+-#[cfg(not(target_os = "macos"))]
++#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+ fn try_clone_dir_no_filter(
+   _permissions: &PermissionsContainer,
+   _fs: &FileSystemRc,
+@@ -1797,7 +1797,7 @@
+   Ok(false)
+ }
+ 
+-#[cfg(target_os = "macos")]
++#[cfg(any(target_os = "macos", target_os = "ios"))]
+ fn cp_tree_only_regular_files_and_dirs(
+   permissions: &PermissionsContainer,
+   fs: &FileSystemRc,
+@@ -1864,7 +1864,7 @@
+   Ok(true)
+ }
+ 
+-#[cfg(target_os = "macos")]
++#[cfg(any(target_os = "macos", target_os = "ios"))]
+ fn clonefile_sync(
+   src: &CheckedPath,
+   dest: &CheckedPath,
+diff -ruN a/ops/os/cpus.rs b/ops/os/cpus.rs
+--- a/ops/os/cpus.rs
++++ b/ops/os/cpus.rs
+@@ -25,7 +25,7 @@
+   }
+ }
+ 
+-#[cfg(target_os = "macos")]
++#[cfg(any(target_os = "macos", target_os = "ios"))]
+ pub fn cpu_info() -> Option<Vec<CpuInfo>> {
+   let mut model: [u8; 512] = [0; 512];
+   let mut size = std::mem::size_of_val(&model);
+diff -ruN a/ops/process.rs b/ops/process.rs
+--- a/ops/process.rs
++++ b/ops/process.rs
+@@ -125,7 +125,7 @@
+   init
+ };
+ 
+-#[cfg(target_os = "macos")]
++#[cfg(any(target_os = "macos", target_os = "ios"))]
+ fn init_macos_argv_info() {
+   ARGV_INFO.get_or_init(|| {
+     // SAFETY: _NSGetArgc/_NSGetArgv are stable macOS APIs that return
+@@ -149,7 +149,7 @@
+   });
+ }
+ 
+-#[cfg(target_os = "macos")]
++#[cfg(any(target_os = "macos", target_os = "ios"))]
+ fn set_process_title(title: &str) {
+   init_macos_argv_info();
+   overwrite_argv_buffer(title);
+@@ -188,7 +188,7 @@
+ }
+ 
+ #[cfg(not(any(
+-  target_os = "macos",
++  any(target_os = "macos", target_os = "ios"),
+   target_os = "linux",
+   target_os = "windows"
+ )))]

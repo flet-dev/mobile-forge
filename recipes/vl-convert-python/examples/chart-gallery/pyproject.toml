@@ -1,0 +1,19 @@
+[project]
+name = "vl-convert-chart-gallery"
+version = "1.0.0"
+description = "Renders Vega-Lite specs to PNG on the device with vl-convert."
+requires-python = ">=3.10"
+
+dependencies = [
+    "flet==1.0.1",
+    "vl-convert-python==2.0.0rc7",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
+
+[tool.flet.android]
+target_arch = ["arm64-v8a", "x86_64"]
