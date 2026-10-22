@@ -495,10 +495,11 @@ jobs:
           for w in "$GITHUB_WORKSPACE"/dist/*.whl; do
               [[ -e "$w" ]] || continue
               base=$(basename "$w")
-              # name-version[-buildtag]-cpXY-cpXY-plat.whl
-              # → name-version-9999-cpXY-cpXY-plat.whl
+              # name-version[-buildtag]-{cpXY-cpXY|cpXY-abi3|py3-none}-plat.whl
+              # → name-version-9999-...-plat.whl. py3-none covers the build.sh
+              # flet-lib* wheels a prebuild_recipes chain puts here.
               new=$(printf '%s\n' "$base" \
-                    | sed -E 's/^([^-]+-[^-]+)(-[0-9]+)?-(cp[0-9]+-cp[0-9]+)-/\1-9999-\3-/')
+                    | sed -E 's/^([^-]+-[^-]+)(-[0-9]+)?-((cp[0-9]+|py3)-(cp[0-9]+|abi[0-9]+|none))-/\1-9999-\3-/')
               cp "$w" "$GITHUB_WORKSPACE/dist-test/$new"
           done
 
@@ -562,7 +563,7 @@ jobs:
               [[ -e "$w" ]] || continue
               base=$(basename "$w")
               new=$(printf '%s\n' "$base" \
-                    | sed -E 's/^([^-]+-[^-]+)(-[0-9]+)?-(cp[0-9]+-(cp[0-9]+|abi[0-9]+))-/\1-9999-\3-/')
+                    | sed -E 's/^([^-]+-[^-]+)(-[0-9]+)?-((cp[0-9]+|py3)-(cp[0-9]+|abi[0-9]+|none))-/\1-9999-\3-/')
               cp "$w" "$GITHUB_WORKSPACE/dist-test/$new"
           done
 

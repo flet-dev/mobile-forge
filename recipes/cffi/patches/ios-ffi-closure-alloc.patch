@@ -1,0 +1,54 @@
+Make ffi.callback() and variadic calls work on iOS (python-cffi/cffi#265).
+
+cffi uses libffi's ffi_closure_alloc()/ffi_prep_closure_loc()/ffi_prep_cif_var()
+on Apple only when ffi.h defines FFI_AVAILABLE_APPLE, which only the macOS SDK's
+ffi.h does. iOS links the support tree's upstream libffi, so every
+ffi.callback() fell back to malloc_closure.h's mmap(PROT_WRITE|PROT_EXEC),
+which iOS refuses ("MemoryError: Cannot allocate write+execute memory"), and
+variadic calls went through ffi_prep_cif(), which passes garbage on arm64,
+where Apple puts varargs on the stack. The fallback's ffi_prep_closure() is
+unusable on arm64 even with W+X allowed: that libffi uses trampoline tables.
+
+Same defines as upstream #265 (90e8cc434a, merged 2026-07-26, in no release
+as of 2.1.1), narrowed to TARGET_OS_IPHONE rather than upstream's hunk
+verbatim, because forge applies patches with a non-interactive `patch -p1`:
+on a release that already carries #265 the verbatim hunk is taken as
+"previously applied", answered "Assume -R? [y]", and silently REVERTED with
+exit 0 (measured on the 2.1.1 tree with #265 applied). This variant lands
+there as a redundant, dead branch instead. Android is not __APPLE__ and forge
+builds no macOS, so behaviour on every forge target equals upstream's. Drop
+this patch on a cffi release that contains #265.
+
+--- a/src/c/_cffi_backend.c
++++ b/src/c/_cffi_backend.c
+@@ -99,6 +99,10 @@
+  * This is also used on macOS, provided we are executing on macOS 10.15 or
+  * above.  It's a mess because it needs runtime checks in that case.
+  */
++#ifdef __APPLE__
++# include <TargetConditionals.h>
++#endif
++
+ #ifdef __NetBSD__
+ 
+ # define CFFI_CHECK_FFI_CLOSURE_ALLOC 1
+@@ -117,6 +121,19 @@
+ # define CFFI_CHECK_FFI_PREP_CIF_VAR __builtin_available(macos 10.15, ios 13, watchos 6, tvos 13, *)
+ # define CFFI_CHECK_FFI_PREP_CIF_VAR_MAYBE 1
+ 
++#elif defined(__APPLE__) && TARGET_OS_IPHONE
++
++/* iOS links upstream libffi, whose ffi.h lacks FFI_AVAILABLE_APPLE (only the
++ * macOS SDK's has it).  Falling to malloc_closure.h means a W+X mmap iOS
++ * refuses, and ffi_prep_cif() for varargs, which arm64 Apple passes on the
++ * stack.  The static libffi always has all three.  python-cffi/cffi#265. */
++# define CFFI_CHECK_FFI_CLOSURE_ALLOC 1
++# define CFFI_CHECK_FFI_CLOSURE_ALLOC_MAYBE 1
++# define CFFI_CHECK_FFI_PREP_CLOSURE_LOC 1
++# define CFFI_CHECK_FFI_PREP_CLOSURE_LOC_MAYBE 1
++# define CFFI_CHECK_FFI_PREP_CIF_VAR 1
++# define CFFI_CHECK_FFI_PREP_CIF_VAR_MAYBE 1
++
+ #elif defined(__EMSCRIPTEN__)
+ 
+ # define CFFI_CHECK_FFI_CLOSURE_ALLOC 1

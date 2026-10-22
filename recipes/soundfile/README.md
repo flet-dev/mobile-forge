@@ -61,27 +61,26 @@ file, so it is how you check a samplerate or duration before deciding to decode.
 ### Reading audio the user picked
 
 [`FilePicker`](https://flet.dev/docs/controls/filepicker/) hands back a path on both
-platforms, and `sf.read()` takes it directly. **A real path is the only form that works
-everywhere** — see the iOS note below.
+platforms, and `sf.read()` takes it directly.
 
-Where you hold bytes instead (a download, a file read out of `assets/`), `soundfile` does
-accept any file object, and on Android that works:
+Where you hold bytes instead (a download, a file read out of `assets/`), pass any binary
+file object:
 
 ```python
 import io
 
-data, sr = sf.read(io.BytesIO(raw_bytes))     # Android and desktop only
+data, sr = sf.read(io.BytesIO(raw_bytes))
 ```
 
-**On iOS this raises `MemoryError`,** and no version of the package will fix it. That path
-uses libsndfile's virtual I/O, which means handing the C library a `ffi.callback()`; cffi
-writes that trampoline into memory at runtime, and iOS refuses write+execute pages to an
-app without the JIT entitlement. The message names the cause:
+A file object goes through libsndfile's virtual I/O, which calls back into Python through
+`ffi.callback()`. That works on both platforms with **cffi 2.1.1-1 or later from
+pypi.flet.dev**, which pip picks over PyPI's own iOS wheel of the same version. Apps built
+against an older cffi raised this on iOS for every file object:
 
     MemoryError: Cannot allocate write+execute memory for ffi.callback().
 
-Write the bytes to a file and read that instead — it costs one write, needs no
-per-platform branch, and is the recommended form on both platforms:
+A real path is still the simplest form, with no callbacks at all. If the bytes are going to
+disk anyway, read them back by path:
 
 ```python
 import os
@@ -91,9 +90,6 @@ with open(path, "wb") as f:
     f.write(raw_bytes)
 data, sr = sf.read(path)
 ```
-
-Only the *file-object* form is affected. Paths, and integer file descriptors (which go
-through `sf_open_fd`), use no callbacks and work normally on iOS.
 
 ### Storage
 
@@ -142,9 +138,10 @@ device, which is not something you can assume for every package.
   being killed by the OS. Pass `dtype="float32"` unless you specifically need the precision,
   and prefer `blocks()` over reading whole files.
 
-- **iOS cannot read audio from a file object.** Repeating it here because it is the one
-  thing that behaves differently between the two platforms, and it fails at the point of
-  use rather than at import. `io.BytesIO` in, `MemoryError` out; write a file first.
+- **`MemoryError: Cannot allocate write+execute memory` on iOS means an old cffi.** File
+  objects need cffi 2.1.1-1 or later; with PyPI's 2.1.1 or our 2.0.0-1 the app imports
+  fine and fails at the first file object. Check which cffi the build resolved rather
+  than looking at soundfile.
 
 - **Opus only encodes at 48 kHz.** libsndfile will not resample for you; `sf.write(...,
   format="OGG", subtype="OPUS")` at any other rate raises. Resample first — [`soxr`](../soxr)
@@ -218,6 +215,10 @@ download six wheels whose contents already live inside `libsndfile.so`.
   `py2.py3-none-any` for an unknown `sys.platform`. forge's `fix_wheel` overwrites the tag,
   which is what makes our wheel outrank PyPI's `any` wheel at the same version. Do not
   "fix" the tag in a patch.
+- **File objects on iOS depend on the cffi recipe's `ios-ffi-closure-alloc.patch`**
+  (python-cffi/cffi#265, in no cffi release as of 2.1.1). If PyPI ships a newer cffi with
+  iOS wheels before pypi.flet.dev does, apps resolve it, and `test_read_from_file_object`
+  goes red on iOS unless that release carries #265.
 - **FLAC 1.5.0 needs `-DCMAKE_SYSTEM_VERSION` on Android** and `-DENABLE_MULTITHREADING=OFF`;
   both have comments in `recipes/flet-libflac/build.sh` saying what breaks without them.
 
@@ -241,10 +242,10 @@ download six wheels whose contents already live inside `libsndfile.so`.
 ### Coverage gaps
 
 The device tests cover loading the library, WAV round trips in three subtypes, every
-container and codec, virtual I/O from `BytesIO` (Android) and its `MemoryError` on iOS,
-the write-a-file workaround, block reads with seeking, and the format registry. They do not
-cover: writing to `FLET_APP_STORAGE_*` (a path question, not a
-libsndfile one), any real recorded audio file, `sf.info()`, the `RAW` format's manual
-`samplerate`/`channels`/`subtype` arguments, or multi-threaded decoding. The security
-backports are compile-verified only — there are no regression tests for the five fixes, since
-reproducing them needs the malformed inputs from upstream's fuzz corpus.
+container and codec, virtual I/O from `BytesIO` on both platforms, bytes spilled to a path,
+block reads with seeking, and the format registry. They do not cover: writing to
+`FLET_APP_STORAGE_*` (a path question, not a libsndfile one), any real recorded audio
+file, `sf.info()`, the `RAW` format's manual `samplerate`/`channels`/`subtype` arguments,
+or multi-threaded decoding. The security backports are compile-verified only — there are
+no regression tests for the five fixes, since reproducing them needs the malformed inputs
+from upstream's fuzz corpus.

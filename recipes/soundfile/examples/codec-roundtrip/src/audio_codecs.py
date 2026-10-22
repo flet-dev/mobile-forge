@@ -41,8 +41,8 @@ def roundtrip(label, fmt, subtype, rate):
     audible-codec-sized for the lossy ones. Returns an `error` string instead if the
     format is not compiled in.
 
-    Files, not io.BytesIO: a file object would route through libsndfile's virtual I/O,
-    which needs a cffi callback, which needs write+execute memory that iOS refuses.
+    Files, not io.BytesIO: a path needs no virtual I/O callbacks, so it works with any
+    cffi. A file object works too, but on iOS only with cffi 2.1.1-1 or later.
     """
     source = signal(rate)
     # FLET_APP_STORAGE_TEMP on device; tempfile's default elsewhere.

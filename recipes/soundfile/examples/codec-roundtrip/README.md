@@ -20,10 +20,10 @@ What it demonstrates:
   quantisation, not codec loss — a distinction worth seeing once.
 - **Writing into Flet's storage.** Each round trip writes a real file under
   [`FLET_APP_STORAGE_TEMP`](https://flet.dev/docs/reference/environment-variables#flet_app_storage_temp)
-  and deletes it again. Files rather than `io.BytesIO` deliberately: a file object routes
-  through libsndfile's virtual I/O, which needs a cffi callback, which needs write+execute
-  memory that iOS refuses — so the file-object form works on Android and raises
-  `MemoryError` on iOS. A path works on both.
+  and deletes it again. Files rather than `io.BytesIO` deliberately: a path needs no
+  callbacks, so it works with any cffi. A file object routes through libsndfile's virtual
+  I/O, which calls back into Python through `ffi.callback()`; that works on both platforms
+  too, but on iOS only with cffi 2.1.1-1 or later from pypi.flet.dev.
 - **Compute off the UI thread.** The sweep runs in
   [`page.run_thread(...)`](https://flet.dev/docs/controls/page/#flet.Page.run_thread) with a
   spinner up, ending in the explicit
