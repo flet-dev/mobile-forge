@@ -133,7 +133,7 @@ permissions:
 
 jobs:
   setup:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       has_jobs: ${{ steps.set-matrix.outputs.has_jobs }}
@@ -180,7 +180,7 @@ jobs:
             for pkg in $build_packages; do
               pkg_name="${pkg%%:*}"
               if [[ "$arch" == "android" ]]; then
-                runner="ubuntu-latest"
+                runner="ubuntu-24.04"
                 platform="android"
                 rust_targets="aarch64-linux-android,arm-linux-androideabi,x86_64-linux-android"
               else
