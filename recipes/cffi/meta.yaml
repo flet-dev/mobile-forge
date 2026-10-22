@@ -1,6 +1,6 @@
 package:
   name: cffi
-  version: "2.0.0"
+  version: "2.1.1"
 
 build:
   number: 1
@@ -11,3 +11,4 @@ requirements:
 
 patches:
   - mobile.patch
+  - ios-ffi-closure-alloc.patch

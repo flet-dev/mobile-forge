@@ -1,5 +1,5 @@
 import io
-import sys
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -8,20 +8,22 @@ import soundfile as sf
 SR = 16000
 
 
-def _tone(seconds=0.25, freq=440.0, sample_rate=SR):
+def _tone(
+    seconds: float = 0.25, freq: float = 440.0, sample_rate: int = SR
+) -> np.ndarray:
     """Deterministic mono float64 sine — no RNG, no assets, no network."""
     t = np.arange(int(sample_rate * seconds)) / sample_rate
     return np.sin(2.0 * np.pi * freq * t)
 
 
-def test_libsndfile_loaded():
+def test_libsndfile_loaded() -> None:
     """The cffi loader found the flet-libsndfile .so and bound the C API — this is
     the single claim the mobile patch exists to make true."""
     assert sf.__libsndfile_version__
     assert sf.SoundFile is not None
 
 
-def test_wav_roundtrip(tmp_path):
+def test_wav_roundtrip(tmp_path: Path) -> None:
     """A float64 signal written as 32-bit float WAV reads back bit-identical, with
     the samplerate and channel count preserved."""
     path = str(tmp_path / "tone.wav")
@@ -34,7 +36,7 @@ def test_wav_roundtrip(tmp_path):
     np.testing.assert_array_equal(y, x)
 
 
-def test_stereo_and_int_subtypes(tmp_path):
+def test_stereo_and_int_subtypes(tmp_path: Path) -> None:
     """Two-channel PCM_16 and PCM_24 round-trip within their quantisation step —
     covers the integer conversion paths, not just the float passthrough."""
     x = np.stack([_tone(), 0.5 * _tone(freq=880.0)], axis=1)
@@ -62,7 +64,9 @@ def test_stereo_and_int_subtypes(tmp_path):
         ("MP3", "mp3", "MPEG_LAYER_III", True),
     ],
 )
-def test_container_roundtrip(tmp_path, fmt, ext, subtype, lossy):
+def test_container_roundtrip(
+    tmp_path: Path, fmt: str, ext: str, subtype: str, lossy: bool
+) -> None:
     """Every container this wheel's libsndfile is built for encodes and decodes on
     device — including the ones that only work because flet-libflac, flet-libogg,
     flet-libvorbis, flet-libopus, flet-libmpg123 and flet-libmp3lame are linked in.
@@ -85,11 +89,11 @@ def test_container_roundtrip(tmp_path, fmt, ext, subtype, lossy):
         assert np.max(np.abs(y - x)) <= 2**-15
 
 
-@pytest.mark.skipif(sys.platform == "ios", reason="no W+X memory for ffi.callback()")
-def test_read_from_file_object():
+def test_read_from_file_object() -> None:
     """sf.read() works on an in-memory binary stream via libsndfile's virtual I/O —
     the path an app takes for audio fetched over the network, where there may be
-    no real file to open. Android only; see the iOS counterpart below."""
+    no real file to open. Virtual I/O hands libsndfile cffi callbacks, so on iOS
+    this needs cffi >= 2.1.1-1 (libffi's closure allocator, not W+X pages)."""
     buf = io.BytesIO()
     x = _tone()
     sf.write(buf, x, SR, format="WAV", subtype="DOUBLE")
@@ -100,30 +104,13 @@ def test_read_from_file_object():
     np.testing.assert_array_equal(y, x)
 
 
-@pytest.mark.skipif(sys.platform != "ios", reason="iOS-only limitation")
-def test_file_object_is_unavailable_on_ios():
-    """Passing a file object on iOS raises MemoryError, and this is permanent: virtual
-    I/O hands libsndfile a `ffi.callback()`, cffi writes that trampoline at runtime, and
-    iOS refuses write+execute pages to an app without the JIT entitlement. Asserted
-    rather than skipped so the README's "write it to a file first" guidance is checked,
-    and so a future cffi or OS change that lifts it does not go unnoticed."""
-    buf = io.BytesIO()
-    with pytest.raises(MemoryError, match="write.execute"):
-        sf.write(buf, _tone(), SR, format="WAV", subtype="DOUBLE")
-
-
-def test_path_roundtrip_is_the_ios_workaround(tmp_path):
-    """The replacement for the file-object path: spill the bytes to a real file and read
-    it back. Works on every platform, so an app needs no per-platform branch."""
-    raw = io.BytesIO()
+def test_bytes_spilled_to_a_path(tmp_path: Path) -> None:
+    """The README's simplest form for bytes in hand: write them to a real file and
+    read that by path. No virtual I/O anywhere, so this works with any cffi."""
     x = _tone()
-    try:
-        sf.write(raw, x, SR, format="WAV", subtype="DOUBLE")
-        encoded = raw.getvalue()
-    except MemoryError:  # iOS: produce the same bytes without virtual I/O
-        staged = str(tmp_path / "staged.wav")
-        sf.write(staged, x, SR, subtype="DOUBLE")
-        encoded = open(staged, "rb").read()
+    staged = tmp_path / "staged.wav"
+    sf.write(str(staged), x, SR, subtype="DOUBLE")
+    encoded = staged.read_bytes()
 
     path = tmp_path / "from_bytes.wav"
     path.write_bytes(encoded)
@@ -132,7 +119,7 @@ def test_path_roundtrip_is_the_ios_workaround(tmp_path):
     np.testing.assert_array_equal(y, x)
 
 
-def test_blockwise_read(tmp_path):
+def test_blockwise_read(tmp_path: Path) -> None:
     """SoundFile seeking and block reads reassemble the whole signal — the memory-
     bounded path for files too large to hold in RAM on a phone."""
     path = str(tmp_path / "tone.wav")
@@ -151,7 +138,7 @@ def test_blockwise_read(tmp_path):
         np.testing.assert_array_equal(f.read(100), x[SR // 2 : SR // 2 + 100])
 
 
-def test_available_formats_advertises_the_linked_codecs():
+def test_available_formats_advertises_the_linked_codecs() -> None:
     """libsndfile's own format registry lists the codec containers, proving they
     were compiled in rather than merely present at link time."""
     formats = sf.available_formats()

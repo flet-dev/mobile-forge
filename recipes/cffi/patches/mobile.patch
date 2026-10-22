@@ -1,8 +1,19 @@
-diff --git a/setup.py b/setup.py
-index f9cabaa..c592203 100644
+Cross-compile cffi against the target's libffi, not the build machine's.
+
+setup.py: drop the /usr/include/ffi and /usr/include/libffi defaults and the
+pkg-config probe, which would point a cross build at the host's libffi
+headers; forge's cross environment supplies the target paths.
+
+malloc_closure.h: guard the Linux-only PaX getline() scan by
+__ANDROID_API__ >= 18, as Chaquopy does (bionic gained getline() at API 18).
+A no-op at forge's API 24.
+
+Regenerated against 2.1.1, where the setup.py hunk moved by 6 lines.
+
+diff -ruN a/setup.py b/setup.py
 --- a/setup.py
 +++ b/setup.py
-@@ -9,8 +9,7 @@ import setuptools
+@@ -9,8 +9,7 @@
  
  sources = ['src/c/_cffi_backend.c']
  libraries = ['ffi']
@@ -12,7 +23,7 @@ index f9cabaa..c592203 100644
  define_macros = [('FFI_BUILDING', '1')]   # for linking with libffi static library
  library_dirs = []
  extra_compile_args = []
-@@ -144,7 +143,7 @@ if sys.platform == "win32" and uses_msvc():
+@@ -150,7 +149,7 @@
          sources.extend(os.path.join(COMPILE_LIBFFI, filename)
                      for filename in _filenames)
  else:
@@ -21,11 +32,10 @@ index f9cabaa..c592203 100644
      ask_supports_thread()
      ask_supports_sync_synchronize()
  
-diff --git a/src/c/malloc_closure.h b/src/c/malloc_closure.h
-index bebb93d..f82dbe4 100644
+diff -ruN a/src/c/malloc_closure.h b/src/c/malloc_closure.h
 --- a/src/c/malloc_closure.h
 +++ b/src/c/malloc_closure.h
-@@ -42,6 +42,8 @@ emutramp_enabled_check (void)
+@@ -42,6 +42,8 @@
          return 0;
      ret = 0;
  
@@ -34,7 +44,7 @@ index bebb93d..f82dbe4 100644
      while (getline (&buf, &len, f) != -1)
          if (!strncmp (buf, "PaX:", 4))
              {
-@@ -51,6 +53,8 @@ emutramp_enabled_check (void)
+@@ -51,6 +53,8 @@
                  break;
              }
      free (buf);
