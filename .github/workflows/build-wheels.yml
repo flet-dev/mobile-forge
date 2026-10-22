@@ -111,7 +111,7 @@ permissions:
 
 jobs:
   detect:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       pythons_json: ${{ steps.detect-pythons.outputs.pythons_json }}
       canonical_python: ${{ steps.detect-pythons.outputs.canonical_python }}
