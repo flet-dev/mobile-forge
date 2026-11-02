@@ -1,9 +1,9 @@
 package:
   name: llama-cpp-python
-  version: "0.3.32"
+  version: "0.3.36"
 
 build:
-  number: 2
+  number: 1
   script_env:
 # {% if sdk == 'android' %}
     CMAKE_ARGS: >-

@@ -58,7 +58,7 @@ diff --git a/CMakeLists.txt b/CMakeLists.txt
 diff --git a/llama_cpp/_ctypes_extensions.py b/llama_cpp/_ctypes_extensions.py
 --- a/llama_cpp/_ctypes_extensions.py
 +++ b/llama_cpp/_ctypes_extensions.py
-@@ -25,35 +25,54 @@ _EMSCRIPTEN_SIDE_MODULE_SUFFIX = ".cpython-00-wasm32-emscripten.so"
+@@ -25,35 +25,54 @@
  # Load the library
  def load_shared_library(lib_base_name: str, base_path: pathlib.Path):
      """Platform independent shared library loader"""
@@ -87,7 +87,7 @@ diff --git a/llama_cpp/_ctypes_extensions.py b/llama_cpp/_ctypes_extensions.py
 -        ]
 -    else:
 -        raise RuntimeError("Unsupported platform")
-+
+ 
 +    def _resolve_fwork(marker: pathlib.Path):
 +        # serious-python (iOS) relocates each bundled dylib into a code-signed
 +        # <name>.framework and leaves a lib<name>.fwork TEXT marker whose content
@@ -132,14 +132,14 @@ diff --git a/llama_cpp/_ctypes_extensions.py b/llama_cpp/_ctypes_extensions.py
 +            else:
 +                out.append(p)
 +        return out
- 
++
      cdll_args = dict()  # type: ignore
  
 -    # Add the library directory to the DLL search path on Windows (if needed)
      if sys.platform == "win32":
          os.add_dll_directory(str(base_path))
          os.environ["PATH"] = str(base_path) + os.pathsep + os.environ["PATH"]
-@@ -67,9 +86,14 @@ def load_shared_library(lib_base_name: str, base_path: pathlib.Path):
+@@ -67,9 +86,14 @@
              os.add_dll_directory(os.path.join(os.environ["HIP_PATH"], "bin"))
              os.add_dll_directory(os.path.join(os.environ["HIP_PATH"], "lib"))
          cdll_args["winmode"] = ctypes.RTLD_GLOBAL
@@ -155,7 +155,7 @@ diff --git a/llama_cpp/_ctypes_extensions.py b/llama_cpp/_ctypes_extensions.py
          lib_dir = str(base_path)
          ld_library_path = os.environ.get("LD_LIBRARY_PATH", "")
          if lib_dir not in ld_library_path.split(os.pathsep):
-@@ -79,43 +103,56 @@ def load_shared_library(lib_base_name: str, base_path: pathlib.Path):
+@@ -79,43 +103,56 @@
                  else f"{lib_dir}{os.pathsep}{ld_library_path}"
              )
  
@@ -168,16 +168,6 @@ diff --git a/llama_cpp/_ctypes_extensions.py b/llama_cpp/_ctypes_extensions.py
 -                base_path / f"lib{dependency}{_EMSCRIPTEN_SIDE_MODULE_SUFFIX}"
 -            )
 -            if dependency_path.exists():
--                try:
--                    ctypes.CDLL(str(dependency_path), **cdll_args)  # type: ignore
--                except Exception as e:
--                    raise RuntimeError(
--                        f"Failed to load shared library '{dependency_path}': {e}"
--                    )
--
--    # Try to load the shared library, handling potential errors
--    for lib_path in lib_paths:
--        if lib_path.exists():
 +    # Preload dependencies in dependency order so the main library resolves them
 +    # from the already-loaded set: ggml-base before ggml-cpu/ggml, all before
 +    # llama/mtmd. On iOS the libs are framework-relocated with sibling @rpath refs
@@ -192,10 +182,7 @@ diff --git a/llama_cpp/_ctypes_extensions.py b/llama_cpp/_ctypes_extensions.py
 +    for dependency in dependencies.get(lib_base_name, ()):
 +        loaded = False
 +        for dependency_path in _candidate_paths(dependency):
-             try:
--                return ctypes.CDLL(str(lib_path), **cdll_args)  # type: ignore
--            except Exception as e:
--                raise RuntimeError(f"Failed to load shared library '{lib_path}': {e}")
++            try:
 +                ctypes.CDLL(str(dependency_path), **cdll_args)  # type: ignore
 +                loaded = True
 +                break
@@ -206,19 +193,31 @@ diff --git a/llama_cpp/_ctypes_extensions.py b/llama_cpp/_ctypes_extensions.py
 +            # site-packages as a zip and serious-python relocated it into the APK's
 +            # jniLibs); load it by bare soname so the linker resolves it there.
 +            for _n in (f"lib{dependency}.so", f"lib{dependency}.dylib"):
-+                try:
+                 try:
+-                    ctypes.CDLL(str(dependency_path), **cdll_args)  # type: ignore
+-                except Exception as e:
+-                    raise RuntimeError(
+-                        f"Failed to load shared library '{dependency_path}': {e}"
+-                    )
 +                    ctypes.CDLL(_n, **cdll_args)  # type: ignore
 +                    break
 +                except OSError:
 +                    continue
-+
+ 
+-    # Try to load the shared library, handling potential errors
+-    for lib_path in lib_paths:
+-        if lib_path.exists():
+-            try:
+-                return ctypes.CDLL(str(lib_path), **cdll_args)  # type: ignore
+-            except Exception as e:
+-                raise RuntimeError(f"Failed to load shared library '{lib_path}': {e}")
 +    # Load the main library.
 +    for lib_path in _candidate_paths(lib_base_name):
 +        try:
 +            return ctypes.CDLL(str(lib_path), **cdll_args)  # type: ignore
 +        except Exception:
 +            pass  # not on disk (Flet 0.86 Android relocates .so to jniLibs) -> fall through to the soname load below
-+
+ 
 +    # Android: the library was relocated into the APK's jniLibs (not a file on
 +    # disk); load it by bare soname.
 +    for _n in (f"lib{lib_base_name}.so", f"lib{lib_base_name}.dylib"):
@@ -226,7 +225,7 @@ diff --git a/llama_cpp/_ctypes_extensions.py b/llama_cpp/_ctypes_extensions.py
 +            return ctypes.CDLL(_n, **cdll_args)  # type: ignore
 +        except OSError:
 +            continue
- 
++
      raise FileNotFoundError(
          f"Shared library with base name '{lib_base_name}' not found"
      )
@@ -243,7 +242,6 @@ diff --git a/llama_cpp/_ctypes_extensions.py b/llama_cpp/_ctypes_extensions.py
  if TYPE_CHECKING:
      CtypesCData = TypeVar("CtypesCData", bound=ctypes._CData)  # type: ignore
  
-
 diff --git a/vendor/llama.cpp/ggml/src/CMakeLists.txt b/vendor/llama.cpp/ggml/src/CMakeLists.txt
 --- a/vendor/llama.cpp/ggml/src/CMakeLists.txt
 +++ b/vendor/llama.cpp/ggml/src/CMakeLists.txt
@@ -263,9 +261,9 @@ diff --git a/vendor/llama.cpp/ggml/src/CMakeLists.txt b/vendor/llama.cpp/ggml/sr
 +#     SOVERSION ${GGML_VERSION_MAJOR}
 +# )
  
- target_include_directories(ggml-base PRIVATE .)
- if (GGML_BACKEND_DL)
-@@ -244,10 +247,10 @@
+ configure_file(ggml-version.h.in ${CMAKE_CURRENT_BINARY_DIR}/ggml-version.h @ONLY)
+ 
+@@ -360,10 +363,10 @@
              ggml-backend-reg.cpp)
  add_library(ggml::ggml ALIAS ggml)
  
@@ -280,7 +278,7 @@ diff --git a/vendor/llama.cpp/ggml/src/CMakeLists.txt b/vendor/llama.cpp/ggml/sr
  
  if (GGML_BACKEND_DIR)
      if (NOT GGML_BACKEND_DL)
-@@ -291,10 +294,11 @@
+@@ -407,10 +410,11 @@
      # Set versioning properties for all backend libraries
      # Building a MODULE library with a version is not supported on macOS (https://gitlab.kitware.com/cmake/cmake/-/issues/20782)
      if (NOT (APPLE AND GGML_BACKEND_DL))
@@ -299,15 +297,15 @@ diff --git a/vendor/llama.cpp/ggml/src/CMakeLists.txt b/vendor/llama.cpp/ggml/sr
 diff --git a/vendor/llama.cpp/src/CMakeLists.txt b/vendor/llama.cpp/src/CMakeLists.txt
 --- a/vendor/llama.cpp/src/CMakeLists.txt
 +++ b/vendor/llama.cpp/src/CMakeLists.txt
-@@ -43,8 +43,9 @@
+@@ -51,8 +51,9 @@
              )
  
  set_target_properties(llama PROPERTIES
--    VERSION ${LLAMA_INSTALL_VERSION}
--    SOVERSION 0
+-    VERSION ${LLAMA_VERSION_BASE}
+-    SOVERSION ${LLAMA_VERSION_MAJOR}
 +    # mobile-forge: drop SONAME versioning (single unversioned libllama)
-+    # VERSION ${LLAMA_INSTALL_VERSION}
-+    # SOVERSION 0
++    # VERSION ${LLAMA_VERSION_BASE}
++    # SOVERSION ${LLAMA_VERSION_MAJOR}
      MACHO_CURRENT_VERSION 0 # keep macOS linker from seeing oversized version number
- )
- 
+     UNITY_BUILD ON
+     UNITY_BUILD_BATCH_SIZE 16
