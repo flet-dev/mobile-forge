@@ -206,6 +206,15 @@ carries every control value: `xcrun simctl spawn "$UDID" log show --last 2m --st
 
     **Two iOS builds running at once cause the same symptom.** Both stage into that one shared `dist_ios`, so whichever finishes second can bundle the other app's files (seen 2026-10-01: a recipe-tester `.app` carrying a consumer app's `main.pyc`). If anything else on the machine might be building for iOS — another terminal, another agent — give each build its own `PUB_CACHE=<dir>` (the first run re-downloads the pub packages), and pass the same `PUB_CACHE` to any manual `flutter build` that follows.
 
+15. **CI's Android test runs only x86_64, so a green CI says nothing about arm64, which is every phone.**
+    vl-convert passed CI's emulator build while its arm64 `.so` could not even load
+    (`cannot locate symbol "__clear_cache"`: x86_64 never references it). Do a local arm64
+    pass for any Rust or C-heavy recipe before trusting the matrix. Two related traps:
+    an iOS simulator on the machine that **built** the wheel can pass while the binary
+    reads build-machine paths a phone will not have, and a native abort kills pytest
+    before its summary reaches `console.log`. For both, see the `forge-error-catalogue`
+    diagnostic snippets (capture fd 2, write results to a file).
+
 ## Model assets & test-only deps
 
 `stage_recipe.sh` copies **every** file in `recipes/<pkg>/tests/` into the app (`cp -r tests/. recipe_tests/`), so a model dropped next to the test file becomes an app asset. Two tiers:

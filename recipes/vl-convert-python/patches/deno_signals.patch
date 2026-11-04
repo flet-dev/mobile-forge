@@ -1,0 +1,17 @@
+deno_signals 0.49.0: give iOS the Darwin signal table.
+
+The signal-name table is per-OS with no fallback, so on iOS
+signal_str_to_int() does not exist and deno_os fails to compile.
+
+diff -ruN a/dict.rs b/dict.rs
+--- a/dict.rs
++++ b/dict.rs
+@@ -145,7 +145,7 @@
+   (31, "SIGSYS" | "SIGUNUSED")
+ );
+ 
+-#[cfg(target_os = "macos")]
++#[cfg(any(target_os = "macos", target_os = "ios"))]
+ signal_dict!(
+   (1, "SIGHUP"),
+   (2, "SIGINT"),

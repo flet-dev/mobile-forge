@@ -1,0 +1,21 @@
+deno_runtime 0.266.0: embed 99_main.js.
+
+The runtime's ESM entry point is attached by hand as a build-machine path that
+is read only while a snapshot is made (see deno_core.patch). This build boots
+without one, so embed the file with ascii_str_include!.
+
+diff -ruN a/shared.rs b/shared.rs
+--- a/shared.rs
++++ b/shared.rs
+@@ -57,9 +57,9 @@
+       // 99_main.js is the snapshot's ESM entry point; its source is loaded
+       // from disk only during snapshot creation, so we don't duplicate it in
+       // the final binary's `.rodata`.
+-      ext.esm_files.to_mut().push(ExtensionFileSource::loaded_during_snapshot(
++      ext.esm_files.to_mut().push(ExtensionFileSource::new(
+         "ext:runtime_main/js/99_main.js",
+-        concat!(env!("CARGO_MANIFEST_DIR"), "/js/99_main.js"),
++        deno_core::ascii_str_include!(concat!(env!("CARGO_MANIFEST_DIR"), "/js/99_main.js")),
+       ));
+       ext.esm_entry_point = Some("ext:runtime_main/js/99_main.js");
+     }
