@@ -1,6 +1,6 @@
 package:
   name: pyjnius
-  version: "1.7.0"
+  version: "1.9.0"
   platforms: [android]
 
 build:
@@ -10,7 +10,5 @@ patches:
   - mobile.patch
 
 requirements:
-  build:
-    - Cython <3.1
   host:
     - flet-libpyjni 1.0.1
