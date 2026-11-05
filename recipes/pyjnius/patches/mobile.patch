@@ -8,8 +8,23 @@ the app ClassLoader.
 PyJni_FindClass goes through that ClassLoader. Raw JNI FindClass on a thread
 Python attached uses the system loader, which cannot see the app's own classes.
 
-setup.py hardcodes the android platform because forge sets no NDKPLATFORM/LIBLINK.
+The glue is a new file because jnius_jvm_android.pxi has CRLF endings, which GNU
+patch will not match against an LF hunk. setup.py hardcodes the android platform
+because upstream only detects it from python-for-android's environment.
 
+diff --git a/jnius/jnius.pyx b/jnius/jnius.pyx
+index ff3f026..43429a1 100644
+--- a/jnius/jnius.pyx
++++ b/jnius/jnius.pyx
+@@ -100,7 +100,7 @@ include "jni.pxi"
+ include "config.pxi"
+ 
+ IF JNIUS_PLATFORM == "android":
+-    include "jnius_jvm_android.pxi"
++    include "jnius_jvm_pyjni.pxi"
+ ELIF JNIUS_PLATFORM == "win32":
+     include "jnius_jvm_desktop.pxi"
+ ELSE:
 diff --git a/jnius/jnius_conversion.pxi b/jnius/jnius_conversion.pxi
 index c045df8..40fc473 100644
 --- a/jnius/jnius_conversion.pxi
@@ -75,34 +90,17 @@ index 3a76dd5..c3e1375 100644
      check_exception(j_env)
  
      cls = Class(noinstance=True)
-diff --git a/jnius/jnius_jvm_android.pxi b/jnius/jnius_jvm_android.pxi
-index 90f846e..74f4f46 100644
---- a/jnius/jnius_jvm_android.pxi
-+++ b/jnius/jnius_jvm_android.pxi
-@@ -144,19 +144,9 @@ cdef JNIEnv *_jnienv_from_created_vm():
-     return <JNIEnv*>env
- 
- 
+diff --git a/jnius/jnius_jvm_pyjni.pxi b/jnius/jnius_jvm_pyjni.pxi
+new file mode 100644
+index 0000000..512c2c3
+--- /dev/null
++++ b/jnius/jnius_jvm_pyjni.pxi
+@@ -0,0 +1,6 @@
 +cdef extern JNIEnv *PyJni_AndroidGetJNIEnv()
 +cdef extern jclass PyJni_FindClass(const char* className)
 +
 +
- cdef JNIEnv *get_platform_jnienv() except NULL:
--    cdef JNIEnv *env = _jnienv_from_sdl()
--    if env == NULL:
--        env = _jnienv_from_created_vm()
--
--    if env != NULL:
--        return env
--
--    raise RuntimeError(
--        "pyjnius (Android) could not obtain a JNIEnv: no SDL JNIEnv getter "
--        "(SDL_GetAndroidJNIEnv / SDL_AndroidGetJNIEnv) and no in-process JVM "
--        "(JNI_GetCreatedJavaVMs) were found in the process. The host must "
--        "provide an in-process JVM before the first 'import jnius' -- e.g. a "
--        "Kivy/SDL app loads its SDL library (libSDL3.so or libSDL2.so) with "
--        "global symbol visibility, which exposes the SDL getter."
--    )
++cdef JNIEnv *get_platform_jnienv() except NULL:
 +    return <JNIEnv*>PyJni_AndroidGetJNIEnv()
 diff --git a/jnius/jnius_utils.pxi b/jnius/jnius_utils.pxi
 index 7dea031..b993267 100644
