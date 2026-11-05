@@ -1159,6 +1159,17 @@ for one marker per hunk. keras `mobile.patch` (bit twice in one session).
 
 ---
 
+### `1 out of 1 hunk FAILED` in CI, though the patch applies cleanly on macOS
+
+**Cause:** the sdist file has CRLF line endings and the hunk has LF. macOS's BSD `patch`
+tolerates that under `--ignore-whitespace`; the GNU `patch` on the Linux runners does not.
+Check with `file <path>`, because `git add` may normalise the endings and hide it.
+
+**Fix:** avoid hunks in that file. Have the patch add a new file and redirect the `include`
+or import to it. pyjnius `jnius_jvm_android.pxi` (1.9.0).
+
+---
+
 ### iOS CMake: `install TARGETS given no BUNDLE DESTINATION for MacOS bundle target "flatc"`
 
 **Cause:** a FetchContent'd flatbuffers builds its `flatc` TOOL as part of the

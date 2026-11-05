@@ -1,21 +1,35 @@
-diff --git a/jnius/env.py b/jnius/env.py
-index ea12d82..4111845 100644
---- a/jnius/env.py
-+++ b/jnius/env.py
-@@ -288,7 +288,7 @@ class MacOsXJavaLocation(UnixJavaLocation):
+Bind pyjnius to Flet's libpyjni instead of SDL.
+
+Upstream's Android wheel looks for SDL's JNIEnv getter, then for
+JNI_GetCreatedJavaVMs (API 31+). A Flet app has no SDL, so neither works below
+API 31. libpyjni's JNI_OnLoad, run by serious_python, captures the JavaVM and
+the app ClassLoader.
+
+PyJni_FindClass goes through that ClassLoader. Raw JNI FindClass on a thread
+Python attached uses the system loader, which cannot see the app's own classes.
+
+The glue is a new file because jnius_jvm_android.pxi has CRLF endings, which GNU
+patch will not match against an LF hunk. setup.py hardcodes the android platform
+because upstream only detects it from python-for-android's environment.
+
+diff --git a/jnius/jnius.pyx b/jnius/jnius.pyx
+index ff3f026..43429a1 100644
+--- a/jnius/jnius.pyx
++++ b/jnius/jnius.pyx
+@@ -100,7 +100,7 @@ include "jni.pxi"
+ include "config.pxi"
  
- class AndroidJavaLocation(UnixJavaLocation):
-     def get_libraries(self):
--        return ['SDL2', 'log']
-+        return ['log', 'pyjni']
- 
-     def get_include_dirs(self):
-         # When cross-compiling for Android, we should not use the include dirs
+ IF JNIUS_PLATFORM == "android":
+-    include "jnius_jvm_android.pxi"
++    include "jnius_jvm_pyjni.pxi"
+ ELIF JNIUS_PLATFORM == "win32":
+     include "jnius_jvm_desktop.pxi"
+ ELSE:
 diff --git a/jnius/jnius_conversion.pxi b/jnius/jnius_conversion.pxi
-index 2e0b48d..e474445 100644
+index c045df8..40fc473 100644
 --- a/jnius/jnius_conversion.pxi
 +++ b/jnius/jnius_conversion.pxi
-@@ -719,7 +719,7 @@ cdef jobject convert_pyarray_to_java(JNIEnv *j_env, definition, pyarray) except
+@@ -717,7 +717,7 @@ cdef jobject convert_pyarray_to_java(JNIEnv *j_env, definition, pyarray) except
  
      elif definition[0] == 'L':
          defstr = str_for_c(definition[1:-1])
@@ -25,10 +39,10 @@ index 2e0b48d..e474445 100644
          if j_class == NULL:
              raise JavaException(
 diff --git a/jnius/jnius_export_class.pxi b/jnius/jnius_export_class.pxi
-index a688e2b..7018adf 100644
+index 0acd2b5..068ca6b 100644
 --- a/jnius/jnius_export_class.pxi
 +++ b/jnius/jnius_export_class.pxi
-@@ -146,7 +146,7 @@ class MetaJavaClass(MetaJavaBase):
+@@ -155,7 +155,7 @@ class MetaJavaClass(MetaJavaBase):
  
          if NULL == obj:
              for interface in getattr(value, '__javainterfaces__', []):
@@ -37,23 +51,23 @@ index a688e2b..7018adf 100644
                  if obj == NULL:
                      j_env[0].ExceptionClear(j_env)
                  elif 0 != j_env[0].IsAssignableFrom(j_env, obj, me.j_cls):
-@@ -191,13 +191,13 @@ class MetaJavaClass(MetaJavaBase):
-
+@@ -190,13 +190,13 @@ class MetaJavaClass(MetaJavaBase):
+ 
          if __javainterfaces__ and __javabaseclass__:
-
+ 
 -            baseclass = j_env[0].FindClass(j_env, <char*>__javabaseclass__)
 +            baseclass = PyJni_FindClass(<char*>__javabaseclass__)
              interfaces = j_env[0].NewObjectArray(j_env, len(__javainterfaces__), classClass, NULL)
              # interfaces = <jclass *>malloc(sizeof(jclass) * len(__javainterfaces__))
-
+ 
              for n, i in enumerate(__javainterfaces__):
                  # interfaces[n] = j_env[0].FindClass(j_env, <char*>i)
 -                j_env[0].SetObjectArrayElement(j_env, interfaces, n, j_env[0].FindClass(j_env, <char*>i))
 +                j_env[0].SetObjectArrayElement(j_env, interfaces, n, PyJni_FindClass(<char*>i))
-
+ 
              getProxyClass = j_env[0].GetStaticMethodID(
                  j_env, baseclass, "getProxyClass",
-@@ -206,8 +206,7 @@ class MetaJavaClass(MetaJavaBase):
+@@ -222,8 +222,7 @@ class MetaJavaClass(MetaJavaBase):
                          ' {0}'.format(__javaclass__))
          else:
              class_name = str_for_c(__javaclass__)
@@ -76,22 +90,20 @@ index 3a76dd5..c3e1375 100644
      check_exception(j_env)
  
      cls = Class(noinstance=True)
-diff --git a/jnius/jnius_jvm_android.pxi b/jnius/jnius_jvm_android.pxi
-index dae6b31..17fe0e2 100644
---- a/jnius/jnius_jvm_android.pxi
-+++ b/jnius/jnius_jvm_android.pxi
-@@ -1,6 +1,7 @@
- # on android, rely on SDL to get the JNI env
--cdef extern JNIEnv *SDL_AndroidGetJNIEnv()
+diff --git a/jnius/jnius_jvm_pyjni.pxi b/jnius/jnius_jvm_pyjni.pxi
+new file mode 100644
+index 0000000..512c2c3
+--- /dev/null
++++ b/jnius/jnius_jvm_pyjni.pxi
+@@ -0,0 +1,6 @@
 +cdef extern JNIEnv *PyJni_AndroidGetJNIEnv()
- 
-+cdef extern jclass *PyJni_FindClass(const char* className)
- 
- cdef JNIEnv *get_platform_jnienv() except NULL:
--    return <JNIEnv*>SDL_AndroidGetJNIEnv()
++cdef extern jclass PyJni_FindClass(const char* className)
++
++
++cdef JNIEnv *get_platform_jnienv() except NULL:
 +    return <JNIEnv*>PyJni_AndroidGetJNIEnv()
 diff --git a/jnius/jnius_utils.pxi b/jnius/jnius_utils.pxi
-index ef5d6ab..a6edb0c 100644
+index 7dea031..b993267 100644
 --- a/jnius/jnius_utils.pxi
 +++ b/jnius/jnius_utils.pxi
 @@ -164,14 +164,14 @@ cdef void check_assignable_from_str(JNIEnv *env, source, target) except *:
@@ -120,11 +132,24 @@ index ef5d6ab..a6edb0c 100644
          if cls == NULL:
              raise JavaException('Unable to found the class for {0!r}'.format(
                  signature))
+diff --git a/jnius_config/env.py b/jnius_config/env.py
+index bc8fa09..13ef860 100644
+--- a/jnius_config/env.py
++++ b/jnius_config/env.py
+@@ -301,7 +301,7 @@ class AndroidJavaLocation(UnixJavaLocation):
+         # libSDL2.so/libSDL3.so would lock the wheel to one SDL/Kivy generation
+         # and fail to dlopen against the other. The JNIEnv getter is resolved at
+         # runtime instead (see jnius_jvm_android.pxi); only liblog is needed.
+-        return ['log']
++        return ['log', 'pyjni']
+ 
+     def get_include_dirs(self):
+         # When cross-compiling for Android, we should not use the include dirs
 diff --git a/setup.py b/setup.py
-index 3cca8c1..a7f40f0 100644
+index 11cc752..e4bf54a 100644
 --- a/setup.py
 +++ b/setup.py
-@@ -54,14 +54,7 @@ PXI_FILES = [
+@@ -50,14 +50,7 @@ PXI_FILES = [
  EXTRA_LINK_ARGS = []
  
  # detect Python for android
