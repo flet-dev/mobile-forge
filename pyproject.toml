@@ -29,7 +29,7 @@ classifiers = [
 dependencies = [
     # Currently using a fork of crossenv to get iOS fixes.
     # Replace when/if these are merged and released.
-    "crossenv @ git+https://github.com/flet-dev/crossenv@flet",
+    "crossenv @ git+https://github.com/ndonkoHenri/crossenv@support-py3.15",
     #"crossenv @ git+https://github.com/freakboy3742/crossenv@f0f07129eb06ea16d180650a26a02df2b948b888",
     #"crossenv @ git+https://github.com/benfogle/crossenv",
     "httpx == 0.27.0",

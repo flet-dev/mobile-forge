@@ -160,11 +160,12 @@ download_support() {
     mkdir -p downloads
     if [ ! -f "downloads/${tarball}" ]; then
         if [ -n "${PYTHON_BUILD_RUN_ID:-}" ]; then
-            # python-build's CI uploads iOS tarballs under the "darwin" artifact
-            # (it bundles iOS + macOS together). The android lane has a 1:1 artifact name.
-            local artifact_plat="$plat"
-            [ "$plat" = "ios" ] && artifact_plat="darwin"
-            local artifact_name="python-${artifact_plat}-${PYTHON_VERSION}"
+            # python-build's CI uploads iOS tarballs with the macOS ones under the
+            # unsigned Darwin artifact (`darwin-unsigned-<ver>`; it is deliberately
+            # not `python-darwin-*`, so it can never be published by accident). The
+            # android lane has a 1:1 artifact name.
+            local artifact_name="python-${plat}-${PYTHON_VERSION}"
+            [ "$plat" = "ios" ] && artifact_name="darwin-unsigned-${PYTHON_VERSION}"
 
             echo "Fetching ${tarball} from python-build run ${PYTHON_BUILD_RUN_ID} (artifact: ${artifact_name})..."
             local stage
