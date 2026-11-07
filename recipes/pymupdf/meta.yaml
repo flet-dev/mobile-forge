@@ -75,10 +75,16 @@ build:
     # we synthesize one from the crossenv cross-python's own sysconfig: emit the
     # target include dir for --includes and nothing for --ldflags (iOS extensions
     # link with -undefined dynamic_lookup, so no libpython on the link line).
+    # pipcl runs this through a shell with stderr merged into the captured flags,
+    # and on 3.15+ the cross-python's startup prints a getpath "Could not find the
+    # standard library directory!" warning to stderr (crossenv points PYTHONHOME
+    # at the xcframework slice, which holds no lib/python3.x). The 2>/dev/null
+    # keeps that text out of the compile/link command; pipcl appends --includes /
+    # --ldflags after it, which the shell still passes to python.
 # {% if sdk == 'android' %}
     PIPCL_PYTHON_CONFIG: bash {HOST_PYTHON_HOME}/bin/python{py_version_short}-config
 # {% else %}
-    PIPCL_PYTHON_CONFIG: "{CROSS_VENV_PYTHON} -c \"import sys,sysconfig; print('-I'+sysconfig.get_path('include') if '--includes' in sys.argv else '')\""
+    PIPCL_PYTHON_CONFIG: "{CROSS_VENV_PYTHON} -c \"import sys,sysconfig; print('-I'+sysconfig.get_path('include') if '--includes' in sys.argv else '')\" 2>/dev/null"
 # {% endif %}
     # Android link flags appended to every link step (C++ wrapper / _mupdf / _extra,
     # and the MuPDF C lib via make's env LDFLAGS):
