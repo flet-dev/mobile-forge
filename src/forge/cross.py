@@ -12,10 +12,33 @@ from pathlib import Path
 from forge import subprocess
 
 
+def _ios_min_version(default="13.0"):
+    """The iOS deployment target of the iOS support tree in use.
+
+    python-build records it as `Min iOS version: X.Y` in the tree's
+    `support/<X.Y>/iOS/VERSIONS`: 13.0 in older releases, 15.0 since python-build
+    #46 (Xcode 27's minimum). The cross env's platform must match the target its
+    `_sysconfigdata` was built for, and the wheel tags follow from it.
+    """
+    root = os.environ.get("MOBILE_FORGE_IOS_SUPPORT_PATH")
+    if not root:
+        return default
+    short = f"{sys.version_info.major}.{sys.version_info.minor}"
+    versions = Path(root) / "support" / short / "iOS" / "VERSIONS"
+    try:
+        for line in versions.read_text().splitlines():
+            key, _, value = line.partition(":")
+            if key.strip().lower() == "min ios version" and value.strip():
+                return value.strip()
+    except OSError:
+        pass
+    return default
+
+
 class CrossVEnv:
     BASE_VERSION = {
         "android": "24",
-        "iOS": "13.0",
+        "iOS": _ios_min_version(),
         "tvOS": "12.0",
         "watchOS": "4.0",
     }
@@ -245,7 +268,7 @@ class CrossVEnv:
                 identifier = f"{sdk}-{version}-{arch}"
         elif sdk in {"iphoneos", "iphonesimulator"}:
             if version is None:
-                version = "13.0"
+                version = self.BASE_VERSION["iOS"]
             identifier = f"ios-{version}-{arch}-{sdk}"
         elif sdk in {"appletvos", "appletvsimulator"}:
             if version is None:
