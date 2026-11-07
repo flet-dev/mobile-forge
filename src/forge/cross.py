@@ -446,6 +446,14 @@ class CrossVEnv:
         if env is None:
             env = os.environ.copy()
 
+        # The host's Rust toolchain, wherever it lives: rustup's ~/.cargo/bin is
+        # listed below, but e.g. GitHub's macOS runners install Homebrew's keg-only
+        # rustup (/opt/homebrew/opt/rustup/bin). Without cargo on PATH, maturin
+        # asks for `puccinialin` to download Rust and the build fails on the
+        # unmet build dependency.
+        host_cargo = shutil.which("cargo", path=os.environ.get("PATH"))
+        cargo_dirs = [str(Path(host_cargo).parent)] if host_cargo else []
+
         # Ensure the path is clean, and doesn't include any non-iOS paths.
         env["PATH"] = os.pathsep.join(
             [
@@ -454,6 +462,7 @@ class CrossVEnv:
                 str(self.venv_path / "build" / "bin"),
                 str(self.venv_path / "bin"),
                 str(self.venv_path / self.venv_path.name / "bin"),
+                *cargo_dirs,
                 str(Path.home() / ".cargo/bin"),
                 "/opt/homebrew/bin",
                 # For Intel-mac or older CI runner images that put Homebrew under /usr/local.
