@@ -1,6 +1,11 @@
 package:
   name: pendulum
+# pendulum 3.2.0 pins pyo3 0.27, which stops at Python 3.14; 3.3.0 builds for 3.15.
+# {% if py_version.minor >= 15 %}
+  version: "3.3.0"
+# {% else %}
   version: "3.2.0"
+# {% endif %}
 
 build:
   number: 1
