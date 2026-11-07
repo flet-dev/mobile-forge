@@ -67,6 +67,15 @@ resolve_full_version() {
         full="$(sed -n "/\"$minor_re\"[[:space:]]*:/,/}/p" "$mf" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+[A-Za-z0-9]*' | head -1)"
     fi
 
+    # A minor the release doesn't list yet may come from a python-build Actions run
+    # (PYTHON_BUILD_RUN_ID): take the full version from the run's artifact name,
+    # `python-android-<X.Y.Z>`.
+    if [ -z "$full" ] && [ -n "${PYTHON_BUILD_RUN_ID:-}" ] && command -v gh >/dev/null 2>&1; then
+        full="$(gh api "repos/flet-dev/python-build/actions/runs/${PYTHON_BUILD_RUN_ID}/artifacts?per_page=100" \
+            --jq ".artifacts[].name | select(startswith(\"python-android-${minor}.\")) | ltrimstr(\"python-android-\")" \
+            2>/dev/null | head -1)"
+    fi
+
     if [ -z "$full" ]; then
         echo "python-build release ${PYTHON_BUILD_RELEASE} has no Python ${minor} in its manifest." >&2
         return 1
@@ -131,7 +140,9 @@ echo "python-build release: $PYTHON_BUILD_RELEASE"
 
 # Android ABI set for this minor, from the python-build manifest.
 # Overridable by setting ANDROID_ABIS env var.
-ANDROID_ABIS="${ANDROID_ABIS:-$(resolve_android_abis "$PYTHON_VER")}"
+# `|| true`: under `set -e` (CI sources this from `bash -e`), a minor the manifest
+# doesn't list would otherwise exit here, before the fallback below.
+ANDROID_ABIS="${ANDROID_ABIS:-$(resolve_android_abis "$PYTHON_VER" || true)}"
 if [ -z "$ANDROID_ABIS" ]; then
     ANDROID_ABIS="arm64-v8a x86_64 armeabi-v7a"
     echo "Warning: manifest has no android_abis for $PYTHON_VER; defaulting to: $ANDROID_ABIS" >&2
