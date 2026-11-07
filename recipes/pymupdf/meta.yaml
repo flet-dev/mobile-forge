@@ -103,7 +103,10 @@ requirements:
     # PyMuPDF's build (setup.py -> pipcl -> mupdf/scripts/mupdfwrap.py) needs SWIG
     # to wrap MuPDF's C++ API, and python clang bindings (libclang) to parse the
     # MuPDF headers when generating the C++ wrapper. Both run on the host.
-    - swig
+    # SWIG 4.5 (2026-08) no longer defines Python 2's PyString_* names, which
+    # MuPDF 1.27's own director code still calls ("use of undeclared identifier
+    # 'PyString_FromString'"). Re-test before raising.
+    - swig <4.5
     - libclang
     - setuptools
     # PyMuPDF's pyproject.toml asks for a bare `pipcl`, so the build would otherwise
