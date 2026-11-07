@@ -31,11 +31,14 @@ build:
     # platforms, resolved via its openblas.pc. Standard Fortran mangling.
     - -Csetup-args=-Dblas=openblas
     - -Csetup-args=-Dlapack=openblas
-# {% if sdk == 'android' %}
+# {% if sdk == 'android' or py_version.minor >= 15 %}
     # pythran 0.18.1's pythonic/types/ndarray.hpp has an ill-formed ref-qualifier
     # overload that the newer NDK clang rejects (Apple clang accepts it, so iOS
     # keeps pythran). pythran is an optional scipy build dep — disable it on
     # Android; the affected modules fall back to their cython/numpy versions.
+    # Also off on Python 3.15+ (iOS too): pythran's gast (0.7.0, the latest)
+    # builds AST nodes without their required fields, which 3.15 rejects
+    # ("ast.Compare.__init__ missing 1 required positional argument: 'left'").
     - -Csetup-args=-Duse-pythran=false
 # {% endif %}
     - -Csetup-args=--cross-file
