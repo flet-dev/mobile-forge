@@ -1170,6 +1170,18 @@ or import to it. pyjnius `jnius_jvm_android.pxi` (1.9.0).
 
 ---
 
+### iOS maturin: `ERROR Unmet dependencies … puccinialin wanted: any found: not installed`
+
+**Cause:** maturin asks for `puccinialin` (its Rust installer) when `cargo` is not on
+PATH. Forge rebuilds the iOS PATH from a fixed list, and the macos-26 runner image
+(20261102) puts cargo under Homebrew's keg-only `/opt/homebrew/opt/rustup/bin`, which no
+list entry covers. Every maturin recipe fails on iOS while Android stays green.
+
+**Fix:** `cross_kwargs` in `src/forge/cross.py` now appends the directory of the caller's
+`cargo`. If it recurs, check `which cargo` on the runner against that PATH. jiter 0.19.0.
+
+---
+
 ### iOS CMake: `install TARGETS given no BUNDLE DESTINATION for MacOS bundle target "flatc"`
 
 **Cause:** a FetchContent'd flatbuffers builds its `flatc` TOOL as part of the

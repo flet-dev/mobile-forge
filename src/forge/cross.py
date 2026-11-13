@@ -423,6 +423,12 @@ class CrossVEnv:
         if env is None:
             env = os.environ.copy()
 
+        # Keep the caller's cargo reachable: GitHub's macOS images install it under
+        # Homebrew's keg-only rustup (/opt/homebrew/opt/rustup/bin), not ~/.cargo/bin.
+        # Without it, maturin falls back to requiring `puccinialin` and the build fails.
+        cargo = shutil.which("cargo", path=env.get("PATH"))
+        cargo_dirs = [str(Path(cargo).parent)] if cargo else []
+
         # Ensure the path is clean, and doesn't include any non-iOS paths.
         env["PATH"] = os.pathsep.join(
             [
@@ -441,6 +447,7 @@ class CrossVEnv:
                 "/sbin",
                 "/Library/Apple/usr/bin",
             ][1 if self.host_os == "android" else 0 :]
+            + cargo_dirs
         )
 
         # Set VIRTUALENV to the active venv
