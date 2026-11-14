@@ -1,6 +1,6 @@
 package:
   name: aiohttp
-  version: "3.14.0"
+  version: "3.14.5"
 
 build:
   number: 1

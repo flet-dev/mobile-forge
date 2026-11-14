@@ -1,6 +1,6 @@
 package:
   name: Pillow
-  version: "12.3.0"
+  version: "13.0.0"
 
 requirements:
   # PNG support is internal: libpng is not used.
@@ -26,8 +26,15 @@ requirements:
     - flet-libtiff 4.7.0
 # {% endif %}
 
-# {% if not version or version >= (12,0,0) %}
-# pillow >= 12.x  (12.x drops `self.add_imaging_libs = ""` from
+# {% if not version or version >= (13,0,0) %}
+# pillow >= 13.x  (13.0 reworks the sys.prefix lib/include lookup, so the
+# 12.x patch's second hunk no longer applies; otherwise identical.)
+
+patches:
+  - setup-13.x.patch
+
+# {% elif version >= (12,0,0) %}
+# pillow 12.x  (12.x drops `self.add_imaging_libs = ""` from
 # initialize_options, so the 11.x patch's hunk-1 context no longer
 # matches; the 12.x patch is otherwise identical to the 11.x one.)
 

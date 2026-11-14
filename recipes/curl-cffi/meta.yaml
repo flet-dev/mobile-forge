@@ -1,4 +1,4 @@
-{% set version = "0.16.2" %}
+{% set version = "0.16.3" %}
 
 package:
   name: curl-cffi
@@ -30,7 +30,7 @@ requirements:
     # constant normally drives the download URL, so a skew self-corrects; the patch
     # skips the download, and cdef.c compiles against curl-cffi's own bundled
     # include/curl/ headers — so a mismatch links a skewed archive and still goes green.
-    - flet-libcurl-impersonate 2.1.1
+    - flet-libcurl-impersonate 2.2.2
 # {% if sdk == 'android' %}
   host:
     # The extension links -lc++ -> DT_NEEDED libc++_shared.so on Android (iOS
