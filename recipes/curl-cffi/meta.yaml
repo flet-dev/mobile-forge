@@ -1,12 +1,8 @@
-{% set version = "0.16.2" %}
+{% set version = "0.17.0" %}
 
 package:
   name: curl-cffi
   version: '{{ version }}'
-  # No upstream curl-impersonate binary exists for 32-bit ARM Android, so the
-  # flet-libcurl-impersonate host_build dep can't be built there either.
-  excluded_arches:
-    - armeabi-v7a
 
 build:
   number: 1
@@ -30,7 +26,7 @@ requirements:
     # constant normally drives the download URL, so a skew self-corrects; the patch
     # skips the download, and cdef.c compiles against curl-cffi's own bundled
     # include/curl/ headers — so a mismatch links a skewed archive and still goes green.
-    - flet-libcurl-impersonate 2.1.1
+    - flet-libcurl-impersonate 2.3.1
 # {% if sdk == 'android' %}
   host:
     # The extension links -lc++ -> DT_NEEDED libc++_shared.so on Android (iOS

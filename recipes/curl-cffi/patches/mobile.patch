@@ -19,16 +19,16 @@ This patch adds a single opt-in lever, IMPERSONATE_FORGE_TARGET (set to "ios" or
   * the link recipe is forced to the target's: Darwin (-force_load + -lc++) for
     iOS, ELF --whole-archive + -lc++ for Android.
 
-  * on iOS the extension additionally links the Apple system libraries the
-    curl-impersonate iOS archive depends on:
-    Security + CoreFoundation (USE_APPLE_SECTRUST) and libiconv + libicucore
-    (USE_APPLE_IDN). Real-macOS builds don't need these and are untouched.
+  * on iOS the extension links the system libraries the curl-impersonate
+    archive depends on: libc++, Security + CoreFoundation (USE_APPLE_SECTRUST)
+    and libiconv + libicucore (USE_APPLE_IDN). Upstream reads these from the
+    archive's pkg-config file, which only the macOS release archives ship.
 
 Upstream behaviour is unchanged whenever IMPERSONATE_FORGE_TARGET is unset.
 
---- a/scripts/build.py	2026-08-01 14:46:08
-+++ b/scripts/build.py	2026-08-13 11:17:48
-@@ -31,6 +31,27 @@
+--- a/scripts/build.py
++++ b/scripts/build.py
+@@ -33,6 +33,27 @@
      with open(Path(__file__).parent.parent / "libs.json") as f:
          archs = json.loads(f.read())
  
@@ -54,9 +54,9 @@ Upstream behaviour is unchanged whenever IMPERSONATE_FORGE_TARGET is unset.
 +        }
 +
      uname = platform.uname()
-     uname_system = "Android" if is_android_env() else uname.system
-     glibc_flavor = "gnueabihf" if uname.machine in ["armv7l", "armv6l"] else "gnu"
-@@ -181,6 +202,13 @@
+ 
+     machine = os.environ.get("CURL_CFFI_TARGET_MACHINE", uname.machine)
+@@ -220,6 +241,13 @@
  
  ffibuilder = FFI()
  system = platform.system()
@@ -70,21 +70,26 @@ Upstream behaviour is unchanged whenever IMPERSONATE_FORGE_TARGET is unset.
  root_dir = Path(__file__).parent.parent
  download_libcurl()
  
-@@ -193,6 +221,17 @@
+@@ -231,8 +259,20 @@
+         extra_link_args = [
              f"-Wl,-force_load,{static_libs[0]}",
-             "-lc++",
          ]
+-        # Only macOS release archives ship the .pc with required system frameworks.
+-        extra_link_args.extend(get_static_link_args())
 +        if _forge_target == "ios":
-+            # curl-impersonate's iOS mega-archive is built with
-+            # USE_APPLE_SECTRUST + USE_APPLE_IDN, so the consuming extension
-+            # must pull in the matching Apple system libraries (Security +
-+            # CoreFoundation for SecTrust, libiconv + libicucore for Apple IDN).
++            # The iOS release archives ship no .pc, so name the system libraries
++            # the archive needs: libc++, Security + CoreFoundation (Apple
++            # SecTrust), libiconv + libicucore (Apple IDN).
 +            extra_link_args += [
++                "-lc++",
 +                "-framework", "Security",
 +                "-framework", "CoreFoundation",
 +                "-liconv",
 +                "-licucore",
 +            ]
-     elif is_android:
++        else:
++            # Only macOS release archives ship the .pc with required system frameworks.
++            extra_link_args.extend(get_static_link_args())
+     elif system in ("FreeBSD", "OpenBSD", "Linux") or is_android:
          extra_link_args = [
              "-Wl,--whole-archive",
