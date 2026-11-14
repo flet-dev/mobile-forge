@@ -276,8 +276,8 @@ against your own backend, on a device, is the thing to validate.
   ship, but each asks that its copyright notice travel with the binary — and **those notices are
   not in the curl_cffi wheel**. Its `dist-info/licenses/` holds one file, curl_cffi's own MIT
   text, because the archive links in as a build-time dependency that ships nothing else to the
-  device. The nine texts are in `flet-libcurl-impersonate`'s wheel, under the same
-  `dist-info/licenses/`, and beside its `meta.yaml`; copy them into whatever acknowledgements
+  device. The texts are in `flet-libcurl-impersonate`'s wheel, under the same
+  `dist-info/licenses/`, taken from upstream's release tarball; copy them into whatever acknowledgements
   screen your app has. Flagging it, not advising you — we are not lawyers.
 
 ## Build notes (maintainers)
@@ -314,6 +314,12 @@ wheel — declares `flet-libcpp-shared`: the arm64-v8a extension's `DT_NEEDED` i
   simulator assets. `excluded_arches: [armeabi-v7a]` is what makes `target_arch` mandatory in
   [Install](#install); if a 32-bit ARM asset ever appears, that paragraph and the example's
   `pyproject.toml` entry both stop being necessary.
+- **Hold curl-impersonate at 2.2.2, and so curl-cffi at 0.16.x, until upstream fixes iOS DNS.**
+  From 2.2.3 the iOS archives resolve through c-ares, and on an iOS simulator every lookup
+  then fails with `curl: (28) Resolving timed out`; measured with curl-cffi 0.17.0 and
+  2.3.1, against 5/5 requests on 0.16.2 in the same app. Upstream moved Android back to the
+  threaded resolver (curl-impersonate #339/#344) but not iOS. A bump past 0.16.3 needs a real
+  HTTPS request on iOS first: `tests/` makes no network calls, and passed on 0.17.0.
 - **`scripts/build.py` is the patch target.** A restructure of `detect_arch()` or of `libs.json`
   makes the patch fail to apply — or worse, apply into a build that falls back to the host's
   `uname` and downloads a host-architecture archive.

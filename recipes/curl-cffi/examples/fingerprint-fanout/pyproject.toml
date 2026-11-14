@@ -6,7 +6,7 @@ requires-python = ">=3.12"
 
 dependencies = [
     "flet==0.86.5",
-    "curl-cffi==0.16.2",
+    "curl-cffi==0.16.3",
     "certifi",
 ]
 

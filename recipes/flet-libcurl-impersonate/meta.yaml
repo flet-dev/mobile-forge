@@ -1,14 +1,17 @@
-{% set version = "2.3.1" %}
+{% set version = "2.2.2" %}
 
 package:
   name: flet-libcurl-impersonate
   version: '{{ version }}'
   # Prebuilt curl-impersonate static mega-archive (a single libcurl-impersonate.a
-  # bundling patched curl + BoringSSL + c-ares + nghttp2/nghttp3/ngtcp2 + brotli +
-  # zstd + zlib) for consumers that statically link it — the curl-cffi recipe. This is a
+  # bundling patched curl + BoringSSL + nghttp2/nghttp3/ngtcp2 + brotli + zstd +
+  # zlib) for consumers that statically link it — the curl-cffi recipe. This is a
   # link-time (host_build) dependency only; nothing is shipped to the device.
   #
-  # Upstream publishes a per-(arch, platform) asset for every slice we build.
+  # Upstream publishes a per-(arch, platform) asset for exactly our slices, EXCEPT
+  # armeabi-v7a — there is no 32-bit ARM Android build of curl-impersonate.
+  excluded_arches:
+    - armeabi-v7a
 
 build:
   number: 1
@@ -19,8 +22,8 @@ source:
 # {% elif sdk == 'iphonesimulator' %}
   url: https://github.com/lexiforest/curl-impersonate/releases/download/v{{ version }}/libcurl-impersonate-v{{ version }}.{{ arch }}-apple-ios-simulator.tar.gz
 # {% else %}
-  # Android: arm64-v8a -> aarch64, armeabi-v7a -> armv7, x86_64 -> x86_64.
-  url: https://github.com/lexiforest/curl-impersonate/releases/download/v{{ version }}/libcurl-impersonate-v{{ version }}.{% if arch == 'arm64-v8a' %}aarch64{% elif arch == 'armeabi-v7a' %}armv7{% else %}{{ arch }}{% endif %}-linux-android.tar.gz
+  # Android: arm64-v8a -> aarch64, x86_64 -> x86_64.
+  url: https://github.com/lexiforest/curl-impersonate/releases/download/v{{ version }}/libcurl-impersonate-v{{ version }}.{% if arch == 'arm64-v8a' %}aarch64{% else %}{{ arch }}{% endif %}-linux-android.tar.gz
 # {% endif %}
   # The release tarballs hold libcurl-impersonate.a + include/curl/ at the archive
   # root (no wrapper directory), so unpack verbatim rather than stripping a
@@ -29,10 +32,14 @@ source:
 
 
 about:
-  # The 2.3.1 release tarballs carry their components' notices at the top level
-  # (LICENSE, LICENSE_BORINGSSL, LICENSE_CARES, ...), identical across slices, and
-  # forge's licence discovery ships them. libcurl-impersonate.a is one `ld -r` blob
-  # merging curl, the curl-impersonate patches, BoringSSL, c-ares, nghttp2, nghttp3,
-  # ngtcp2, brotli, zstd and zlib, so the expression ANDs all of them. zstd's notice
-  # is its BSD arm; the GPL-2.0 alternative is not expressed.
+  # The release tarballs carry their components' notices at the top level (LICENSE,
+  # LICENSE_BORINGSSL, LICENSE_CURL, ...), identical across slices, and forge's
+  # licence discovery ships them. libcurl-impersonate.a is one `ld -r` blob merging
+  # curl, the curl-impersonate patches, BoringSSL, nghttp2, nghttp3, ngtcp2, brotli,
+  # zstd and zlib, so the expression ANDs all of them. zstd's notice is its BSD arm;
+  # the GPL-2.0 alternative is not expressed.
+  #
+  # Hold at 2.2.2: 2.2.3+ resolve DNS through c-ares on iOS, and on the iOS simulator
+  # every lookup then times out (curl 28, "Resolving timed out"). Android went back
+  # to the threaded resolver upstream (curl-impersonate #339/#344); iOS did not.
   license: curl AND MIT AND Apache-2.0 AND BSD-3-Clause AND Zlib
