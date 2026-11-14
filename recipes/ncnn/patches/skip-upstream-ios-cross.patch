@@ -1,0 +1,22 @@
+Skip setup.py's own iOS cross-compile block when EXTRA_CMAKE_ARGS is set.
+
+20261020 added a cibuildwheel-oriented iOS block that swaps the compilers for
+raw `xcrun clang++` and re-derives the SDK, deployment target and Python paths.
+forge's compiler wrappers carry the simulator `-target`; raw clang++ does not,
+so the simulator slice compiles for iOS-simulator but links as iOS:
+"ld: building for 'iOS', but linking in object file ... built for
+'iOS-simulator'". The recipe already passes every setting that block sets
+through EXTRA_CMAKE_ARGS, so let the recipe's own args stand alone.
+
+--- a/setup.py
++++ b/setup.py
+@@ -118,7 +118,8 @@
+                     sysconfig.get_config_var("LDLIBRARY"),
+                 )),
+             ]
+-        elif sys.platform == "ios":
++        elif sys.platform == "ios" and not os.environ.get("EXTRA_CMAKE_ARGS"):
++            # mobile-forge: skipped when the caller passes its own cross args
+             # use the selected target python framework and native xcode compilers
+             # cross-venv compiler wrappers may otherwise select the host macos sdk
+             arch, sdk = sys.implementation._multiarch.rsplit("-", 1)

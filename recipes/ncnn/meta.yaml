@@ -58,3 +58,4 @@ requirements:
 
 patches:
   - pin-version-date.patch
+  - skip-upstream-ios-cross.patch
