@@ -1,9 +1,9 @@
 package:
   name: ncnn
-  version: "1.0.20260526"
+  version: "1.0.20261020"
 
 build:
-  number: 2
+  number: 1
   script_env:
     _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
     # setup.py appends EXTRA_CMAKE_ARGS after its own args, so our overrides
