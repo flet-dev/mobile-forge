@@ -1,0 +1,107 @@
+Cross-compile Pillow 13 for iOS and Android under mobile-forge.
+
+Same four changes as setup-12.x.patch. Only the sys.prefix hunk is re-cut:
+13.0 picks LIBDIR/INCLUDEDIR from sysconfig there, so the 12.x context no
+longer matches.
+
+  * force disable_platform_guessing, and disable brotli (no host dep supplies it)
+  * skip sys.prefix lib/include dirs, which point at the build host
+  * drop exact host system dirs that leak in from the build Python's sysconfig
+  * on iOS, link only z + bz2 transitively for _imagingft
+
+diff --git a/setup.py b/setup.py
+--- a/setup.py
++++ b/setup.py
+@@ -371,13 +371,19 @@
+         return True if value in configuration.get(option, []) else None
+ 
+     def initialize_options(self) -> None:
+-        self.disable_platform_guessing = self.check_configuration(
+-            "platform-guessing", "disable"
+-        )
++        self.disable_platform_guessing = True
+         build_ext.initialize_options(self)
+         for x in self.feature:
+             setattr(self, f"disable_{x}", self.check_configuration(x, "disable"))
+             setattr(self, f"enable_{x}", self.check_configuration(x, "enable"))
++        # Mobile-forge: force-disable optional features whose libraries
++        # mobile-forge does NOT supply via host deps. Pillow 12 added
++        # brotli to the link line whenever the headers can be reached;
++        # on iOS the cross site-packages happens to expose them, so the
++        # build pulls in `-lbrotlicommon -lbrotlidec` but no matching
++        # static archive exists in the link search path, breaking the
++        # _imaging.so link with `ld: library 'brotlicommon' not found`.
++        self.disable_brotli = True
+         for x in ("raqm", "fribidi"):
+             setattr(self, f"vendor_{x}", self.check_configuration(x, "vendor"))
+         if self.check_configuration("debug", "true"):
+@@ -572,16 +578,18 @@
+                 for d in os.environ[k].split(os.path.pathsep):
+                     _add_directory(library_dirs, d)
+ 
+-        _add_directory(
+-            library_dirs,
+-            (sys.prefix == sys.base_prefix and sysconfig.get_config_var("LIBDIR"))
+-            or os.path.join(sys.prefix, "lib"),
+-        )
+-        _add_directory(
+-            include_dirs,
+-            (sys.prefix == sys.base_prefix and sysconfig.get_config_var("INCLUDEDIR"))
+-            or os.path.join(sys.prefix, "include"),
+-        )
++        # Skip sys.prefix paths when cross-compiling to avoid host headers
++        if not self.disable_platform_guessing:
++            _add_directory(
++                library_dirs,
++                (sys.prefix == sys.base_prefix and sysconfig.get_config_var("LIBDIR"))
++                or os.path.join(sys.prefix, "lib"),
++            )
++            _add_directory(
++                include_dirs,
++                (sys.prefix == sys.base_prefix and sysconfig.get_config_var("INCLUDEDIR"))
++                or os.path.join(sys.prefix, "include"),
++            )
+ 
+         #
+         # add platform directories
+@@ -723,6 +731,31 @@
+         self.compiler.library_dirs = library_dirs + self.compiler.library_dirs
+         self.compiler.include_dirs = include_dirs + self.compiler.include_dirs
+ 
++        #
++        # When cross-compiling, drop the host's Linux system include/lib
++        # paths that leak in from the build Python's sysconfig (e.g. a
++        # system-installed CPython contributing /usr/include).
++        #
++        # Match exact paths only — NOT `d.startswith("/usr/")` — because
++        # pillow's `_add_directory` calls `os.path.realpath()`, so a
++        # CPATH entry pointing inside the Android NDK resolves through
++        # whatever symlink chain the runner uses. On GitHub Actions
++        # `$ANDROID_HOME=/usr/local/lib/android/sdk`, so the NDK
++        # sysroot include path realpaths to
++        # `/usr/local/lib/android/sdk/ndk/<ver>/.../sysroot/usr/include`
++        # — `startswith("/usr/")` matches that and the prefix-based
++        # filter ends up stripping the very headers CPATH was set to
++        # surface for zlib detection.
++        if self.disable_platform_guessing:
++            _host_leaks = frozenset({
++                "/usr/include", "/usr/local/include",
++                "/usr/lib", "/usr/local/lib",
++                # Debian/Ubuntu multi-arch:
++                "/usr/include/x86_64-linux-gnu",
++                "/usr/lib/x86_64-linux-gnu",
++            })
++            self.compiler.include_dirs = [d for d in self.compiler.include_dirs if d not in _host_leaks]
++            self.compiler.library_dirs = [d for d in self.compiler.library_dirs if d not in _host_leaks]
+         #
+         # look for available libraries
+ 
+@@ -972,7 +1005,7 @@
+ 
+             if sys.platform == "ios":
+                 # Ensure transitive dependencies are linked.
+-                libs.extend(["z", "bz2", "brotlicommon", "brotlidec", "png"])
++                libs.extend(["z", "bz2"])
+ 
+             self._update_extension("PIL._imagingft", libs, defs, srcs)
+ 
