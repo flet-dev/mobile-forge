@@ -30,3 +30,14 @@ def test_streaming_unpacker():
     unpacker = msgpack.Unpacker(buf)
     decoded = list(unpacker)
     assert decoded == [{"i": 0}, {"i": 1}, {"i": 2}]
+
+
+def test_c_extension_is_in_use():
+    """msgpack falls back to pure Python if `_cmsgpack` fails to import, and the
+    round-trip tests above still pass, so assert the C classes are the ones bound."""
+    import msgpack
+    from msgpack import _cmsgpack
+
+    assert msgpack.Packer is _cmsgpack.Packer
+    assert msgpack.Unpacker is _cmsgpack.Unpacker
+    assert msgpack.unpackb is _cmsgpack.unpackb
