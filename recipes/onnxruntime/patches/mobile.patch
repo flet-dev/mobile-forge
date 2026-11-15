@@ -139,7 +139,7 @@ diff -ruN a/pyproject.toml b/pyproject.toml
 +++ b/pyproject.toml	2026-07-08 18:23:09
 @@ -1,6 +1,7 @@
  [build-system]
- requires = ["setuptools>=61.0.0", "wheel", "packaging"]
+ requires = ["setuptools>=84.2.1", "wheel", "packaging"]
 -build-backend = "setuptools.build_meta"
 +build-backend = "forge_ort_backend"
 +backend-path = ["_forge"]
