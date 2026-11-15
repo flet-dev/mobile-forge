@@ -1,6 +1,6 @@
 package:
   name: rapidfuzz
-  version: "3.14.5"
+  version: "3.14.6"
 
 build:
   number: 1
