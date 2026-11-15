@@ -1,6 +1,6 @@
 package:
   name: biopython
-  version: "1.87"
+  version: "1.88"
 
 build:
-  number: 10
+  number: 1
