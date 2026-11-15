@@ -6,6 +6,11 @@ requirements:
   build:
     - cmake
 
+# {% if sdk != 'android' %}
+patches:
+  - ios-libc.patch
+# {% endif %}
+
 build:
   script_env:
     _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'

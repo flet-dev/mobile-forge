@@ -1,4 +1,6 @@
 import asyncio
+import importlib.util
+import sys
 from pathlib import Path
 
 from surrealdb import AsyncSurreal, RecordID, Surreal
@@ -7,6 +9,9 @@ from surrealdb_embedded import SyncEmbeddedDB
 
 def test_native_engine() -> None:
     """Load the native binding and initialize an in-memory engine."""
+    native = importlib.util.find_spec("surrealdb_embedded._ext")
+    assert native is not None
+    print(f"SURREALDB_RUNTIME python={sys.version} native={native.origin}", flush=True)
     with SyncEmbeddedDB("mem://") as db:
         db.connect()
 
