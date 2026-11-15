@@ -1,0 +1,31 @@
+Build a per-version extension instead of abi3.
+
+With the abi3-py310 feature, PyO3 links iOS extensions against
+`-lpython3.10`, which no iOS Python tree has ("ld: library 'python3.10' not
+found"). Drop abi3 from maturin's features and the crate defaults so each
+wheel links its own libpython. Same fix as uuid-utils.
+
+diff --git a/pyproject.toml b/pyproject.toml
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -43,7 +43,7 @@
+ [tool.maturin]
+ module-name = "tokenizers.tokenizers"
+ bindings = "pyo3"
+-features = ["pyo3/extension-module", "abi3"]
++features = ["pyo3/extension-module"]
+ manifest-path = "bindings/python/Cargo.toml"
+ python-source = "py_src"
+ 
+diff --git a/bindings/python/Cargo.toml b/bindings/python/Cargo.toml
+--- a/bindings/python/Cargo.toml
++++ b/bindings/python/Cargo.toml
+@@ -36,7 +36,7 @@
+ pyo3 = { version = "0.29", features = ["auto-initialize", "experimental-inspect"] }
+ 
+ [features]
+-default = ["ext-module", "abi3", "parity-aware-bpe"]
++default = ["ext-module", "parity-aware-bpe"]
+ ext-module = ["pyo3/extension-module"]
+ abi3 = ["pyo3/abi3", "pyo3/abi3-py310"]
+ parity-aware-bpe = ["tokenizers/parity-aware-bpe"]
