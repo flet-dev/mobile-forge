@@ -1,0 +1,14 @@
+[project]
+name = "surrealdb-notes"
+version = "0.1.0"
+description = "Offline Flet notes backed by embedded SurrealKV."
+requires-python = ">=3.12"
+dependencies = ["flet>=0.86,<2", "surrealdb[embedded]==3.0.0"]
+
+[tool.flet]
+org = "dev.mobileforge"
+product = "SurrealDB Notes"
+artifact = "surrealdb-notes"
+
+[tool.flet.app]
+path = "src"

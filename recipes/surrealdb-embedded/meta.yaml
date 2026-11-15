@@ -1,0 +1,21 @@
+package:
+  name: surrealdb-embedded
+  version: "3.0.0"
+
+requirements:
+  build:
+    - cmake
+
+build:
+  script_env:
+    _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
+    # cc-rs appends CPython's -O3 after jitterentropy's mandatory -O0.
+    # AWS-LC's CMake builder filters those inherited optimization flags.
+    AWS_LC_SYS_CMAKE_BUILDER: "1"
+# {% if sdk == 'android' %}
+    ANDROID_NDK_ROOT: '{NDK_ROOT}'
+# {% endif %}
+
+test:
+  requires:
+    - surrealdb==3.0.0
