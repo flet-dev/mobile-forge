@@ -1,4 +1,4 @@
-{% set version = "1.27.0" %}
+{% set version = "1.32.0" %}
 
 package:
   name: onnxruntime
@@ -11,7 +11,7 @@ package:
     - armeabi-v7a
 
 build:
-  number: 2
+  number: 1
   script_env:
     _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
     # Consumed by the patch-added PEP 517 shim (_forge/forge_ort_backend.py),
