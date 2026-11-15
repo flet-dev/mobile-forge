@@ -61,6 +61,13 @@ else
         -DGDAL_USE_EXTERNAL_LIBS=OFF \
         -DPROJ_LIBRARY=$PLATLIB/opt/lib/libproj.a \
         -DPROJ_INCLUDE_DIR=$PLATLIB/opt/include \
+        `# Use flet-libtiff (already here via flet-libproj), not GDAL's internal` \
+        `# copy: consumers link libtiff.a for libproj.a, and two static TIFFs` \
+        `# give duplicate symbols (libtiff 4.7.2 + PROJ 9.9).` \
+        -DGDAL_USE_TIFF=ON \
+        -DGDAL_USE_TIFF_INTERNAL=OFF \
+        -DTIFF_LIBRARY=$PLATLIB/opt/lib/libtiff.a \
+        -DTIFF_INCLUDE_DIR=$PLATLIB/opt/include \
         -DSQLite3_LIBRARY=$SDK_ROOT/usr/lib/libsqlite3.tbd \
         -DSQLite3_INCLUDE_DIR=$SDK_ROOT/usr/include \
         -DGDAL_BUILD_OPTIONAL_DRIVERS=OFF \
