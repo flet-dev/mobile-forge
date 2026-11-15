@@ -1,6 +1,6 @@
 package:
   name: cbor2
-  version: "6.1.4"
+  version: "6.3.0"
 
 build:
   number: 1
