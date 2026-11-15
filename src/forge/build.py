@@ -190,6 +190,12 @@ class Builder(ABC):
                     try:
                         if parts[strip]:
                             member.path = parts[strip]
+                            # A hard link names its target by archive path, so strip
+                            # it too or tarfile can't find it (jq 1.8.2's manual.yml).
+                            if member.islnk():
+                                link_parts = member.linkname.split("/", strip)
+                                if len(link_parts) > strip:
+                                    member.linkname = link_parts[strip]
                             yield member
                     except IndexError:
                         pass
