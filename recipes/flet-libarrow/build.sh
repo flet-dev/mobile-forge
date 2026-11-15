@@ -11,6 +11,9 @@
 #   * iOS link: -framework CoreFoundation — Arrow's vendored `date` lib compiles
 #     ios.mm (Obj-C++) using CoreFoundation for the tzdata.
 #   * ARROW_SIMD_LEVEL=NONE — avoids -march=armv8-a (Apple clang dislikes it).
+#   * ARROW_RUNTIME_SIMD_LEVEL=NONE — 26.x adds runtime-dispatched SVE-256 kernels
+#     (util/bpacking_simd_256.cc) that crash NDK r27 clang ("Cannot scalarize
+#     scalable vector loads").
 set -eu
 
 # Locate the Arrow C++ source (cpp/), whether or not forge stripped the tarball top dir.
@@ -58,6 +61,7 @@ COMMON_ARGS=(
     -DCMAKE_INSTALL_LIBDIR=lib
     -DARROW_CPU_FLAG="$CPU"
     -DARROW_SIMD_LEVEL=NONE
+    -DARROW_RUNTIME_SIMD_LEVEL=NONE
     -DARROW_BUILD_SHARED=ON -DARROW_BUILD_STATIC=OFF
     -DARROW_IPC=ON
     # pyarrow 24 builds 7 UNCONDITIONAL Cython modules (lib, _compute, _csv,
