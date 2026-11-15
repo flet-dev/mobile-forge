@@ -1,15 +1,16 @@
 package:
   name: shapely
-  version: "2.1.2"
+  version: "2.2.0"
 
 build:
   number: 1
+  backend-args:
+    - -Csetup-args=--cross-file
+    - -Csetup-args={MESON_CROSS_FILE}
   script_env:
-    # shapely 2.1+ supports an official cross-compile path: when both
-    # GEOS_INCLUDE_PATH and GEOS_LIBRARY_PATH are set, setup.py skips the
-    # geos-config probe and the version compatibility check, and links
-    # against `geos_c` directly. Replaces the 2.0.x-era mobile.patch
-    # that commented out the geos-config block by hand.
+    # shapely 2.2 builds with meson and finds GEOS only via pkg-config or CMake
+    # config, which flet-libgeos does not ship. geos-from-env.patch declares the
+    # GEOS dependency from these two paths instead, linking `geos_c` directly.
     GEOS_INCLUDE_PATH: '{platlib}/opt/include'
     GEOS_LIBRARY_PATH: '{platlib}/opt/lib'
 # {% if sdk != 'android' %}
@@ -38,6 +39,13 @@ build:
 # {% endif %}
 
 requirements:
+  build:
+    - ninja
+    - meson
+    - cython
   host:
     - flet-libgeos 3.13.1
     - numpy ^2.0.0
+
+patches:
+  - geos-from-env.patch
