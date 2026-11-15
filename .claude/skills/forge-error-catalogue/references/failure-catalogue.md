@@ -1212,6 +1212,17 @@ package still offers its old binding layer, opting out works too: coolprop 8.0
 
 ---
 
+### iOS CMake: `error: thread-local storage is not supported for the current target`
+
+**Cause:** the library started using C++ `thread_local`, and the iOS `cmake` call in
+build.sh passes no deployment target, so clang compiles for an iOS version
+without thread-local storage. Android is unaffected.
+
+**Fix:** add `-DCMAKE_OSX_DEPLOYMENT_TARGET=$SDK_VERSION` to the iOS `cmake` line.
+flet-libgeos 3.15.0.
+
+---
+
 ### meson: a `flet-lib*` dependency is not found (`dependency('geos')`)
 
 **Cause:** our `flet-lib*` build.sh recipes delete `lib/pkgconfig` and `lib/cmake`,
