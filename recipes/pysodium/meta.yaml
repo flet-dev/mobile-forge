@@ -1,9 +1,9 @@
 package:
   name: pysodium
-  version: "0.7.18"
+  version: "0.7.19"
 
 build:
-  number: 11
+  number: 1
 
 patches:
   - mobile.patch
