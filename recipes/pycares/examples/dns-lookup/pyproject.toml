@@ -7,7 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "flet==0.86.5",
     "aiodns==4.0.4",
-    "pycares==5.0.1",
+    "pycares==5.2.1",
 ]
 
 [dependency-groups]
