@@ -1182,6 +1182,51 @@ list entry covers. Every maturin recipe fails on iOS while Android stays green.
 
 ---
 
+### scikit-build-core: `Could NOT find Python (missing: Python_SABI_LIBRARIES Interpreter Development.Module Development.SABIModule)`
+
+**Cause:** the package builds an abi3 wheel (`wheel.py-api = "cp3xx"` in
+pyproject, or a PyO3 `abi3-py3xx` feature), so FindPython is asked for
+`Development.SABIModule`, i.e. `libpython3.so`. Our support trees don't ship it,
+and one missing component makes FindPython report *every* component missing,
+the interpreter included. That reads like a cross-compile interpreter problem
+and isn't one: the same `Python_*` hints find the interpreter fine without SABI.
+
+**Fix:** build a per-version wheel: `backend-args: [-Cwheel.py-api=]`. For PyO3
+crates, drop the `abi3-py3xx` feature in a patch; on iOS it otherwise links
+`-lpython3.10` (`ld: library 'python3.10' not found`). argon2-cffi-bindings 26,
+duckdb 2.0, uuid-utils 1.2.
+
+---
+
+### Android nanobind module: `ld.lld: error: undefined symbol: PyMem_Malloc` (`_Py_Dealloc`, `PyObject_Str`, …)
+
+**Cause:** nanobind links its modules without libpython and leaves Python symbols
+for load time. pybind11's `Python::Module` linked libpython on Android, so a
+package that moves from pybind11 to nanobind starts failing, because the NDK
+links with `--no-undefined`. iOS links with `-undefined dynamic_lookup` and is fine.
+
+**Fix:** add `-L{HOST_PYTHON_HOME}/lib -lpython{py_version_short}` to
+`CMAKE_MODULE_LINKER_FLAGS` in the Android `CMAKE_ARGS`. duckdb 2.0. If the
+package still offers its old binding layer, opting out works too: coolprop 8.0
+`-DCOOLPROP_NANOBIND=OFF`.
+
+---
+
+### meson: a `flet-lib*` dependency is not found (`dependency('geos')`)
+
+**Cause:** our `flet-lib*` build.sh recipes delete `lib/pkgconfig` and `lib/cmake`,
+because their prefixes are absolute build paths. A package that moves from
+setuptools (env-var paths) to meson-python finds the library only via pkg-config
+or CMake config, so the dependency lookup fails.
+
+**Fix:** a small `meson.build` patch that declares the dependency from the env
+vars the recipe already sets, with `-I`/`-L` compile and link args.
+`include_directories()` refuses absolute paths inside the source tree. Add
+`--cross-file {MESON_CROSS_FILE}` backend-args and ninja/meson/cython build
+requirements, as other meson recipes do. shapely 2.2 (`geos-from-env.patch`).
+
+---
+
 ### iOS CMake: `install TARGETS given no BUNDLE DESTINATION for MacOS bundle target "flatc"`
 
 **Cause:** a FetchContent'd flatbuffers builds its `flatc` TOOL as part of the
