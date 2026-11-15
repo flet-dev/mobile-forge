@@ -1,6 +1,6 @@
 package:
   name: jq
-  version: "1.11.0"
+  version: "1.13.0"
 
 requirements:
   # host_build (not host): flet-libjq's static archives are linked INTO the jq
@@ -11,7 +11,7 @@ requirements:
     - flet-libjq 1.7.1
 
 build:
-  number: 2
+  number: 1
   script_env:
     JQPY_USE_SYSTEM_LIBS: 1
 
