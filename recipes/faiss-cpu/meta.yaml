@@ -1,4 +1,4 @@
-{% set version = "1.14.3" %}
+{% set version = "1.16.0" %}
 
 package:
   name: faiss-cpu
@@ -8,7 +8,7 @@ source:
   url: https://github.com/facebookresearch/faiss/archive/refs/tags/v{{ version }}.tar.gz
 
 build:
-  number: 2
+  number: 1
   script_env:
     # scikit-build-core honors the CMAKE_ARGS env var (appended to its cmake call),
     # same as recipes/duckdb. faiss defines + BLAS + OpenMP are shared across
