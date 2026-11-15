@@ -1,4 +1,4 @@
-{% set version = "3.0.90" %}
+{% set version = "3.2.1" %}
 
 package:
   name: flet-libjpeg
@@ -8,7 +8,7 @@ source:
   url: https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/{{ version }}/libjpeg-turbo-{{ version }}.tar.gz
 
 build:
-  number: 11
+  number: 1
 
 requirements:
   build:

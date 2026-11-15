@@ -8,7 +8,7 @@ requirements:
   # libjq.so would collide with the `jq` extension's own jniLibs name on Android
   # (see recipes/jq/patches/mobile.patch and recipes/flet-libjq/build.sh).
   host_build:
-    - flet-libjq 1.7.1
+    - flet-libjq 1.8.2
 
 build:
   number: 1

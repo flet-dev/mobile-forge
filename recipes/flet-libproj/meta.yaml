@@ -1,4 +1,4 @@
-{% set version = "9.5.0" %}
+{% set version = "9.9.0" %}
 
 package:
   name: flet-libproj
@@ -8,7 +8,7 @@ source:
   url: https://download.osgeo.org/proj/proj-{{ version }}.tar.gz
 
 build:
-  number: 10
+  number: 1
 # {% if sdk != 'android' %}
   script_env:
     LDFLAGS: '-undefined dynamic_lookup'
@@ -18,8 +18,8 @@ requirements:
   build:
     - cmake
   host:
-    - flet-libtiff 4.7.0
-    - flet-libcurl 8.11.0
+    - flet-libtiff 4.7.2
+    - flet-libcurl 8.23.0
 
 about:
   license: MIT

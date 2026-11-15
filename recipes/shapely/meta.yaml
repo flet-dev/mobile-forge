@@ -44,7 +44,7 @@ requirements:
     - meson
     - cython
   host:
-    - flet-libgeos 3.13.1
+    - flet-libgeos 3.15.0
     - numpy ^2.0.0
 
 patches:

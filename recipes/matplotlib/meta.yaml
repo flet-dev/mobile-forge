@@ -9,7 +9,7 @@ requirements:
   host:
     - numpy ^2.0.0
     - pybind11
-    - flet-libjpeg 3.0.90
+    - flet-libjpeg 3.2.1
 # {% if sdk == 'android' %}
     - flet-libcpp-shared >=27.2.12479018
 # {% endif %}

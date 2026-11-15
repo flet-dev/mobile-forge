@@ -14,7 +14,7 @@ requirements:
   build:
     - cmake
   host:
-    - flet-libproj 9.5.0
+    - flet-libproj 9.9.0
 
 patches:
   - mobile.patch

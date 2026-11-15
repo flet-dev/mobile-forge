@@ -1,4 +1,4 @@
-{% set version = "3.100" %}
+{% set version = "4.0" %}
 
 # Static PIC libmp3lame -- the MP3 *encoder* half of flet-libsndfile's MP3
 # support (mpg123 is the decoder half; libsndfile needs both or neither).

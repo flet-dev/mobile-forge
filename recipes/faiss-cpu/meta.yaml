@@ -83,7 +83,7 @@ requirements:
   host_build:
     # Static libs linked INTO libfaiss / _swigfaiss.so — needed to build/link but
     # never dlopened at runtime, so kept OUT of the wheel's Requires-Dist.
-    - flet-libopenblas 0.3.33
+    - flet-libopenblas 0.3.34
 # {% if sdk != 'android' %}
     # iOS serial-stub libomp.a (+ omp.h) — static-linked.
     - flet-libomp 27.3.13750724

@@ -8,7 +8,7 @@ requirements:
 # {% if sdk != 'android' %}
     # iOS-only — see GDAL_LIBS comment below for the rationale.
     - openssl >=3.0.15
-    - flet-libjpeg 3.0.90
+    - flet-libjpeg 3.2.1
 # {% endif %}
 
 build:

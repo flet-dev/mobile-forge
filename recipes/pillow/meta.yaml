@@ -14,16 +14,16 @@ requirements:
   # carry as DT_NEEDED, and flet stages it into jniLibs.
 # {% if sdk == 'android' %}
   host:
-    - flet-libjpeg 3.0.90
-    - flet-libfreetype 2.13.3
+    - flet-libjpeg 3.2.1
+    - flet-libfreetype 2.15.0
     - flet-libwebp 1.6.0
-    - flet-libtiff 4.7.0
+    - flet-libtiff 4.7.2
 # {% else %}
   host_build:
-    - flet-libjpeg 3.0.90
-    - flet-libfreetype 2.13.3
+    - flet-libjpeg 3.2.1
+    - flet-libfreetype 2.15.0
     - flet-libwebp 1.6.0
-    - flet-libtiff 4.7.0
+    - flet-libtiff 4.7.2
 # {% endif %}
 
 # {% if not version or version >= (13,0,0) %}
@@ -50,7 +50,7 @@ patches:
 # {% endif %}
 
 build:
-  number: 1
+  number: 2
   script_env:
 # {% if sdk == 'android' %}
     # pillow's setup.py manually probes `self.compiler.{include,library}_dirs`

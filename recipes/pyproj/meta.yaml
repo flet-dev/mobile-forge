@@ -30,11 +30,11 @@ build:
 
 requirements:
   host:
-    - flet-libproj 9.5.0
+    - flet-libproj 9.9.0
 # {% if sdk != 'android' %}
     # iOS-only — see PROJ_LIBS comment above for the rationale.
     - openssl >=3.0.15
-    - flet-libjpeg 3.0.90
+    - flet-libjpeg 3.2.1
 # {% endif %}
 
 patches:

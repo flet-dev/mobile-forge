@@ -1,11 +1,11 @@
-{% set version = "5.46" %}
+{% set version = "5.48" %}
 
 package:
   name: flet-libmagic
   version: '{{ version }}'
 
 build:
-  number: 2
+  number: 1
 
 source:
   # The `file` project ships a release tarball with a pre-generated ./configure

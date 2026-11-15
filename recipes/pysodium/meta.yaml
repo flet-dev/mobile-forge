@@ -10,4 +10,4 @@ patches:
 
 requirements:
   host:
-    - flet-libsodium 1.0.20
+    - flet-libsodium 1.0.22

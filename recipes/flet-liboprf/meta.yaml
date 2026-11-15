@@ -9,10 +9,10 @@ source:
 
 requirements:
   host:
-    - flet-libsodium 1.0.20
+    - flet-libsodium 1.0.22
 
 build:
-  number: 10
+  number: 11
   script_env:
     CFLAGS: '-Qunused-arguments -Wno-unreachable-code'
 
