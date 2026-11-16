@@ -1212,6 +1212,31 @@ package still offers its old binding layer, opting out works too: coolprop 8.0
 
 ---
 
+### Android: `fatal error: error in backend: Cannot scalarize scalable vector loads`
+
+**Cause:** NDK r27 clang crashes on SVE code. Arrow 26 added runtime-dispatched
+SVE-256 bit-unpacking kernels (`util/bpacking_simd_256.cc`), which are built even
+with `ARROW_SIMD_LEVEL=NONE`, because runtime dispatch is a separate switch.
+
+**Fix:** `-DARROW_RUNTIME_SIMD_LEVEL=NONE` alongside `ARROW_SIMD_LEVEL=NONE`.
+flet-libarrow 26.0.1.
+
+---
+
+### iOS link: `duplicate symbol '__TIFF…'` in `libgdal.a` and `libtiff.a`
+
+**Cause:** on iOS, flet-libgdal is static and, with `GDAL_USE_EXTERNAL_LIBS=OFF`,
+compiles its internal libtiff into `libgdal.a`. Consumers also link flet-libtiff's
+`libtiff.a` for `libproj.a`. Once PROJ needs a TIFF symbol only the external copy
+defines, the linker pulls that object and both copies collide (libtiff 4.7.2 +
+PROJ 9.9). Android is unaffected because libgdal is shared there.
+
+**Fix:** build GDAL against the external static libtiff on iOS:
+`-DGDAL_USE_TIFF=ON -DGDAL_USE_TIFF_INTERNAL=OFF -DTIFF_LIBRARY=… -DTIFF_INCLUDE_DIR=…`.
+flet-libgdal 3.13.3.
+
+---
+
 ### iOS CMake: `error: thread-local storage is not supported for the current target`
 
 **Cause:** the library started using C++ `thread_local`, and the iOS `cmake` call in
@@ -2106,6 +2131,18 @@ model pack is `buffalo_sc` (det_500m + w600k_mbf, 15MB download).
 ---
 
 ## Recipe-tester app failures
+
+### Android CI: `downloadDistArchive_<abi>` / `downloadDartBridge_<abi>` FAILED, `The current character read is ' ' with an int value of 0`
+
+**Cause:** not the recipe. serious_python_android registers one `Download` task per
+ABI with `onlyIfModified` + `useETag("all")` and the default shared
+`etags.json`. Gradle runs them in parallel and they corrupt the file (zero-filled).
+Hit about 10% of Android jobs in November 2026.
+
+**Fix:** rerun. In a long CI campaign, `org.gradle.workers.max=1` in
+`~/.gradle/gradle.properties` before the APK build stops it. The real fix is a
+per-ABI `cachedETagsFile` in serious_python.
+
 
 ### `ResolutionImpossible` — a package's `numpy` upper-cap can't be satisfied on a newer CPython
 
