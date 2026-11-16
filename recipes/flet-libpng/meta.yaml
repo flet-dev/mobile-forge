@@ -1,17 +1,14 @@
-{% set version = "1.6.43" %}
+{% set version = "1.6.59" %}
 
 package:
   name: flet-libpng
   version: '{{ version }}'
 
 build:
-  number: 11
+  number: 1
 
 source:
   url: https://github.com/pnggroup/libpng/archive/refs/tags/v{{ version }}.tar.gz
-
-patches:
-  - config.patch
 
 about:
   # Lowercase libpng-2.0: the capital-L `Libpng` licence applies only up to 1.6.35.

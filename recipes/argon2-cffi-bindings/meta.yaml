@@ -1,6 +1,45 @@
 package:
   name: argon2-cffi-bindings
-  version: "25.1.0"
+  version: "26.2.0"
+
+requirements:
+  build:
+    # 26.x builds with scikit-build-core + CMake (was setuptools + cffi).
+    - cmake
+    - ninja
 
 build:
   number: 1
+  backend-args:
+    # Build a regular CPython-ABI wheel. The abi3 build asks FindPython for
+    # Development.SABIModule (libpython3.so), which our support tree lacks, and
+    # one missing component makes FindPython report all of them missing.
+    - -Cwheel.py-api=
+  script_env:
+    # Toolchain, the crossenv python and the target Python headers/lib for
+    # FindPython; the /usr/bin/env emulator lets CMake 4 search the interpreter.
+# {% if sdk == 'android' %}
+    CMAKE_ARGS: >-
+      -DCMAKE_TOOLCHAIN_FILE={NDK_ROOT}/build/cmake/android.toolchain.cmake
+      -DANDROID_ABI={ANDROID_ABI}
+      -DANDROID_NATIVE_API_LEVEL={ANDROID_API_LEVEL}
+      -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/env
+      -DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DCMAKE_MODULE_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DPython_EXECUTABLE={CROSS_VENV_PYTHON}
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.so
+# {% else %}
+    # The `ninja` pip package crashes importing on the iOS crossenv python
+    # (pyzmq tell), so use the Makefiles generator on iOS.
+    CMAKE_GENERATOR: Unix Makefiles
+    CMAKE_ARGS: >-
+      -DCMAKE_SYSTEM_NAME=iOS
+      -DCMAKE_OSX_SYSROOT={{ sdk }}
+      -DCMAKE_OSX_DEPLOYMENT_TARGET={{ sdk_version }}
+      -DCMAKE_OSX_ARCHITECTURES={{ arch }}
+      -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/env
+      -DPython_EXECUTABLE={CROSS_VENV_PYTHON}
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.dylib
+# {% endif %}

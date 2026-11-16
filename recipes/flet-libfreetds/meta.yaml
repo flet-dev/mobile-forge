@@ -1,4 +1,4 @@
-{% set version = "1.4.27" %}
+{% set version = "1.5.21" %}
 
 package:
   name: flet-libfreetds
@@ -9,7 +9,7 @@ source:
   url: https://www.freetds.org/files/stable/freetds-{{ version }}.tar.gz
 
 build:
-  number: 2
+  number: 1
   script_env:
     # OpenSSL (for TLS) comes from the python-build support tree, surfaced by the
     # `openssl` host requirement at {platlib}/opt (same as cryptography).

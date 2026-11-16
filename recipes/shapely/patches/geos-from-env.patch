@@ -1,0 +1,38 @@
+Let shapely 2.2's meson build use GEOS_INCLUDE_PATH / GEOS_LIBRARY_PATH.
+
+shapely 2.2 moved from setuptools to meson-python and now finds GEOS only via
+pkg-config or CMake config files. flet-libgeos ships neither (its build.sh
+removes them: their prefix is an absolute build path). Restore the env-var path
+shapely 2.1's setup.py had: when both variables are set, declare the GEOS
+dependency from them and skip the "no longer supported" warning. Uses -I/-L
+args rather than include_directories(), which meson refuses for paths inside
+the source tree.
+
+--- a/meson.build
++++ b/meson.build
+@@ -75,7 +75,9 @@
+     if name in environ:
+         print(name + "=" + environ[name])
+ '''], check: true).stdout().strip().split()
+-if ignored_env_vars != []
++_geos_paths = run_command(py, ['-c', 'import os; print(os.environ.get("GEOS_INCLUDE_PATH", "")); print(os.environ.get("GEOS_LIBRARY_PATH", ""))'], check: true).stdout().strip().split('\n')
++_geos_from_env = _geos_paths.length() == 2 and _geos_paths[0] != '' and _geos_paths[1] != ''
++if ignored_env_vars != [] and not _geos_from_env
+   warning(
+     'These previously-supported environment variable(s) are not supported:',
+     ignored_env_vars, '; use `cmake_prefix_path` ',
+@@ -84,6 +86,14 @@
+ 
+ # Enforce a dependency method search priority if built-in option is specified
+ geos_dep = dependency('', required: false)  # dummy to have dependency variable
++# mobile-forge: cross builds link a prebuilt GEOS with no .pc or CMake config;
++# take its paths from GEOS_INCLUDE_PATH / GEOS_LIBRARY_PATH, as shapely 2.1 did.
++if _geos_from_env
++  geos_dep = declare_dependency(
++    compile_args: ['-I' + _geos_paths[0]],
++    link_args: ['-L' + _geos_paths[1], '-lgeos_c'],
++  )
++endif
+ if not geos_dep.found() and get_option('cmake_prefix_path').length() > 0
+   # possibly configured with -Dcmake_prefix_path=/path/to/prefix
+   geos_dep = dependency('geos', version: f'>=@min_geos_version@',

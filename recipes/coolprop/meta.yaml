@@ -1,6 +1,6 @@
 package:
   name: coolprop
-  version: "7.2.0"
+  version: "8.0.0"
 
 requirements:
   build:
@@ -14,10 +14,15 @@ patches:
   - mkdir-cython-output.patch
 
 build:
-  number: 11
+  number: 1
   script_env:
+    # 8.0 defaults to a nanobind core plus Cython "capsule shim" sidecars. That
+    # path links no libpython on Android (undefined PyMem_Malloc etc.) and writes
+    # into a build dir it never creates on iOS. COOLPROP_NANOBIND=OFF keeps the
+    # legacy Cython wrapper, the shape 7.x shipped.
 # {% if sdk == 'android' %}
     CMAKE_ARGS: >-
+      -DCOOLPROP_NANOBIND=OFF
       -DCMAKE_TOOLCHAIN_FILE={NDK_ROOT}/build/cmake/android.toolchain.cmake
       -DANDROID_ABI={ANDROID_ABI}
       -DANDROID_PLATFORM=android-{ANDROID_API_LEVEL}
@@ -30,6 +35,7 @@ build:
       -DPython3_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
 # {% else %}
     CMAKE_ARGS: >-
+      -DCOOLPROP_NANOBIND=OFF
       -DCMAKE_SYSTEM_NAME=iOS
       -DCMAKE_OSX_SYSROOT={{ sdk }}
       -DCMAKE_OSX_DEPLOYMENT_TARGET={{ sdk_version }}

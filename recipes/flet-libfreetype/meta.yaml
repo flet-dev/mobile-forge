@@ -1,11 +1,11 @@
-{% set version = "2.13.3" %}
+{% set version = "2.15.0" %}
 
 package:
   name: flet-libfreetype
   version: '{{ version }}'
 
 build:
-  number: 11
+  number: 1
 
 source:
   url: https://downloads.sourceforge.net/project/freetype/freetype2/{{ version }}/freetype-{{ version }}.tar.gz

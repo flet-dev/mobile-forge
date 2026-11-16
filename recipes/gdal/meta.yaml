@@ -4,11 +4,11 @@ package:
   # bindings hard-require an exact major.minor match with libgdal —
   # any bump here must come with flet-libgdal bumped to the same
   # version, plus fiona / rasterio / pyogrio re-pinned in lockstep.
-  version: "3.13.1"
+  version: "3.13.3"
 
 requirements:
   host:
-    - flet-libgdal 3.13.1
+    - flet-libgdal 3.13.3
 # {% if sdk == 'android' %}
     # libgdal links C++; the SWIG-generated _gdal.so loads via dlopen which
     # needs libc++_shared.so on Android.
@@ -16,13 +16,13 @@ requirements:
 # {% else %}
     # iOS-only — see GDAL_LIBS comment below for the rationale.
     - openssl >=3.0.15
-    - flet-libjpeg 3.0.90
+    - flet-libjpeg 3.2.1
 # {% endif %}
 
 build:
   number: 1
   script_env:
-    GDAL_VERSION: 3.13.1
+    GDAL_VERSION: 3.13.3
     GDAL_PREFIX: '{platlib}/opt'
     GDAL_CFLAGS: ''
 # {% if sdk != 'android' %}

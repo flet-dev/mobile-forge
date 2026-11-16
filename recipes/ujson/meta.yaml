@@ -1,9 +1,9 @@
 package:
   name: ujson
-  version: "5.12.1"
+  version: "6.1.0"
 
 build:
-  number: 10
+  number: 1
 
 # {% if sdk == 'android' %}
 # ujson links its bundled double-conversion C++ code against NDK's libc++.

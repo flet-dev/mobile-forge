@@ -1,6 +1,6 @@
 package:
   name: oracledb
-  version: "4.0.1"
+  version: "26.1.0"
 
 build:
   number: 1

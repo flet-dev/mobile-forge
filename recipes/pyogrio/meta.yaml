@@ -1,20 +1,20 @@
 package:
   name: pyogrio
-  version: "0.12.1"
+  version: "0.13.0"
 
 requirements:
   host:
-    - flet-libgdal 3.13.1
+    - flet-libgdal 3.13.3
 # {% if sdk != 'android' %}
     # iOS-only — see GDAL_LIBS comment below for the rationale.
     - openssl >=3.0.15
-    - flet-libjpeg 3.0.90
+    - flet-libjpeg 3.2.1
 # {% endif %}
 
 build:
   number: 1
   script_env:
-    GDAL_VERSION: 3.13.1
+    GDAL_VERSION: 3.13.3
     GDAL_LIBRARY_PATH: '{platlib}/opt/lib'
     GDAL_INCLUDE_PATH: '{platlib}/opt/include'
 # {% if sdk != 'android' %}

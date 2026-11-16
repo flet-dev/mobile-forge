@@ -1,9 +1,9 @@
 package:
   name: scikit-learn
-  version: "1.9.0"
+  version: "1.9.1"
 
 build:
-  number: 2
+  number: 1
   backend-args:
     # scikit-learn borrows BLAS via scipy.linalg.cython_blas (no external BLAS
     # link, no Fortran); OpenMP is optional (required:false → single-threaded).
@@ -27,7 +27,6 @@ requirements:
 # {% endif %}
 
 patches:
-  - relax-scipy-build-cap.patch
   - disable-openmp-non-android.patch
 
 # scikit-learn reads sklearn/utils/_repr_html/estimator.css via __file__ at import.

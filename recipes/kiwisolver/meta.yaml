@@ -3,10 +3,10 @@ package:
   version: "1.5.1"
 
 build:
-  number: 1
+  number: 2
 
 # {% if sdk == 'android' %}
 requirements:
   host:
-    - flet-libcpp-shared 27.2.12479018
+    - flet-libcpp-shared >=27.2.12479018
 # {% endif %}

@@ -1,6 +1,6 @@
 package:
   name: tokenizers
-  version: "0.23.1"
+  version: "0.23.3"
 
 # {% if sdk == 'android' %}
 requirements:
@@ -24,3 +24,5 @@ patches:
   # that one type through the portable-atomic crate (which ships a 32-bit
   # fallback), so every arch builds.
   - mobile.patch
+  # abi3 links iOS extensions against -lpython3.10, which iOS lacks.
+  - no-abi3.patch

@@ -1,4 +1,4 @@
-{% set version = "3.13.1" %}
+{% set version = "3.13.3" %}
 
 package:
   name: flet-libgdal
@@ -8,13 +8,13 @@ source:
   url: https://github.com/OSGeo/gdal/releases/download/v{{ version }}/gdal-{{ version }}.tar.gz
 
 build:
-  number: 2
+  number: 1
 
 requirements:
   build:
     - cmake
   host:
-    - flet-libproj 9.5.0
+    - flet-libproj 9.9.0
 
 patches:
   - mobile.patch

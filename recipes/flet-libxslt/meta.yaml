@@ -8,7 +8,7 @@
 # {%   set libxml2_version = "2.9.8" %}
 # {%   set patch = "mobile-1.1.32.patch" %}
 # {% else %}
-# {%   set libxml2_version = "2.15.3" %}
+# {%   set libxml2_version = "2.15.4" %}
 # {%   set patch = "mobile-1.1.45.patch" %}
 # {% endif %}
 
@@ -17,7 +17,7 @@ package:
   version: '{{ version }}'
 
 build:
-  number: 11
+  number: 12
 
 source:
   url: https://download.gnome.org/sources/libxslt/{{ version.rsplit('.', 1)[0] }}/libxslt-{{ version }}.tar.xz

@@ -1,6 +1,6 @@
 package:
   name: scipy
-  version: "1.18.0"
+  version: "1.18.1"
 
 requirements:
   build:
@@ -8,10 +8,13 @@ requirements:
     - meson
     - cython
     - pythran
+  host_build:
+    # A static libopenblas.a linked into the extensions; under host it became a
+    # runtime Requires-Dist and every scipy app downloaded ~17 MB it never loads.
+    - flet-libopenblas 0.3.34
   host:
     - numpy 2.4.6
     - pybind11
-    - flet-libopenblas 0.3.33
 # {% if sdk == 'android' %}
     - flet-libcpp-shared >=27.2.12479018
 # {% endif %}

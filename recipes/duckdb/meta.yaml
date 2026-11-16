@@ -1,6 +1,6 @@
 package:
   name: duckdb
-  version: "1.5.4"
+  version: "2.0.0"
 
 requirements:
   build:
@@ -18,8 +18,15 @@ requirements:
 
 build:
   number: 1
+  backend-args:
+    # 2.0 builds a cp312 abi3 wheel by default, which asks FindPython for
+    # Development.SABIModule (libpython3.so). Our support tree lacks it, and one
+    # missing component makes FindPython report all of them missing.
+    - -Cwheel.py-api=
   script_env:
 # {% if sdk == 'android' %}
+    # nanobind (2.0) leaves Python symbols for load time, unlike pybind11's
+    # Python::Module; the NDK links with --no-undefined, so link libpython.
     CMAKE_ARGS: >-
       -DCMAKE_TOOLCHAIN_FILE={NDK_ROOT}/build/cmake/android.toolchain.cmake
       -DANDROID_ABI={ANDROID_ABI}
@@ -27,7 +34,7 @@ build:
       -DANDROID_STL=c++_shared
       -DCMAKE_CROSSCOMPILING_EMULATOR=/usr/bin/env
       -DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384
-      -DCMAKE_MODULE_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DCMAKE_MODULE_LINKER_FLAGS="-Wl,-z,max-page-size=16384 -L{HOST_PYTHON_HOME}/lib -lpython{py_version_short}"
       -DPython_EXECUTABLE={CROSS_VENV_PYTHON}
       -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
       -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.so

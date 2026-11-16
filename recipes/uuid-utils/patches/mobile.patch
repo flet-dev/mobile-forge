@@ -1,5 +1,4 @@
-Make uuid-utils cross-compile for Flet's mobile targets. Both problems are in
-dependencies, not in uuid-utils itself.
+Make uuid-utils cross-compile for Flet's mobile targets.
 
 1. armeabi-v7a (the arm-linux-androideabi Rust target) has no native 64-bit
    atomics, so std::sync::atomic::AtomicU64 — used for the v1/v6 MAC-node cache
@@ -14,11 +13,21 @@ dependencies, not in uuid-utils itself.
    path (only v1/v6 UUIDs consult it; uuid4/uuid5 — what LangGraph uses — never
    do). arm64-v8a / x86_64 Android and desktop keep the real MAC lookup.
 
-diff --git a/Cargo.toml b/Cargo.toml
-index 0085e10..663a26f 100644
---- a/a/Cargo.toml
+3. 1.x builds a stable-ABI (abi3-py310) extension, and on iOS PyO3 then links
+   `-lpython3.10`, which no iOS Python tree has ("ld: library 'python3.10' not
+   found"). Drop the abi3 feature so each wheel links its own libpython.
+
+--- a/Cargo.toml
 +++ b/Cargo.toml
-@@ -24,6 +24,13 @@ uuid = { version  = "1.23.4", features = [
+@@ -10,7 +10,6 @@
+ 
+ [dependencies]
+ pyo3 = { version = "0.29.2", features = [
+-    "abi3-py310",
+     "extension-module",
+     "generate-import-lib",
+ ]}
+@@ -25,6 +24,13 @@
      "v8",
      "fast-rng",
  ]}
@@ -33,9 +42,7 @@ index 0085e10..663a26f 100644
 +# _getnode() in src/lib.rs falls back to a random multicast node there (v1/v6 only).
 +[target.'cfg(all(not(target_arch = "wasm32"), not(target_os = "ios")))'.dependencies]
  mac_address = "1.1.8"
-diff --git a/src/lib.rs b/src/lib.rs
-index e8960b8..d90c01b 100644
---- a/a/src/lib.rs
+--- a/src/lib.rs
 +++ b/src/lib.rs
 @@ -1,4 +1,4 @@
 -#[cfg(not(target_arch = "wasm32"))]
@@ -43,7 +50,7 @@ index e8960b8..d90c01b 100644
  use mac_address::MacAddressIterator;
  use pyo3::{
      IntoPyObjectExt,
-@@ -8,9 +8,10 @@ use pyo3::{
+@@ -8,9 +8,10 @@
      types::{PyBytes, PyDict},
  };
  use std::{
@@ -52,10 +59,10 @@ index e8960b8..d90c01b 100644
      time::SystemTime,
  };
 +use portable_atomic::AtomicU64;
- use uuid::{Builder, Bytes, ContextV1, Timestamp, Uuid, Variant, Version};
+ use uuid::{Builder, Bytes, Timestamp, Uuid, Variant, Version};
  
  static NODE: AtomicU64 = AtomicU64::new(0);
-@@ -438,7 +439,7 @@ fn _getnode() -> u64 {
+@@ -445,7 +446,7 @@
          (mac & (1 << 41)) == 0
      }
  

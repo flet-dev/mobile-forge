@@ -1182,6 +1182,87 @@ list entry covers. Every maturin recipe fails on iOS while Android stays green.
 
 ---
 
+### scikit-build-core: `Could NOT find Python (missing: Python_SABI_LIBRARIES Interpreter Development.Module Development.SABIModule)`
+
+**Cause:** the package builds an abi3 wheel (`wheel.py-api = "cp3xx"` in
+pyproject, or a PyO3 `abi3-py3xx` feature), so FindPython is asked for
+`Development.SABIModule`, i.e. `libpython3.so`. Our support trees don't ship it,
+and one missing component makes FindPython report *every* component missing,
+the interpreter included. That reads like a cross-compile interpreter problem
+and isn't one: the same `Python_*` hints find the interpreter fine without SABI.
+
+**Fix:** build a per-version wheel: `backend-args: [-Cwheel.py-api=]`. For PyO3
+crates, drop the `abi3-py3xx` feature in a patch; on iOS it otherwise links
+`-lpython3.10` (`ld: library 'python3.10' not found`). argon2-cffi-bindings 26,
+duckdb 2.0, uuid-utils 1.2.
+
+---
+
+### Android nanobind module: `ld.lld: error: undefined symbol: PyMem_Malloc` (`_Py_Dealloc`, `PyObject_Str`, …)
+
+**Cause:** nanobind links its modules without libpython and leaves Python symbols
+for load time. pybind11's `Python::Module` linked libpython on Android, so a
+package that moves from pybind11 to nanobind starts failing, because the NDK
+links with `--no-undefined`. iOS links with `-undefined dynamic_lookup` and is fine.
+
+**Fix:** add `-L{HOST_PYTHON_HOME}/lib -lpython{py_version_short}` to
+`CMAKE_MODULE_LINKER_FLAGS` in the Android `CMAKE_ARGS`. duckdb 2.0. If the
+package still offers its old binding layer, opting out works too: coolprop 8.0
+`-DCOOLPROP_NANOBIND=OFF`.
+
+---
+
+### Android: `fatal error: error in backend: Cannot scalarize scalable vector loads`
+
+**Cause:** NDK r27 clang crashes on SVE code. Arrow 26 added runtime-dispatched
+SVE-256 bit-unpacking kernels (`util/bpacking_simd_256.cc`), which are built even
+with `ARROW_SIMD_LEVEL=NONE`, because runtime dispatch is a separate switch.
+
+**Fix:** `-DARROW_RUNTIME_SIMD_LEVEL=NONE` alongside `ARROW_SIMD_LEVEL=NONE`.
+flet-libarrow 26.0.1.
+
+---
+
+### iOS link: `duplicate symbol '__TIFF…'` in `libgdal.a` and `libtiff.a`
+
+**Cause:** on iOS, flet-libgdal is static and, with `GDAL_USE_EXTERNAL_LIBS=OFF`,
+compiles its internal libtiff into `libgdal.a`. Consumers also link flet-libtiff's
+`libtiff.a` for `libproj.a`. Once PROJ needs a TIFF symbol only the external copy
+defines, the linker pulls that object and both copies collide (libtiff 4.7.2 +
+PROJ 9.9). Android is unaffected because libgdal is shared there.
+
+**Fix:** build GDAL against the external static libtiff on iOS:
+`-DGDAL_USE_TIFF=ON -DGDAL_USE_TIFF_INTERNAL=OFF -DTIFF_LIBRARY=… -DTIFF_INCLUDE_DIR=…`.
+flet-libgdal 3.13.3.
+
+---
+
+### iOS CMake: `error: thread-local storage is not supported for the current target`
+
+**Cause:** the library started using C++ `thread_local`, and the iOS `cmake` call in
+build.sh passes no deployment target, so clang compiles for an iOS version
+without thread-local storage. Android is unaffected.
+
+**Fix:** add `-DCMAKE_OSX_DEPLOYMENT_TARGET=$SDK_VERSION` to the iOS `cmake` line.
+flet-libgeos 3.15.0.
+
+---
+
+### meson: a `flet-lib*` dependency is not found (`dependency('geos')`)
+
+**Cause:** our `flet-lib*` build.sh recipes delete `lib/pkgconfig` and `lib/cmake`,
+because their prefixes are absolute build paths. A package that moves from
+setuptools (env-var paths) to meson-python finds the library only via pkg-config
+or CMake config, so the dependency lookup fails.
+
+**Fix:** a small `meson.build` patch that declares the dependency from the env
+vars the recipe already sets, with `-I`/`-L` compile and link args.
+`include_directories()` refuses absolute paths inside the source tree. Add
+`--cross-file {MESON_CROSS_FILE}` backend-args and ninja/meson/cython build
+requirements, as other meson recipes do. shapely 2.2 (`geos-from-env.patch`).
+
+---
+
 ### iOS CMake: `install TARGETS given no BUNDLE DESTINATION for MacOS bundle target "flatc"`
 
 **Cause:** a FetchContent'd flatbuffers builds its `flatc` TOOL as part of the
@@ -2050,6 +2131,18 @@ model pack is `buffalo_sc` (det_500m + w600k_mbf, 15MB download).
 ---
 
 ## Recipe-tester app failures
+
+### Android CI: `downloadDistArchive_<abi>` / `downloadDartBridge_<abi>` FAILED, `The current character read is ' ' with an int value of 0`
+
+**Cause:** not the recipe. serious_python_android registers one `Download` task per
+ABI with `onlyIfModified` + `useETag("all")` and the default shared
+`etags.json`. Gradle runs them in parallel and they corrupt the file (zero-filled).
+Hit about 10% of Android jobs in November 2026.
+
+**Fix:** rerun. In a long CI campaign, `org.gradle.workers.max=1` in
+`~/.gradle/gradle.properties` before the APK build stops it. The real fix is a
+per-ABI `cachedETagsFile` in serious_python.
+
 
 ### `ResolutionImpossible` — a package's `numpy` upper-cap can't be satisfied on a newer CPython
 

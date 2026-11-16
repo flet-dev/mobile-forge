@@ -1,4 +1,4 @@
-{% set version = "0.21.5" %}
+{% set version = "0.23.3" %}
 
 package:
   name: flet-libpsl
@@ -8,7 +8,7 @@ source:
   url: https://github.com/rockdaboot/libpsl/releases/download/{{ version }}/libpsl-{{ version }}.tar.gz
 
 build:
-  number: 11
+  number: 1
 
 patches:
   - config.patch

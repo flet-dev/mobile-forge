@@ -1,6 +1,6 @@
 package:
   name: av
-  version: "18.1.0"
+  version: "19.0.2"
 
 build:
   number: 1
@@ -37,4 +37,4 @@ requirements:
     # Pinned exactly: PyAV tracks the FFmpeg 8.x ABI closely and the two are
     # released as a pair, so a floating >= would let a future ABI bump resolve
     # into an `av` built against the old headers.
-    - flet-libffmpeg ==8.1.2
+    - flet-libffmpeg ==8.1.3

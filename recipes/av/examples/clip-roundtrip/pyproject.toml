@@ -6,7 +6,7 @@ requires-python = ">=3.11"
 
 dependencies = [
     "flet==0.86.5",
-    "av==18.1.0",
+    "av==19.0.2",
 ]
 
 [dependency-groups]

@@ -1,4 +1,4 @@
-{% set version = "1.14.3" %}
+{% set version = "1.16.0" %}
 
 package:
   name: faiss-cpu
@@ -8,7 +8,7 @@ source:
   url: https://github.com/facebookresearch/faiss/archive/refs/tags/v{{ version }}.tar.gz
 
 build:
-  number: 2
+  number: 1
   script_env:
     # scikit-build-core honors the CMAKE_ARGS env var (appended to its cmake call),
     # same as recipes/duckdb. faiss defines + BLAS + OpenMP are shared across
@@ -83,7 +83,7 @@ requirements:
   host_build:
     # Static libs linked INTO libfaiss / _swigfaiss.so — needed to build/link but
     # never dlopened at runtime, so kept OUT of the wheel's Requires-Dist.
-    - flet-libopenblas 0.3.33
+    - flet-libopenblas 0.3.34
 # {% if sdk != 'android' %}
     # iOS serial-stub libomp.a (+ omp.h) — static-linked.
     - flet-libomp 27.3.13750724

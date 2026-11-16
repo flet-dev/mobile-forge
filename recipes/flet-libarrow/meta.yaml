@@ -1,4 +1,4 @@
-{% set version = "24.0.0" %}
+{% set version = "26.0.1" %}
 package:
   name: flet-libarrow
   version: '{{ version }}'
@@ -9,7 +9,7 @@ package:
   # not worth diverging from the flet-lib* convention to skip it.
 
 build:
-  number: 2
+  number: 1
 
 source:
   # Apache Arrow C++ (curated source release; build dir = its cpp/). pyarrow

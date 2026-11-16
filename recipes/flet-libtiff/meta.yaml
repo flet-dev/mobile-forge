@@ -1,4 +1,4 @@
-{% set version = "4.7.0" %}
+{% set version = "4.7.2" %}
 
 package:
   name: flet-libtiff
@@ -8,11 +8,11 @@ source:
   url: https://download.osgeo.org/libtiff/tiff-{{ version }}.tar.gz
 
 build:
-  number: 10
+  number: 1
 
 requirements:
   host:
-    - flet-libjpeg 3.0.90
+    - flet-libjpeg 3.2.1
 
 patches:
   - config.patch

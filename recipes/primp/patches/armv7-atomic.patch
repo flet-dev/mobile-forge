@@ -1,0 +1,31 @@
+Take AtomicU64 from portable-atomic so primp builds for armeabi-v7a.
+
+2.0's HTTP/2 connection pool (crates/primp/src/async_impl/h2_client/pool.rs)
+uses std::sync::atomic::AtomicU64, which the 32-bit ARM Android target lacks
+(E0432). portable-atomic (already in Cargo.lock) supplies a fallback with the
+same API; Ordering stays from std. Same fix as uuid-utils and tokenizers.
+
+diff --git a/crates/primp/Cargo.toml b/crates/primp/Cargo.toml
+--- a/crates/primp/Cargo.toml
++++ b/crates/primp/Cargo.toml
+@@ -75,6 +75,7 @@
+ serde_json = { version = "1.0", optional = true }
+ mime_guess = { version = "2.0", default-features = false, optional = true }
+ rand = "0.10"
++portable-atomic = "1"
+ foldhash = "0.2"
+ encoding_rs = { version = "0.8", optional = true }
+ http-body = "1"
+diff --git a/crates/primp/src/async_impl/h2_client/pool.rs b/crates/primp/src/async_impl/h2_client/pool.rs
+--- a/crates/primp/src/async_impl/h2_client/pool.rs
++++ b/crates/primp/src/async_impl/h2_client/pool.rs
+@@ -2,7 +2,8 @@
+ 
+ use foldhash::{HashMap, HashMapExt};
+ use std::pin::Pin;
+-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
++use portable_atomic::AtomicU64;
++use std::sync::atomic::{AtomicUsize, Ordering};
+ use std::sync::{Arc, Mutex};
+ use std::task::{Context, Poll};
+ use std::time::{Duration, Instant};

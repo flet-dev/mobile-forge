@@ -1,9 +1,6 @@
 package:
   name: selectolax
-  version: "0.4.10"
+  version: "1.0.2"
 
 build:
-  number: 11
-
-patches:
-  - mobile.patch
+  number: 1

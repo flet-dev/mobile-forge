@@ -1,4 +1,4 @@
-{% set version = "1.7.1" %}
+{% set version = "1.8.2" %}
 
 package:
   name: flet-libjq
@@ -8,7 +8,7 @@ source:
   url: https://github.com/jqlang/jq/releases/download/jq-{{ version }}/jq-{{ version }}.tar.gz
 
 build:
-  number: 12
+  number: 1
 
 requirements:
   build:
@@ -21,5 +21,5 @@ about:
   # oniguruma is bundled (--with-oniguruma=builtin), so its notice ships too.
   license_file:
     - COPYING
-    - modules/oniguruma/COPYING
+    - vendor/oniguruma/COPYING
   license: MIT AND BSD-2-Clause AND ICU AND dtoa

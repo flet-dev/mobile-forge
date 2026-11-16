@@ -1,6 +1,6 @@
 package:
   name: psycopg2
-  version: "2.9.12"
+  version: "2.9.13"
 
 build:
   number: 1
@@ -22,7 +22,7 @@ requirements:
     # build-time-only dependency. host_build extracts it for the link without
     # adding it to the wheel's Requires-Dist, so a psycopg2 app does not bundle
     # the (unused) flet-libpq wheel at runtime.
-    - flet-libpq 17.5
+    - flet-libpq 17.12
 
 patches:
   - mobile.patch

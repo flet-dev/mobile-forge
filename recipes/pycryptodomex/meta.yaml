@@ -1,9 +1,9 @@
 package:
   name: pycryptodomex
-  version: "3.23.0"
+  version: "3.24.2"
 
 build:
-  number: 2
+  number: 1
 
 # Same fix rationale as recipes/pycryptodome/meta.yaml — pycryptodomex is
 # the sister package (same code under `Cryptodome.*` namespace). Without

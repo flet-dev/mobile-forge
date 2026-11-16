@@ -1,6 +1,6 @@
 package:
   name: pandas
-  version: "3.0.3"
+  version: "3.1.1"
 
 # {% if not version or version >= (2,1) %}
 # pandas >= 2.1.0
@@ -12,7 +12,7 @@ requirements:
   host:
     - numpy ^2.0.0
 # {% if sdk == 'android' %}
-    - flet-libcpp-shared 27.2.12479018
+    - flet-libcpp-shared >=27.2.12479018
 # {% endif %}
 
 patches:

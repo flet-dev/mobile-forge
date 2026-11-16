@@ -1,13 +1,12 @@
 diff --git a/build-aux/config.sub b/build-aux/config.sub
-index dba16e8..215b8e2 100755
 --- a/build-aux/config.sub
 +++ b/build-aux/config.sub
-@@ -1792,6 +1792,8 @@ case $kernel-$os in
- 		;;
- 	*-eabi* | *-gnueabi*)
- 		;;
-+	ios-simulator)
+@@ -2252,6 +2252,8 @@
+ 	none--*)
+ 		# None (no kernel, i.e. freestanding / bare metal),
+ 		# can be paired with an machine code file format
 +		;;
- 	-*)
- 		# Blank kernel with real OS is always fine.
++	ios-simulator-)
  		;;
+ 	-*-)
+ 		# Blank kernel with real OS is always fine.

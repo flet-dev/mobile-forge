@@ -3,7 +3,7 @@ package:
   version: "0.4.27"
 
 build:
-  number: 2
+  number: 3
   script_env:
     # flet-libmagic (the host dep below) installs the compiled magic database
     # into the cross-env at opt/share/misc/magic.mgc. Hand setup.py that path so
@@ -18,7 +18,7 @@ requirements:
     # runtime (loader + magic-db patched by mobile.patch). Ship libmagic (the .so
     # it dlopens) and, via FLET_MAGIC_MGC above, its magic.mgc database; fix_wheel
     # turns this into a Requires-Dist so pip pulls the platform .so.
-    - flet-libmagic 5.46
+    - flet-libmagic 5.48
 
 patches:
   - mobile.patch
