@@ -1,0 +1,18 @@
+Build a per-version extension instead of abi3.
+
+With PyO3's abi3-py310 feature, iOS extensions link against `-lpython3.10`,
+which no iOS Python tree has ("ld: library 'python3.10' not found"). Drop it so
+each wheel links its own libpython. Same fix as uuid-utils and tokenizers.
+
+diff --git a/crates/primp-python/Cargo.toml b/crates/primp-python/Cargo.toml
+--- a/crates/primp-python/Cargo.toml
++++ b/crates/primp-python/Cargo.toml
+@@ -15,7 +15,7 @@
+ doc = false
+ 
+ [dependencies]
+-pyo3 = { version = "0.29", features = ["abi3-py310", "indexmap", "anyhow", "multiple-pymethods"] }
++pyo3 = { version = "0.29", features = ["indexmap", "anyhow", "multiple-pymethods"] }
+ pyo3-async-runtimes = { version = "0.29", features = ["tokio-runtime"] }
+ anyhow = "1.0.104"
+ tracing = { version = "0.1.41", features = ["log-always"] }

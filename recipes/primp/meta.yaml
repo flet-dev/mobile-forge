@@ -8,3 +8,4 @@ build:
 patches:
   - mobile.patch
   - armv7-atomic.patch
+  - no-abi3.patch
