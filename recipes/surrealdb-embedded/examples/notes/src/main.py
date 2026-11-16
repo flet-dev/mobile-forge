@@ -50,7 +50,8 @@ async def main(page: ft.Page):
             )
             for note, text in await list_notes(db)
         ]
-        status.value = f"Launch #{launches} · {len(notes.controls)} notes in {path.name}"
+        count = len(notes.controls)
+        status.value = f"Launch #{launches} · {count} note{'' if count == 1 else 's'} in {path.name}"
         page.update()
 
     async def remove(note: RecordID):

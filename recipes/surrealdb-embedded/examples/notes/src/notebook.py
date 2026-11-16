@@ -45,7 +45,9 @@ async def list_notes(db: AsyncSurreal) -> list[tuple[RecordID, str]]:
 
 async def add_note(db: AsyncSurreal, text: str) -> None:
     """Store one note with a server-side timestamp to sort by."""
-    await db.query("CREATE notes SET text = $text, created = time::now();", {"text": text})
+    await db.query(
+        "CREATE notes SET text = $text, created = time::now();", {"text": text}
+    )
 
 
 async def delete_note(db: AsyncSurreal, note: RecordID) -> None:
