@@ -1,13 +1,17 @@
 package:
   name: surrealdb-embedded
   version: "3.0.0"
+  # surrealdb-core's surrealdb-cnf uses std's AtomicU64, which
+  # 32-bit ARM lacks; upstream ships no 32-bit ARM wheels either.
+  excluded_arches: [armeabi-v7a]
 
 requirements:
   build:
     - cmake
 
-# {% if sdk != 'android' %}
 patches:
+  - no-abi3.patch
+# {% if sdk != 'android' %}
   - ios-libc.patch
 # {% endif %}
 
