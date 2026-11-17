@@ -1,0 +1,17 @@
+[project]
+name = "sherpa-onnx-transcribe"
+version = "1.0.0"
+description = "Downloads a small speech model once, then transcribes a recording offline."
+requires-python = ">=3.12"
+
+dependencies = [
+    "flet==1.1.2",
+    "sherpa-onnx==2.0.1",
+    "certifi",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"

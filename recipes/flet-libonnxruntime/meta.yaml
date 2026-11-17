@@ -1,0 +1,30 @@
+{% set version = "1.28.2" %}
+
+package:
+  name: flet-libonnxruntime
+  version: '{{ version }}'
+  # The ONNX Runtime C library, for recipes that LINK it (sherpa-onnx). Not
+  # the onnxruntime Python package, which has its own recipe.
+
+source:
+  # csukuangfj/onnxruntime-libs: the prebuilt artifacts sherpa-onnx's own
+  # mobile builds use. Keep the version in step with sherpa-onnx's
+  # cmake/onnxruntime-*.cmake.
+# {% if sdk == 'android' %}
+  # Microsoft's AAR contents: jni/<abi>/libonnxruntime.so (16KB-aligned) and
+  # headers/.
+  url: https://github.com/csukuangfj/onnxruntime-libs/releases/download/v{{ version }}/onnxruntime-android-{{ version }}.zip
+# {% else %}
+  # A STATIC xcframework: onnxruntime.xcframework/<slice>/onnxruntime.framework.
+  url: https://github.com/csukuangfj/onnxruntime-libs/releases/download/v{{ version }}/onnxruntime-ios-static-xcframework-{{ version }}.xcframework.zip
+# {% endif %}
+  # Unpack as-is: these zips have no single top-level folder to strip.
+  strip: 0
+
+build:
+  number: 1
+
+about:
+  # The prebuilt zips carry no notices, so licenses/ holds onnxruntime's
+  # LICENSE and ThirdPartyNotices.txt from the matching tag.
+  license: MIT
