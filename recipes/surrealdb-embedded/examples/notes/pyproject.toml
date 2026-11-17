@@ -1,0 +1,19 @@
+[project]
+name = "surrealdb-notes"
+version = "1.0.0"
+description = "Offline notes in an embedded SurrealDB datastore that survives restarts."
+requires-python = ">=3.12"
+
+dependencies = [
+    "flet==1.1.2",
+    "surrealdb[embedded]==3.0.0",
+]
+
+[dependency-groups]
+dev = ["flet-cli", "flet-desktop", "flet-web"]
+
+[tool.flet.app]
+path = "src"
+
+[tool.flet.android]
+target_arch = ["arm64-v8a", "x86_64"]

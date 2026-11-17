@@ -1,0 +1,30 @@
+package:
+  name: surrealdb-embedded
+  version: "3.0.0"
+  # surrealdb-core's surrealdb-cnf uses std's AtomicU64, which
+  # 32-bit ARM lacks; upstream ships no 32-bit ARM wheels either.
+  excluded_arches: [armeabi-v7a]
+
+requirements:
+  build:
+    - cmake
+
+patches:
+  - no-abi3.patch
+# {% if sdk != 'android' %}
+  - ios-libc.patch
+# {% endif %}
+
+build:
+  script_env:
+    _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
+    # cc-rs appends CPython's -O3 after jitterentropy's mandatory -O0.
+    # AWS-LC's CMake builder filters those inherited optimization flags.
+    AWS_LC_SYS_CMAKE_BUILDER: "1"
+# {% if sdk == 'android' %}
+    ANDROID_NDK_ROOT: '{NDK_ROOT}'
+# {% endif %}
+
+test:
+  requires:
+    - surrealdb==3.0.0
