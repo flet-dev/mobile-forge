@@ -1,0 +1,81 @@
+package:
+  name: sherpa-onnx
+  version: "2.0.1"
+
+build:
+  number: 1
+  script_env:
+    _PYTHON_SYSCONFIGDATA_NAME: '{sysconfigdata_name}'
+    # sherpa's cmake/onnxruntime.cmake reads these and links the prebuilt
+    # onnxruntime from flet-libonnxruntime: the shared .so on Android (which
+    # it also installs into this wheel), the static .a on iOS.
+    SHERPA_ONNXRUNTIME_INCLUDE_DIR: '{platlib}/opt/include'
+    SHERPA_ONNXRUNTIME_LIB_DIR: '{platlib}/opt/lib'
+    # SHERPA_ONNX_SPLIT_PYTHON_PACKAGE stays unset: one self-contained wheel,
+    # with no dependency on PyPI's sherpa-onnx-core (which has no iOS wheels).
+    # SHERPA_ONNX_MAKE_ARGS stays unset too: upstream then runs "make -j4",
+    # while a bare "-j" runs out of memory on the CI runners.
+    #
+    # setup.py appends SHERPA_ONNX_CMAKE_ARGS after its own defaults. No
+    # generator flag: setup.py checks for a literal "-G Ninja". C_API must be
+    # OFF explicitly, or the wheel ships extra shared libraries.
+# {% if sdk == 'android' %}
+    SHERPA_ONNX_CMAKE_ARGS: >-
+      -DCMAKE_BUILD_TYPE=Release
+      -DCMAKE_TOOLCHAIN_FILE={NDK_ROOT}/build/cmake/android.toolchain.cmake
+      -DANDROID_ABI={ANDROID_ABI}
+      -DANDROID_NATIVE_API_LEVEL={ANDROID_API_LEVEL}
+      -DANDROID_STL=c++_shared
+      -DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DCMAKE_MODULE_LINKER_FLAGS=-Wl,-z,max-page-size=16384
+      -DPython_EXECUTABLE={CROSS_VENV_PYTHON}
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.so
+      -DPYTHON_EXECUTABLE={CROSS_VENV_PYTHON}
+      -DSHERPA_ONNX_ENABLE_BINARY=OFF
+      -DSHERPA_ONNX_ENABLE_PORTAUDIO=OFF
+      -DSHERPA_ONNX_ENABLE_WEBSOCKET=OFF
+      -DSHERPA_ONNX_ENABLE_C_API=OFF
+      -DSHERPA_ONNX_ENABLE_TESTS=OFF
+# {% else %}
+    # The static onnxruntime archive has no CMake interface, so the system
+    # libraries it needs are passed to the linker by hand.
+    SHERPA_ONNX_CMAKE_ARGS: >-
+      -DCMAKE_BUILD_TYPE=Release
+      -DCMAKE_SYSTEM_NAME=iOS
+      -DCMAKE_OSX_SYSROOT={{ sdk }}
+      -DCMAKE_OSX_DEPLOYMENT_TARGET={{ sdk_version }}
+      -DCMAKE_OSX_ARCHITECTURES={{ arch }}
+      -DCMAKE_MODULE_LINKER_FLAGS=-Wl,-framework,Foundation,-framework,CoreFoundation,-liconv
+      -DPython_EXECUTABLE={CROSS_VENV_PYTHON}
+      -DPython_INCLUDE_DIR={HOST_PYTHON_HOME}/include/python{py_version_short}
+      -DPython_LIBRARY={HOST_PYTHON_HOME}/lib/libpython{py_version_short}.dylib
+      -DPYTHON_EXECUTABLE={CROSS_VENV_PYTHON}
+      -DSHERPA_ONNX_ENABLE_BINARY=OFF
+      -DSHERPA_ONNX_ENABLE_PORTAUDIO=OFF
+      -DSHERPA_ONNX_ENABLE_WEBSOCKET=OFF
+      -DSHERPA_ONNX_ENABLE_C_API=OFF
+      -DSHERPA_ONNX_ENABLE_TESTS=OFF
+# {% endif %}
+
+requirements:
+  build:
+    - cmake
+# {% if sdk == 'android' %}
+  host:
+    - flet-libcpp-shared >=27.2.12479018
+# {% endif %}
+  host_build:
+    # Link-time only: Android re-ships the .so inside this wheel, iOS links
+    # the .a in. Keep in step with flet-libonnxruntime's version.
+    - flet-libonnxruntime 1.28.2
+
+patches:
+  - android-no-jni.patch
+  - android-preload-ort.patch
+  - onnxruntime-license.patch
+
+test:
+  # test_vad_inference downloads silero_vad.onnx over HTTPS.
+  requires:
+    - certifi

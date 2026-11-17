@@ -1,0 +1,31 @@
+Preload the bundled libonnxruntime.so on Android.
+
+The wheel ships libonnxruntime.so in sherpa_onnx/lib, but the extension has
+no RUNPATH, so the dynamic linker cannot find it. Load it first, by path or,
+inside a Flet app, by soname. On iOS onnxruntime is linked statically and
+both attempts fail harmlessly.
+
+--- a/sherpa-onnx/python/sherpa_onnx/__init__.py
++++ b/sherpa-onnx/python/sherpa_onnx/__init__.py
+@@ -1,3 +1,21 @@
++# mobile-forge: on Android the extension has no RUNPATH, so load the bundled
++# onnxruntime first: by path when the package is extracted, otherwise by
++# soname (Flet copies it into the app's native library directory).
++def _preload_onnxruntime():
++    import ctypes
++    import os
++
++    path = os.path.join(os.path.dirname(__file__), "lib", "libonnxruntime.so")
++    for name in (path, "libonnxruntime.so"):
++        try:
++            ctypes.CDLL(name, mode=ctypes.RTLD_GLOBAL)
++            return
++        except OSError:
++            pass
++
++
++_preload_onnxruntime()
++
+ from sherpa_onnx.lib._sherpa_onnx import (
+     Alsa,
+     AudioEvent,
